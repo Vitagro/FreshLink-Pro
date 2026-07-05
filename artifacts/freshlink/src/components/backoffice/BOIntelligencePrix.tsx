@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react"
 import { store, type User } from "@/lib/store"
+import { getExternalPricesByArticle, lookupExternalPrice } from "@/lib/extCompetitorPrices"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,14 +84,23 @@ export default function BOIntelligencePrix({ user }: { user: User }) {
   const [showForm, setShowForm] = useState(false)
   const [filterSku, setFilterSku] = useState("")
   const [filterConcurrent, setFilterConcurrent] = useState("")
+  const [filterFrom, setFilterFrom] = useState("")
+  const [filterTo, setFilterTo] = useState("")
   const [photoDrag, setPhotoDrag] = useState(false)
   const [tab, setTab] = useState<"tableau" | "stats">("tableau")
   const photoRef = useRef<HTMLInputElement>(null)
 
-  const filtered = entries.filter(e =>
-    (!filterSku || e.sku.toLowerCase().includes(filterSku.toLowerCase())) &&
-    (!filterConcurrent || e.concurrentNom.toLowerCase().includes(filterConcurrent.toLowerCase()))
-  )
+  const filtered = entries.filter(e => {
+    const d = String(e.date ?? "").slice(0, 10)
+    return (!filterSku || e.sku.toLowerCase().includes(filterSku.toLowerCase())) &&
+      (!filterConcurrent || e.concurrentNom.toLowerCase().includes(filterConcurrent.toLowerCase())) &&
+      (!filterFrom || d >= filterFrom) &&
+      (!filterTo || d <= filterTo)
+  })
+
+  // Source prioritaire : sync GestFlux/Iziry (Comparatif Données Externes),
+  // sur la même plage de dates que le filtre ci-dessus.
+  const externalPrices = getExternalPricesByArticle(filterFrom, filterTo)
 
   // Photo handling
   const handlePhoto = useCallback((file: File) => {
@@ -127,14 +137,20 @@ export default function BOIntelligencePrix({ user }: { user: User }) {
     saveEntries(updated); setEntries(updated)
   }
 
-  // Stats
-  const skus = [...new Set(entries.map(e => e.sku))]
+  // Stats — relevés manuels (terrain/photo) + prix GestFlux/Iziry synchronisés
+  // (Comparatif Données Externes) en référence, sur la même plage de dates.
+  const skus = [...new Set([...entries.map(e => e.sku), ...Object.keys(externalPrices)])]
   const statsBySku = skus.map(sku => {
     const rows = entries.filter(e => e.sku === sku)
-    const avgConc = rows.reduce((s, r) => s + r.prixConcurrent, 0) / rows.length
-    const avgNous = rows.reduce((s, r) => s + r.prixNotre, 0) / rows.length
+    const avgConc = rows.length ? rows.reduce((s, r) => s + r.prixConcurrent, 0) / rows.length : 0
+    const avgNous = rows.length ? rows.reduce((s, r) => s + r.prixNotre, 0) / rows.length : 0
     const delta = avgNous && avgConc ? ((avgNous - avgConc) / avgConc) * 100 : 0
-    return { sku, count: rows.length, avgConc, avgNous, delta, minConc: Math.min(...rows.map(r => r.prixConcurrent)) }
+    const ext = lookupExternalPrice(externalPrices, sku)
+    return {
+      sku, count: rows.length, avgConc, avgNous, delta,
+      minConc: rows.length ? Math.min(...rows.map(r => r.prixConcurrent)) : 0,
+      extPA: ext?.paGf ?? 0, extPV: ext?.pvIz ?? 0,
+    }
   }).sort((a, b) => b.delta - a.delta)
 
   const canEdit = user.role === "admin" || user.role === "super_admin" || user.role === "super_super_admin" ||
@@ -182,6 +198,14 @@ export default function BOIntelligencePrix({ user }: { user: User }) {
         <input value={filterConcurrent} onChange={e => setFilterConcurrent(e.target.value)}
           placeholder="Filtrer par concurrent..."
           className="flex-1 min-w-[180px] px-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+        <label className="flex items-center gap-1.5 text-xs text-slate-500">Du
+          <input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)}
+            className="px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+        </label>
+        <label className="flex items-center gap-1.5 text-xs text-slate-500">Au
+          <input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)}
+            className="px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30" />
+        </label>
         <span className="self-center text-xs text-slate-400 font-medium">{filtered.length} entree(s)</span>
       </div>
 
@@ -299,6 +323,8 @@ export default function BOIntelligencePrix({ user }: { user: User }) {
                         <th className="px-4 py-3 text-right">Prix conc. min</th>
                         <th className="px-4 py-3 text-right">Notre prix moy.</th>
                         <th className="px-4 py-3 text-right">Delta</th>
+                        <th className="px-4 py-3 text-right" title="Sync GestFlux — Comparatif Données Externes">PA GestFlux</th>
+                        <th className="px-4 py-3 text-right" title="Sync Iziry — Comparatif Données Externes">PV Iziry</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
@@ -306,12 +332,14 @@ export default function BOIntelligencePrix({ user }: { user: User }) {
                         <tr key={s.sku} className="hover:bg-slate-50 transition-colors">
                           <td className="px-4 py-3 font-semibold text-slate-800">{s.sku}</td>
                           <td className="px-4 py-3 text-right text-slate-500">{s.count}</td>
-                          <td className="px-4 py-3 text-right text-red-600 font-medium">{s.avgConc.toFixed(2)} DH</td>
-                          <td className="px-4 py-3 text-right text-orange-500 font-medium">{s.minConc.toFixed(2)} DH</td>
-                          <td className="px-4 py-3 text-right text-slate-700 font-medium">{s.avgNous.toFixed(2)} DH</td>
+                          <td className="px-4 py-3 text-right text-red-600 font-medium">{s.count ? `${s.avgConc.toFixed(2)} DH` : "—"}</td>
+                          <td className="px-4 py-3 text-right text-orange-500 font-medium">{s.count ? `${s.minConc.toFixed(2)} DH` : "—"}</td>
+                          <td className="px-4 py-3 text-right text-slate-700 font-medium">{s.count ? `${s.avgNous.toFixed(2)} DH` : "—"}</td>
                           <td className="px-4 py-3 text-right">
-                            <DeltaBadge prixC={s.avgConc} prixN={s.avgNous} />
+                            {s.count ? <DeltaBadge prixC={s.avgConc} prixN={s.avgNous} /> : <span className="text-slate-300">—</span>}
                           </td>
+                          <td className="px-4 py-3 text-right text-blue-600 font-medium">{s.extPA > 0 ? `${s.extPA.toFixed(2)} DH` : "—"}</td>
+                          <td className="px-4 py-3 text-right text-orange-600 font-medium">{s.extPV > 0 ? `${s.extPV.toFixed(2)} DH` : "—"}</td>
                         </tr>
                       ))}
                     </tbody>

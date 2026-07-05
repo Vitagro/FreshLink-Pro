@@ -13,6 +13,7 @@ import { useState, useMemo, useRef, useEffect } from "react"
 import { store, type User } from "@/lib/store"
 import BOImportConcurrence from "./BOImportConcurrence"
 import BOComparatifExterne from "./BOComparatifExterne"
+import { getExternalPricesByArticle, getTonnageDuJour } from "@/lib/extCompetitorPrices"
 
 // ─── Modèles ────────────────────────────────────────────────────────────────
 interface CompetitorEntry {
@@ -165,6 +166,11 @@ export default function BOConcurrence({ user }: { user: User }) {
       const d = String(e.date ?? "").slice(0, 10)
       if (!m[k] || d >= m[k].date) m[k] = { pa, date: d }
     })
+    // Source prioritaire : sync GestFlux (fiable, automatique, cf. Comparatif
+    // Donnees Externes) — ecrase la saisie/import manuel quand plus recente.
+    Object.entries(getExternalPricesByArticle()).forEach(([k, v]) => {
+      if (v.paGf > 0 && (!m[k] || v.dateGf >= m[k].date)) m[k] = { pa: v.paGf, date: v.dateGf }
+    })
     return m
   }, [prix])
   // PV concurrent + volume = depuis les FACTURES, FILTRÉ par la plage de dates
@@ -179,6 +185,11 @@ export default function BOConcurrence({ user }: { user: User }) {
     })
     const m: Record<string, { pv: number; vol: number; ca: number }> = {}
     Object.entries(agg).forEach(([k, a]) => { m[k] = { pv: a.w ? Math.round(a.sum / a.w * 100) / 100 : 0, vol: a.vol, ca: a.ca } })
+    // Source prioritaire : sync Iziry (vraies factures, automatique) sur la
+    // meme plage de dates — ecrase l'import manuel de factures concurrent.
+    Object.entries(getExternalPricesByArticle(dateFrom, dateTo)).forEach(([k, v]) => {
+      if (v.pvIz > 0) m[k] = { pv: v.pvIz, vol: v.qteIzKg, ca: v.pvIz * v.qteIzKg }
+    })
     return m
   }, [ventes, dateFrom, dateTo])
 
@@ -217,8 +228,9 @@ export default function BOConcurrence({ user }: { user: User }) {
     }
     const top = (m: Map<string, { ca: number; t: number }>) =>
       [...m.entries()].map(([k, v]) => ({ k, ...v })).sort((a, b) => b.ca - a.ca)
+    const tonnageExterne = getTonnageDuJour(dateFrom, dateTo)
     return {
-      nbCmds: docs.size, tonnage, ca,
+      nbCmds: docs.size, tonnage, ca, tonnageExterne,
       articles: top(byArticle), clients: top(byClient), zones: top(byZone), prevs: top(byPrev),
     }
   }, [ventes, dateFrom, dateTo])
@@ -403,6 +415,7 @@ export default function BOConcurrence({ user }: { user: User }) {
     red: "bg-red-100 text-red-700", emerald: "bg-emerald-100 text-emerald-700",
     amber: "bg-amber-100 text-amber-700", slate: "bg-slate-100 text-slate-700",
     violet: "bg-violet-100 text-violet-700", blue: "bg-blue-100 text-blue-700",
+    indigo: "bg-indigo-100 text-indigo-700", orange: "bg-orange-100 text-orange-700",
   } as Record<string, string>)[t] ?? "bg-slate-100 text-slate-700"
 
   return (
@@ -472,16 +485,18 @@ export default function BOConcurrence({ user }: { user: User }) {
       {/* ── DASHBOARD ─────────────────────────────────────────────────────── */}
       {tab === "dashboard" && (
         <div className="flex flex-col gap-4">
-          <p className="text-xs text-slate-500">Performance du concurrent (Iziry) calculée depuis les factures importées{dateFrom || dateTo ? " sur la période sélectionnée" : ""}.</p>
-          {dash.nbCmds === 0 && dash.ca === 0 ? (
+          <p className="text-xs text-slate-500">Performance du concurrent (Iziry) — factures importées + synchro Comparatif Données Externes{dateFrom || dateTo ? " sur la période sélectionnée" : ""}.</p>
+          {dash.nbCmds === 0 && dash.ca === 0 && dash.tonnageExterne.gfTonnes === 0 && dash.tonnageExterne.izTonnes === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
-              Aucune facture concurrent importée{dateFrom || dateTo ? " sur cette période" : ""}. Importe la facture (Import Excel).
+              Aucune donnée concurrent{dateFrom || dateTo ? " sur cette période" : ""}. Lance une synchro dans l&apos;onglet 🔗 Comparatif Données Externes, ou importe la facture (Import Excel).
             </div>
           ) : (<>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
-              { l: "Tonnage concurrent", v: `${fmt(dash.tonnage)} kg`, c: "blue" },
+              { l: "Tonnage concurrent (factures)", v: `${fmt(dash.tonnage)} kg`, c: "blue" },
               { l: "CA concurrent", v: `${fmt(dash.ca)} DH`, c: "emerald" },
+              { l: "Tonnage GestFlux (achats)", v: `${dash.tonnageExterne.gfTonnes.toLocaleString("fr-MA", { maximumFractionDigits: 2 })} t`, c: "indigo" },
+              { l: "Tonnage Iziry (ventes)", v: `${dash.tonnageExterne.izTonnes.toLocaleString("fr-MA", { maximumFractionDigits: 2 })} t`, c: "orange" },
               { l: "Factures", v: fmt(dash.nbCmds), c: "violet" },
               { l: "Panier moyen", v: `${fmt(dash.nbCmds ? dash.ca / dash.nbCmds : 0)} DH`, c: "amber" },
             ].map(k => (
@@ -550,7 +565,7 @@ export default function BOConcurrence({ user }: { user: User }) {
 
           {margeRows.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
-              Aucune donnée concurrent. Importe la <strong>facture</strong> (PV) et la <strong>synthèse achats</strong> (PA) dans l&apos;onglet Import Excel.
+              Aucune donnée concurrent. Lance une synchro dans <strong>🔗 Comparatif Données Externes</strong>, ou importe la <strong>facture</strong> (PV) et la <strong>synthèse achats</strong> (PA) dans l&apos;onglet Import Excel.
             </div>
           ) : (
           <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">

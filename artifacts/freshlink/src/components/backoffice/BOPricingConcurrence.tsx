@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { store, type Article, type User, type Notice } from "@/lib/store"
+import { getExternalPricesByArticle } from "@/lib/extCompetitorPrices"
 
 const LS_PRIX = "fl_intel_prix"   // CompetitorEntry[] (PA concurrent)
 const LS_PV   = "fl_conc_pv"      // PV concurrent (catalogue — repli)
@@ -89,6 +90,12 @@ export default function BOPricingConcurrence({ user }: Props) {
     Object.entries(pvAgg).forEach(([k, a]) => { pv[k] = a.w ? Math.round((a.sum / a.w) * 100) / 100 : 0 })
     // Repli sur le catalogue prix-vente uniquement si la facture ne couvre pas l'article
     getJSON<ConcPV>(LS_PV).forEach(e => { const k = norm(e.libelle || e.ref); if (k && !pv[k]) pv[k] = Number(e.pv) || 0 })
+    // Source prioritaire : sync GestFlux/Iziry (Comparatif Données Externes) —
+    // écrase la saisie/import manuel quand elle a une valeur pour l'article.
+    Object.entries(getExternalPricesByArticle()).forEach(([k, v]) => {
+      if (v.paGf > 0) paAvg[k] = v.paGf
+      if (v.pvIz > 0) pv[k] = v.pvIz
+    })
     setPaMap(paAvg); setPvMap(pv)
   }, [])
 
