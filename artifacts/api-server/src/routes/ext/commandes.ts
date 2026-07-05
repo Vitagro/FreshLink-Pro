@@ -2,6 +2,9 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { rateLimit } from "../../lib/ext/rateLimit.js";
 import { verifyApiKey } from "../../lib/ext/webIntegration.js";
+import { sendEmail } from "../../lib/email.js";
+
+const SHOP_ORDER_ALERT_EMAIL = process.env.SHOP_ORDER_ALERT_EMAIL || "sales@vita-agro.com";
 
 const router = Router();
 
@@ -73,6 +76,69 @@ async function injectToLogistique(
     } catch { /* essayer table suivante */ }
   }
   console.warn("[commandes] injectToLogistique: aucune table disponible pour", bonId);
+}
+
+// ── Alerte email équipe (+ confirmation client) — Fire-and-forget ───────────
+// Remplace l'ancien envoi EmailJS côté navigateur (peu fiable : bloqueurs de
+// pub, JS désactivé, réseau client...) par un envoi serveur via Resend/Brevo.
+function formatLignesText(lignes: unknown): string {
+  if (!Array.isArray(lignes)) return "—";
+  return (lignes as Array<{ nom?: string; articleNom?: string; quantite?: number; unite?: string; prixUnitaire?: number; prixVente?: number; total?: number }>)
+    .map(l => {
+      const nom = l.nom ?? l.articleNom ?? "Article";
+      const pu = l.prixUnitaire ?? l.prixVente ?? 0;
+      const total = l.total ?? pu * (l.quantite ?? 0);
+      return `• ${nom} — ${l.quantite ?? 0} ${l.unite ?? "kg"} × ${pu} MAD = ${Math.round(total * 100) / 100} MAD`;
+    })
+    .join("\n");
+}
+
+async function notifyOrder(commande: Record<string, unknown>): Promise<void> {
+  const itemsText = formatLignesText(commande.lignes);
+  const numero = String(commande.numero);
+
+  sendEmail({
+    to: SHOP_ORDER_ALERT_EMAIL,
+    subject: `🛒 Nouvelle commande ${numero} — ${commande.nom_client}`,
+    text: [
+      `Nouvelle commande reçue sur shop.vita-agro.com`,
+      ``,
+      `Référence : ${numero}`,
+      `Client : ${commande.nom_client}`,
+      `Téléphone : ${commande.telephone}`,
+      `Email : ${commande.email ?? "—"}`,
+      `Adresse : ${commande.adresse_livraison ?? "—"}`,
+      `Créneau : ${commande.creneau ?? "—"}`,
+      `Instructions : ${commande.instructions ?? "—"}`,
+      ``,
+      `Articles :`,
+      itemsText,
+      ``,
+      `Total : ${commande.montant_total} MAD`,
+    ].join("\n"),
+  }).catch(() => { /* alerte best-effort — la commande reste enregistree */ });
+
+  const email = commande.email as string | null | undefined;
+  if (email) {
+    sendEmail({
+      to: email,
+      subject: `Confirmation de commande ${numero} — Vita Fresh`,
+      text: [
+        `Bonjour ${commande.nom_client},`,
+        ``,
+        `Votre commande ${numero} a bien été reçue et est en cours de préparation.`,
+        ``,
+        `Articles :`,
+        itemsText,
+        ``,
+        `Total : ${commande.montant_total} MAD`,
+        `Livraison : ${commande.creneau ?? "—"}`,
+        `Adresse : ${commande.adresse_livraison ?? "—"}`,
+        ``,
+        `Merci de votre confiance — Vita Fresh (Vita Agro Capital)`,
+      ].join("\n"),
+    }).catch(() => { /* confirmation best-effort */ });
+  }
 }
 
 // ── POST /ext/commandes ─────────────────────────────────────────────────
@@ -152,6 +218,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (r.ok) {
       console.log("[commandes] ✅ Enregistré dans fl_commandes (JSONB):", numero);
       void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
+      void notifyOrder(payloadData);
       res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
       return;
     }
@@ -172,6 +239,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (r.ok) {
       console.log("[commandes] ✅ Enregistré dans fl_commandes (flat):", numero);
       void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
+      void notifyOrder(payloadData);
       res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
       return;
     }
@@ -191,6 +259,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (r.ok) {
       console.log("[commandes] ✅ Enregistré dans fl_commandes_web:", numero);
       void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
+      void notifyOrder(payloadData);
       res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
       return;
     }
