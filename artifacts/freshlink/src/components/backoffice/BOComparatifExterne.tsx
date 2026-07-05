@@ -9,7 +9,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { store, type User } from "@/lib/store"
+import { store, type User, type HistoriquePrixAchat } from "@/lib/store"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface GfReception {
@@ -290,11 +290,23 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
   // ── FreshLink articles ────────────────────────────────────────────────────
   const flArticles = store.getArticles()
   const flByNorm   = useMemo(() => {
-    const m: Record<string, { pa: number; nom: string; unite: string; famille: string }> = {}
-    flArticles.forEach(a => { m[normName(a.nom)] = { pa: Number(a.prixAchat) || 0, nom: a.nom, unite: a.unite ?? "kg", famille: a.famille ?? "" } })
+    const m: Record<string, { pa: number; nom: string; unite: string; famille: string; historique: HistoriquePrixAchat[] }> = {}
+    flArticles.forEach(a => { m[normName(a.nom)] = { pa: Number(a.prixAchat) || 0, nom: a.nom, unite: a.unite ?? "kg", famille: a.famille ?? "", historique: a.historiquePrixAchat ?? [] } })
     return m
   }, [flArticles])
   const famillesDisponibles = useMemo(() => [...new Set(flArticles.map(a => a.famille).filter(Boolean))].sort(), [flArticles])
+
+  // "Notre PA" doit refleter le prix d'achat du JOUR selectionne (dateFrom..dateTo),
+  // pas le prixAchat courant de l'article (qui reste affiche meme des jours/semaines
+  // apres le dernier achat reel, laissant croire a une saisie du jour qui n'existe pas).
+  // Moyenne ponderee par quantite quand plusieurs achats du meme jour existent.
+  const paDuJour = useCallback((historique: HistoriquePrixAchat[] | undefined): number => {
+    const entries = (historique ?? []).filter(h => inRange(h.date))
+    if (!entries.length) return 0
+    const totalQte = entries.reduce((s, h) => s + (h.quantite ?? 1), 0)
+    if (totalQte <= 0) return 0
+    return entries.reduce((s, h) => s + h.prixAchat * (h.quantite ?? 1), 0) / totalQte
+  }, [dateFrom, dateTo])
 
   // ── GestFlux products by id ───────────────────────────────────────────────
   const gfProductById = useMemo(() => {
@@ -321,11 +333,26 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
     return m
   }, [izArticles])
 
+  // Date de facture par id — pour restreindre le prix de vente Iziry au jour
+  // selectionne (les lignes_facture n'ont pas de date propre, seule la
+  // facture parente en a une).
+  const izFactDateById = useMemo(() => {
+    const m: Record<string, string> = {}
+    izFact.forEach(f => { m[f.id] = f.date_facture })
+    return m
+  }, [izFact])
+
   // ── Iziry avg prix per article (from lignes_facture) ──────────────────────
+  // izLignesFact est recupere sans filtre de date (juste les N dernieres
+  // lignes) — sans le filtre ci-dessous, la moyenne melangeait plusieurs
+  // jours (parfois des semaines) au lieu du seul jour selectionne, rendant
+  // le "Prix Vente Iziry" affiche non representatif du jour courant.
   const izPrixByArticleId = useMemo(() => {
     const m: Record<string, { sum: number; count: number }> = {}
     izLignesFact.forEach(l => {
       if (!l.article_id || l.prix_unitaire <= 0) return
+      const factDate = izFactDateById[l.facture_id]
+      if (!factDate || !inRange(factDate)) return
       const prev = m[l.article_id] ?? { sum: 0, count: 0 }
       prev.sum += l.prix_unitaire
       prev.count += 1
@@ -334,7 +361,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
     const avg: Record<string, number> = {}
     Object.entries(m).forEach(([id, v]) => { avg[id] = v.sum / v.count })
     return avg
-  }, [izLignesFact])
+  }, [izLignesFact, izFactDateById, dateFrom, dateTo])
 
   // Iziry avg prix by normalized name (for matching with GF articles)
   const izPrixByNorm = useMemo(() => {
@@ -381,7 +408,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
       const mapEntry = mappings[`gf:${k}`]
       const resolvedNorm = mapEntry?.status === "approved" ? mapEntry.flNorm : k
       const fl      = flByNorm[resolvedNorm]
-      const paFl    = fl?.pa ?? 0
+      const paFl    = paDuJour(fl?.historique)
       const nomFl   = mapEntry?.status === "approved" ? mapEntry.flNom : (fl?.nom ?? null)
       const mapped  = mapEntry?.status === "approved"
       const diffGf  = prixGf > 0 && paFl > 0 ? ((paFl - prixGf) / prixGf) * 100 : null
@@ -390,7 +417,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
     })
       .filter(r => familleFiltre === "toutes" || r.famille === familleFiltre)
       .sort((a, b) => (a.nomFl ?? a.article).localeCompare(b.nomFl ?? b.article, "fr"))
-  }, [gfFiltered, gfProductById, gfProductByNormName, izPrixByNorm, flByNorm, mappings, familleFiltre])
+  }, [gfFiltered, gfProductById, gfProductByNormName, izPrixByNorm, flByNorm, mappings, familleFiltre, paDuJour])
 
   // ── Iziry Commandes ───────────────────────────────────────────────────────
   const cmdFiltered = useMemo(() => {
@@ -454,9 +481,9 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
       const prixIz  = izPrixByArticleId[a.id] ?? 0
       const nomFl   = mapEntry?.status === "approved" ? mapEntry.flNom : (fl?.nom ?? null)
       const mapped  = mapEntry?.status === "approved"
-      return { ...a, paFl: fl?.pa ?? 0, nomFl, prixIz, mapped, normKey: norm }
+      return { ...a, paFl: paDuJour(fl?.historique), nomFl, prixIz, mapped, normKey: norm }
     })
-  }, [artFiltered, flByNorm, izPrixByArticleId, mappings])
+  }, [artFiltered, flByNorm, izPrixByArticleId, mappings, paDuJour])
 
   // ── UI helpers ────────────────────────────────────────────────────────────
   const diffBadge = (diff: number | null, tooltip?: string) => {
