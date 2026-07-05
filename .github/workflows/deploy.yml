@@ -124,6 +124,7 @@ jobs:
           SetEnv VITE_IZIRY_URL "${{ secrets.VITE_IZIRY_URL }}"
           SetEnv VITE_IZIRY_ANON_KEY "${{ secrets.VITE_IZIRY_ANON_KEY }}"
           SetEnv RESEND_API_KEY "${{ secrets.RESEND_API_KEY }}"
+          SetEnv SHOP_ADMIN_PASSWORD "${{ secrets.SHOP_ADMIN_PASSWORD }}"
           SetEnv ANTHROPIC_API_KEY "${{ secrets.ANTHROPIC_API_KEY }}"
 
           RewriteEngine On
