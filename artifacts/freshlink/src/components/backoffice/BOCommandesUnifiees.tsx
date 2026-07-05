@@ -513,6 +513,38 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const newCount  = cmds.filter(c => ["nouveau","en_attente"].includes(c.statut)).length
   const totalCA   = filtered.reduce((s, c) => s + c.montant, 0)
 
+  // ── Export modèle : commandes par CLIENT × ARTICLE × QUANTITÉ ─────────────────
+  // Respecte les filtres actifs (statut, source, zone, période, recherche...) —
+  // une ligne par combinaison client/article, quantités et montants cumulés sur
+  // toutes les commandes filtrées.
+  const exportParClientArticle = async () => {
+    if (filtered.length === 0) return
+    const XLSX = await import("xlsx")
+    const agg = new Map<string, { client: string; telephone: string; article: string; unite: string; quantite: number; montant: number; nbCommandes: Set<string> }>()
+    filtered.forEach(c => {
+      c.lignes.forEach(l => {
+        const key = `${c.nom_client}|||${l.nom}`
+        const prev = agg.get(key) ?? { client: c.nom_client, telephone: c.telephone, article: l.nom, unite: l.unite || "kg", quantite: 0, montant: 0, nbCommandes: new Set<string>() }
+        prev.quantite += Number(l.quantite) || 0
+        prev.montant += Number(l.total) || 0
+        prev.nbCommandes.add(c.numero)
+        agg.set(key, prev)
+      })
+    })
+    const rows = [...agg.values()]
+      .sort((a, b) => a.client.localeCompare(b.client, "fr") || a.article.localeCompare(b.article, "fr"))
+      .map(r => ({
+        Client: r.client, Telephone: r.telephone, Article: r.article, Unite: r.unite,
+        Quantite: Math.round(r.quantite * 100) / 100, "Nb commandes": r.nbCommandes.size,
+        "Montant (DH)": Math.round(r.montant * 100) / 100,
+      }))
+    const ws = XLSX.utils.json_to_sheet(rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Commandes par client")
+    const periode = filterDateDebut || filterDateFin ? `_${filterDateDebut || "debut"}_${filterDateFin || "fin"}` : `_${new Date().toISOString().slice(0, 10)}`
+    XLSX.writeFile(wb, `commandes_client_article${periode}.xlsx`)
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4 max-w-7xl mx-auto">
@@ -532,6 +564,17 @@ export default function BOCommandesUnifiees({ user }: Props) {
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
             Nouvelle commande
+          </button>
+          <button
+            onClick={exportParClientArticle}
+            disabled={filtered.length === 0}
+            title="Exporte les commandes filtrées, une ligne par client × article, avec quantité et montant cumulés"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v11a2 2 0 01-2 2z" />
+            </svg>
+            Exporter (client &amp; article)
           </button>
           <button
             onClick={load}

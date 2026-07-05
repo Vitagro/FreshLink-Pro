@@ -67,20 +67,32 @@ export default function BOPricingConcurrence({ user }: Props) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [subtab, setSubtab] = useState<"comparaison" | "marge">("comparaison")
+  // Meme defaut que Comparatif Données Externes (jour operationnel achat) —
+  // sans ca, "PV concurrent" agregait tout l'historique au lieu du jour choisi
+  // et ne correspondait jamais a la colonne "Prix Vente Iziry" de cet ecran.
+  const [pricingFrom, setPricingFrom] = useState(() => store.jourOperationnel("achat"))
+  const [pricingTo, setPricingTo] = useState(() => store.jourOperationnel("achat"))
   const [margeFrom, setMargeFrom] = useState("")
   const [margeTo, setMargeTo] = useState("")
   const [margeDim, setMargeDim] = useState<"article" | "secteur" | "type">("secteur")
 
+  const inPricingRange = useCallback((d: string) => {
+    const x = String(d ?? "").slice(0, 10)
+    if (pricingFrom && x < pricingFrom) return false
+    if (pricingTo && x > pricingTo) return false
+    return true
+  }, [pricingFrom, pricingTo])
+
   const buildMaps = useCallback(() => {
     const pa: Record<string, number[]> = {}
-    getJSON<CompetitorEntry>(LS_PRIX).filter(e => (e.source ?? "") === "synthese_achats" || !e.source).forEach(e => {
+    getJSON<CompetitorEntry>(LS_PRIX).filter(e => (e.source ?? "") === "synthese_achats" || !e.source).filter(e => inPricingRange(e.date ?? "")).forEach(e => {
       const k = norm(e.sku); if (!k) return; (pa[k] ??= []).push(Number(e.prixConcurrent) || 0)
     })
     const paAvg: Record<string, number> = {}
     Object.entries(pa).forEach(([k, arr]) => { const v = arr.filter(x => x > 0); paAvg[k] = v.length ? v.reduce((s, x) => s + x, 0) / v.length : 0 })
     // PV concurrent EXTRAIT DES FACTURES (PU réel, moyenne pondérée par quantité)
     const pvAgg: Record<string, { sum: number; w: number }> = {}
-    getJSON<ConcVente>(LS_VENTES).forEach(v => {
+    getJSON<ConcVente>(LS_VENTES).filter(v => inPricingRange(v.date)).forEach(v => {
       const k = norm(v.article); const pu = Number(v.pu) || 0; const q = Number(v.qt) || 0
       if (!k || pu <= 0) return
       const w = q > 0 ? q : 1
@@ -90,14 +102,16 @@ export default function BOPricingConcurrence({ user }: Props) {
     Object.entries(pvAgg).forEach(([k, a]) => { pv[k] = a.w ? Math.round((a.sum / a.w) * 100) / 100 : 0 })
     // Repli sur le catalogue prix-vente uniquement si la facture ne couvre pas l'article
     getJSON<ConcPV>(LS_PV).forEach(e => { const k = norm(e.libelle || e.ref); if (k && !pv[k]) pv[k] = Number(e.pv) || 0 })
-    // Source prioritaire : sync GestFlux/Iziry (Comparatif Données Externes) —
-    // écrase la saisie/import manuel quand elle a une valeur pour l'article.
-    Object.entries(getExternalPricesByArticle()).forEach(([k, v]) => {
+    // Source prioritaire ET MEME PLAGE DE DATES que 🔗 Comparatif Données
+    // Externes — sinon "PV concurrent" ne correspondait jamais à la colonne
+    // "Prix Vente Iziry" de cet écran (agrégeait tout l'historique au lieu
+    // du jour sélectionné).
+    Object.entries(getExternalPricesByArticle(pricingFrom, pricingTo)).forEach(([k, v]) => {
       if (v.paGf > 0) paAvg[k] = v.paGf
       if (v.pvIz > 0) pv[k] = v.pvIz
     })
     setPaMap(paAvg); setPvMap(pv)
-  }, [])
+  }, [inPricingRange, pricingFrom, pricingTo])
 
   useEffect(() => {
     setArticles(store.getArticles())
@@ -409,6 +423,19 @@ export default function BOPricingConcurrence({ user }: Props) {
       </div>
 
       {subtab === "comparaison" && (<>
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-slate-600">Du</label>
+          <input type="date" value={pricingFrom} onChange={e => setPricingFrom(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-slate-600">Au</label>
+          <input type="date" value={pricingTo} onChange={e => setPricingTo(e.target.value)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm" />
+        </div>
+        <button onClick={() => { const t = store.jourOperationnel("achat"); setPricingFrom(t); setPricingTo(t) }}
+          className="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200">Aujourd&apos;hui</button>
+        <p className="text-[11px] text-slate-400 flex-1 min-w-[220px]">PA/PV concurrent = même plage que 🔗 Comparatif Données Externes (par défaut : aujourd&apos;hui).</p>
+      </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { l: "Articles comparables", v: String(kpis.comparables), i: "🔎", c: "text-slate-900" },
