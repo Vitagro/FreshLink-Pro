@@ -106,3 +106,54 @@ export function getTonnageDuJour(dateFrom = "", dateTo = ""): { gfTonnes: number
   Object.values(m).forEach(v => { gfKg += v.qteGfKg; izKg += v.qteIzKg })
   return { gfTonnes: Math.round((gfKg / 1000) * 1000) / 1000, izTonnes: Math.round((izKg / 1000) * 1000) / 1000 }
 }
+
+// ── Historique jour par jour (pour trajectoires/tendances) ─────────────────
+// Contrairement a getExternalPricesByArticle (une moyenne agregee sur toute
+// la periode), ceci retourne UN POINT PAR JOUR par article — necessaire pour
+// calculer une pente/tendance (ex: onglet "Flux & trajectoires").
+export interface ExternalFluxPoint { date: string; concurrent: "GestFlux" | "Iziry"; sku: string; prix: number; volume: number }
+
+export function getExternalPriceHistory(dateFrom = "", dateTo = ""): ExternalFluxPoint[] {
+  const points: ExternalFluxPoint[] = []
+
+  const gfByDay: Record<string, { sum: number; qte: number; article: string }> = {}
+  loadCache<GfAchatRow>("fl_ext_gf_achat").forEach(a => {
+    if (!inRange(a.date, dateFrom, dateTo) || a.qte_achetee <= 0 || a.prix <= 0) return
+    const key = `${a.date.slice(0, 10)}|||${normName(a.article)}`
+    const prev = gfByDay[key] ?? { sum: 0, qte: 0, article: a.article }
+    prev.sum += a.prix * a.qte_achetee
+    prev.qte += a.qte_achetee
+    gfByDay[key] = prev
+  })
+  Object.entries(gfByDay).forEach(([key, v]) => {
+    const date = key.split("|||")[0]
+    points.push({ date, concurrent: "GestFlux", sku: v.article, prix: Math.round((v.sum / v.qte) * 100) / 100, volume: v.qte })
+  })
+
+  const izArticleById: Record<string, { norm: string; libelle: string }> = {}
+  loadCache<IzArticleRow>("fl_ext_iz_articles").forEach(a => { izArticleById[a.id] = { norm: normName(a.libelle), libelle: a.libelle } })
+
+  const izFactDateById: Record<string, string> = {}
+  loadCache<IzFactRow>("fl_ext_iz_factures").forEach(f => { izFactDateById[f.id] = f.date_facture })
+
+  const izByDay: Record<string, { sum: number; qte: number; libelle: string }> = {}
+  loadCache<IzLigneFactRow>("fl_ext_iz_lignes_fact").forEach(l => {
+    if (!l.article_id || l.prix_unitaire <= 0) return
+    const factDate = izFactDateById[l.facture_id]
+    if (!factDate || !inRange(factDate, dateFrom, dateTo)) return
+    const art = izArticleById[l.article_id]; if (!art) return
+    const date = factDate.slice(0, 10)
+    const key = `${date}|||${art.norm}`
+    const qte = l.quantite || 1
+    const prev = izByDay[key] ?? { sum: 0, qte: 0, libelle: art.libelle }
+    prev.sum += l.prix_unitaire * qte
+    prev.qte += qte
+    izByDay[key] = prev
+  })
+  Object.entries(izByDay).forEach(([key, v]) => {
+    const date = key.split("|||")[0]
+    points.push({ date, concurrent: "Iziry", sku: v.libelle, prix: Math.round((v.sum / v.qte) * 100) / 100, volume: v.qte })
+  })
+
+  return points
+}

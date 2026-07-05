@@ -13,7 +13,7 @@ import { useState, useMemo, useRef, useEffect } from "react"
 import { store, type User } from "@/lib/store"
 import BOImportConcurrence from "./BOImportConcurrence"
 import BOComparatifExterne from "./BOComparatifExterne"
-import { getExternalPricesByArticle, getTonnageDuJour } from "@/lib/extCompetitorPrices"
+import { getExternalPricesByArticle, getTonnageDuJour, getExternalPriceHistory } from "@/lib/extCompetitorPrices"
 
 // ─── Modèles ────────────────────────────────────────────────────────────────
 interface CompetitorEntry {
@@ -108,17 +108,15 @@ function download(filename: string, content: string) {
 }
 
 // ─── Composant ──────────────────────────────────────────────────────────────
-type Tab = "dashboard" | "prix" | "pv" | "comportement" | "flux" | "import" | "comparatif_ext"
+// "Marges & PV stratégique" a été fusionné dans l'écran Pricing (BOPricingConcurrence)
+// — les deux faisaient une comparaison PA/PV + stratégie de prix quasi identique.
+type Tab = "dashboard" | "prix" | "comportement" | "flux" | "import" | "comparatif_ext"
 
 export default function BOConcurrence({ user }: { user: User }) {
   const [tab, setTab] = useState<Tab>("prix")
   // Marge & Concurrence : tri alpha par défaut, filtre tous/commandés, famille.
   const [margeFilter, setMargeFilter] = useState<"tous" | "commandes">("tous")
   const [margeFamille, setMargeFamille] = useState<string>("toutes")
-  // Paramètres pricing stratégique
-  const [margeTheo, setMargeTheo] = useState(25)   // % marge théorique (sur coût de revient)
-  const [margeConc, setMargeConc] = useState(20)   // % marge supposée du concurrent
-  const [decote, setDecote]       = useState(1)    // DH à retrancher pour attaquer (décote)
   const [prix, setPrix] = useState<CompetitorEntry[]>(getPrix)
   const [flux, setFlux] = useState<FluxEntry[]>(getFlux)
   const [ventes, setVentes] = useState<ConcVente[]>(() => { try { return JSON.parse(localStorage.getItem("fl_conc_ventes") ?? "[]") } catch { return [] } })
@@ -200,7 +198,14 @@ export default function BOConcurrence({ user }: { user: User }) {
       id: `fv_${i}`, date: String(v.date).slice(0, 10), concurrent: "Iziry",
       sku: v.article, prix: Number(v.pu) || 0, volume: Number(v.qt) || 0,
     })), [ventes])
-  const fluxF = useMemo(() => [...flux, ...fluxAuto].filter(e => inRange(e.date)), [flux, fluxAuto, dateFrom, dateTo])
+  // Historique jour-par-jour depuis la sync GestFlux/Iziry (Comparatif Données
+  // Externes) — sans borne de date ici : on veut toute la trajectoire connue,
+  // le filtre dateFrom/dateTo s'applique ensuite comme pour le reste.
+  const fluxExterne = useMemo<FluxEntry[]>(() =>
+    getExternalPriceHistory().map((p, i) => ({
+      id: `fx_${i}`, date: p.date, concurrent: p.concurrent, sku: p.sku, prix: p.prix, volume: p.volume,
+    })), [])
+  const fluxF = useMemo(() => [...flux, ...fluxAuto, ...fluxExterne].filter(e => inRange(e.date)), [flux, fluxAuto, fluxExterne, dateFrom, dateTo])
 
   // ── Performance concurrent (Iziry) : agrégats depuis les FACTURES importées ──
   const dash = useMemo(() => {
@@ -264,33 +269,6 @@ export default function BOConcurrence({ user }: { user: User }) {
       .filter(r => margeFamille === "toutes" || r.famille === margeFamille)
       .sort((x, y) => x.nom.localeCompare(y.nom, "fr"))
   }, [compPA, compPV, margeFilter, margeFamille, articlesCommandes])
-
-  // ── PV stratégique : PV théorique, PV concurrence (est.), PV proposé pour attaquer ──
-  const pvRows = useMemo(() => {
-    const articles = store.getArticles()
-    const charges = store.getChargesArticle()
-    return articles.map(a => {
-      const pa = Number(a.prixAchat) || 0
-      const charge = Number(charges.find(c => c.id === a.chargeArticleId)?.montant) || 0
-      const cout = pa + charge                                   // coût de revient
-      const pvClient = store.computePV(a)                        // notre PV actuel (prix client)
-      const paConc = lookupName(compPA, a.nom)?.pa ?? 0          // PA concurrent (synthèse, dernier)
-      const pvConcReal = lookupName(compPV, a.nom)?.pv ?? 0      // PV concurrent RÉEL (factures)
-      const hasConc = paConc > 0 || pvConcReal > 0
-      const pvTheo = Math.round(cout * (1 + margeTheo / 100) * 100) / 100    // PV théorique = coût + marge théorique
-      // PV concurrent : réel si dispo (factures), sinon estimé (PA + marge supposée)
-      const pvConcEst = pvConcReal > 0 ? pvConcReal : (paConc > 0 ? Math.round(paConc * (1 + margeConc / 100) * 100) / 100 : 0)
-      // PV proposé pour attaquer :
-      let pvPropose = pvTheo, strategie = "Marge théorique"
-      if (paConc > 0) {
-        if (pa < paConc - 0.01) { pvPropose = Math.round(pa * (1 + margeConc / 100) * 100) / 100; strategie = "On achète moins cher → PA + marge concurrent" }
-        else if (Math.abs(pa - paConc) <= Math.max(0.01, paConc * 0.02)) { pvPropose = Math.max(cout, (pvConcEst || pvClient) - decote); strategie = "Même PA → on casse le PV (−" + decote + " DH)" }
-        else { pvPropose = pvTheo; strategie = "On achète plus cher → garder notre marge" }
-      }
-      const margeProposeePct = pvPropose > 0 ? ((pvPropose - cout) / pvPropose) * 100 : 0
-      return { nom: a.nom, unite: a.unite ?? "kg", pa, charge, cout, pvClient, paConc, pvTheo, pvConcEst, pvPropose, margeProposeePct, strategie, nbRel: hasConc ? 1 : 0 }
-    }).filter(r => r.nbRel > 0 || r.pa > 0).sort((x, y) => y.nbRel - x.nbRel)
-  }, [compPA, compPV, margeTheo, margeConc, decote])
 
   // ── Comportement : classe chaque concurrent ───────────────────────────────
   const comportement = useMemo(() => {
@@ -431,7 +409,6 @@ export default function BOConcurrence({ user }: { user: User }) {
       <div className="flex gap-2 flex-wrap">
         {([
           ["prix", "Prix"],
-          ["pv", "Marges & PV stratégique"],
           ["comportement", "Comportement concurrent"],
           ["flux", "Flux & trajectoires"],
           ["dashboard", "Performance commerciale"],
@@ -542,6 +519,7 @@ export default function BOConcurrence({ user }: { user: User }) {
               onChange={e => { const f = e.target.files?.[0]; if (f) importPrix(f); e.target.value = "" }} />
           </div>
           <p className="text-xs text-slate-500">Colonnes import attendues : <code>Concurrent;SKU;PrixConcurrent;NotrePrixVente;Unite;Lieu;Source;Date</code> (le SKU doit correspondre au nom de l&apos;article).</p>
+          <p className="text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">ℹ️ Le PV proposé, les alertes achat et la diffusion à la force de vente ont déménagé dans <strong>Pricing</strong> (menu Prix, Marge &amp; Concurrence).</p>
 
           {/* Filtres : tous/commandés + famille — tri toujours alphabétique */}
           <div className="flex flex-wrap items-center gap-2">
@@ -598,58 +576,6 @@ export default function BOConcurrence({ user }: { user: User }) {
         </div>
       )}
 
-      {/* ── PV STRATÉGIQUE ────────────────────────────────────────────────── */}
-      {tab === "pv" && (
-        <div className="flex flex-col gap-3">
-          {/* Paramètres */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap items-end gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Marge théorique %</label>
-              <input type="number" value={margeTheo} onChange={e => setMargeTheo(Number(e.target.value))} className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-sm" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Marge concurrent % (supposée)</label>
-              <input type="number" value={margeConc} onChange={e => setMargeConc(Number(e.target.value))} className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-sm" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Décote attaque (DH)</label>
-              <input type="number" step="0.5" value={decote} onChange={e => setDecote(Number(e.target.value))} className="w-24 px-3 py-2 rounded-xl border border-slate-200 text-sm" />
-            </div>
-            <p className="text-[11px] text-slate-500 flex-1 min-w-[200px]">
-              PV théorique = (PA + charge) × (1 + marge). <strong>PV proposé</strong> : si notre PA &lt; PA concurrent → PA + marge concurrent (on reste moins cher) ; si PA égal → on casse le PV (−décote) ; sinon on garde notre marge.
-            </p>
-          </div>
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead><tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
-                <th className="px-3 py-2">Article</th><th className="px-3 py-2 text-right">PA</th><th className="px-3 py-2 text-right">Charge</th>
-                <th className="px-3 py-2 text-right">Coût</th><th className="px-3 py-2 text-right">PV actuel</th><th className="px-3 py-2 text-right">PV théo.</th>
-                <th className="px-3 py-2 text-right">PA conc.</th><th className="px-3 py-2 text-right">PV conc. (est.)</th>
-                <th className="px-3 py-2 text-right">PV proposé</th><th className="px-3 py-2 text-right">Marge</th><th className="px-3 py-2">Stratégie</th>
-              </tr></thead>
-              <tbody>
-                {pvRows.map(r => (
-                  <tr key={r.nom} className="border-b border-slate-50 hover:bg-slate-50/50">
-                    <td className="px-3 py-2 font-semibold text-slate-800">{r.nom}</td>
-                    <td className="px-3 py-2 text-right text-slate-600">{fmt1(r.pa)}</td>
-                    <td className="px-3 py-2 text-right text-amber-600">{fmt1(r.charge)}</td>
-                    <td className="px-3 py-2 text-right text-slate-700">{fmt1(r.cout)}</td>
-                    <td className="px-3 py-2 text-right text-slate-500">{fmt1(r.pvClient)}</td>
-                    <td className="px-3 py-2 text-right text-slate-700">{fmt1(r.pvTheo)}</td>
-                    <td className="px-3 py-2 text-right text-slate-600">{r.paConc > 0 ? fmt1(r.paConc) : "—"}</td>
-                    <td className="px-3 py-2 text-right text-slate-600">{r.pvConcEst > 0 ? fmt1(r.pvConcEst) : "—"}</td>
-                    <td className="px-3 py-2 text-right font-black text-emerald-700">{fmt1(r.pvPropose)}</td>
-                    <td className={`px-3 py-2 text-right font-bold ${r.margeProposeePct < 8 ? "text-red-600" : "text-slate-700"}`}>{fmt1(r.margeProposeePct)}%</td>
-                    <td className="px-3 py-2 text-[11px] text-slate-500">{r.nbRel > 0 ? r.strategie : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-[11px] text-slate-400">Les PA concurrents viennent de l&apos;import « synthese_achats » (relevés Marché). Importe-les pour activer la comparaison.</p>
-        </div>
-      )}
-
       {/* ── COMPORTEMENT ──────────────────────────────────────────────────── */}
       {tab === "comportement" && (
         <div className="flex flex-col gap-3">
@@ -691,7 +617,7 @@ export default function BOConcurrence({ user }: { user: User }) {
 
           {trajectoires.length === 0 ? (
             <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-500 text-sm">
-              Aucun flux importé. Télécharge le modèle, remplis-le (historique de prix par concurrent &amp; SKU), puis réimporte-le.
+              Aucun flux. Lance une synchro dans 🔗 Comparatif Données Externes, ou télécharge le modèle, remplis-le (historique de prix par concurrent &amp; SKU), puis réimporte-le.
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">

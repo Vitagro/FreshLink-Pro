@@ -146,9 +146,16 @@ export default function BOPricingConcurrence({ user }: Props) {
     return 0
   }, [])
 
+  // Charge article (transport/manutention...) — venait de l'onglet "Marges &
+  // PV stratégique" (fusionné ici) : le vrai coût de revient est PA + charge,
+  // pas juste le PA brut, sinon un PV "imbattable" peut passer sous le coût réel.
+  const chargesArticle = useMemo(() => { try { return store.getChargesArticle() } catch { return [] } }, [])
+
   type Row = ReturnType<typeof computeRow>
   const computeRow = useCallback((a: Article) => {
     const ourPA = Number(a.prixAchat) || 0
+    const charge = Number(chargesArticle.find(c => c.id === a.chargeArticleId)?.montant) || 0
+    const cout = ourPA + charge
     const ourPV = store.computePV(a)
     const compPA = findComp(a.nom, paMap)
     const compPV = findComp(a.nom, pvMap)
@@ -156,22 +163,26 @@ export default function BOPricingConcurrence({ user }: Props) {
     const decote = (base: number) => params.decoteType === "dh" ? base - params.decoteVal : base * (1 - params.decoteVal / 100)
     let pvImb = ourPV
     let strat = "—"
+    // Comparaison PA vs PA concurrent : brut contre brut (apples-to-apples,
+    // le concurrent a lui aussi ses propres charges non connues de nous).
     const alertePA = compPA > 0 && ourPA > compPA + params.tolPA
     if (compPA > 0 && Math.abs(ourPA - compPA) <= params.tolPA) {
       pvImb = decote(compPV > 0 ? compPV : ourPV); strat = `PA ≈ concurrent → PV concurrent − ${params.decoteType === "dh" ? params.decoteVal + " DH" : params.decoteVal + "%"}`
     } else if (compPA > 0 && ourPA < compPA) {
       pvImb = compMarge != null ? ourPA + compMarge : (compPV > 0 ? decote(compPV) : ourPV); strat = "PA < concurrent → notre PA + marge concurrent"
     } else if (alertePA) {
-      pvImb = compPV > 0 ? Math.max(decote(compPV), ourPA * (1 + params.margeMin / 100)) : ourPA * (1 + params.margeMin / 100)
+      pvImb = compPV > 0 ? Math.max(decote(compPV), cout * (1 + params.margeMin / 100)) : cout * (1 + params.margeMin / 100)
       strat = "⚠️ PA > concurrent (achat trop cher)"
     } else if (compPV > 0) {
       pvImb = decote(compPV); strat = "Aligné sur PV concurrent − décote"
     }
-    pvImb = Math.max(pvImb, ourPA)
+    // Le plancher est le cout REEL (PA + charge) — jamais en dessous, meme si
+    // le PA brut seul aurait laisse passer un PV plus bas.
+    pvImb = Math.max(pvImb, cout)
     pvImb = Math.round(pvImb * 100) / 100
     const hasComp = compPA > 0 || compPV > 0
-    return { a, ourPA, ourPV, compPA, compPV, compMarge, pvImb, strat, alertePA, hasComp }
-  }, [paMap, pvMap, params, findComp])
+    return { a, ourPA, charge, cout, ourPV, compPA, compPV, compMarge, pvImb, strat, alertePA, hasComp }
+  }, [paMap, pvMap, params, findComp, chargesArticle])
 
   const rows = useMemo(() => {
     const q = norm(search)
@@ -499,6 +510,7 @@ export default function BOPricingConcurrence({ user }: Props) {
               <tr className="bg-slate-50 text-left text-[11px] uppercase tracking-wide text-slate-500">
                 <th className="px-3 py-3">Article</th>
                 <th className="px-3 py-3 text-right">Notre PA</th>
+                <th className="px-3 py-3 text-right" title="Prix d'achat + charge article (transport/manutention...)">Coût réel</th>
                 <th className="px-3 py-3 text-right">PA concurrent</th>
                 <th className="px-3 py-3 text-right">Notre PV</th>
                 <th className="px-3 py-3 text-right">PV concurrent</th>
@@ -516,6 +528,7 @@ export default function BOPricingConcurrence({ user }: Props) {
                     <p className="text-[11px] text-slate-400">{r.a.famille}</p>
                   </td>
                   <td className="px-3 py-2.5 text-right font-semibold text-slate-700">{money(r.ourPA)}</td>
+                  <td className="px-3 py-2.5 text-right text-slate-500">{r.charge > 0 ? money(r.cout) : "—"}</td>
                   <td className={`px-3 py-2.5 text-right font-semibold ${r.alertePA ? "text-red-600" : r.compPA > 0 && r.ourPA < r.compPA ? "text-emerald-600" : "text-slate-700"}`}>
                     {r.compPA > 0 ? money(r.compPA) : "—"}
                     {r.alertePA && <span className="block text-[10px] font-bold">⚠️ +{money(r.ourPA - r.compPA)}</span>}
