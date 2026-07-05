@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { store, type User } from "@/lib/store"
 import { getExternalPricesByArticle, lookupExternalPrice } from "@/lib/extCompetitorPrices"
 
@@ -86,6 +86,15 @@ export default function BOIntelligencePrix({ user }: { user: User }) {
   const [filterConcurrent, setFilterConcurrent] = useState("")
   const [filterFrom, setFilterFrom] = useState("")
   const [filterTo, setFilterTo] = useState("")
+  // Force un re-render des qu'une synchro GestFlux/Iziry (Comparatif Données
+  // Externes) met a jour le cache pendant la même session — externalPrices
+  // n'est pas mémoïsé, mais sans ceci rien ne redéclenche le rendu.
+  const [, setExtSyncTick] = useState(0)
+  useEffect(() => {
+    const onSync = () => setExtSyncTick(t => t + 1)
+    window.addEventListener("fl_ext_sync_updated", onSync)
+    return () => window.removeEventListener("fl_ext_sync_updated", onSync)
+  }, [])
   const [photoDrag, setPhotoDrag] = useState(false)
   const [tab, setTab] = useState<"tableau" | "stats">("tableau")
   const photoRef = useRef<HTMLInputElement>(null)

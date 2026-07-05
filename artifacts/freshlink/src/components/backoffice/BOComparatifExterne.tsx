@@ -79,8 +79,15 @@ const CACHE = {
 function loadCache<T>(key: string): T[] {
   try { return JSON.parse(localStorage.getItem(key) ?? "[]") } catch { return [] }
 }
+// Notifie les autres onglets/ecrans (Prix, Pricing, Intelligence Prix, Flux)
+// deja montes dans la meme session qu'une nouvelle sync est disponible — sans
+// ca, ils gardaient le cache lu a leur propre montage (avant la sync) jusqu'au
+// prochain rechargement complet de la page.
 function saveCache(key: string, data: unknown[]) {
-  try { localStorage.setItem(key, JSON.stringify(data)) } catch { /* quota */ }
+  try {
+    localStorage.setItem(key, JSON.stringify(data))
+    window.dispatchEvent(new CustomEvent("fl_ext_sync_updated", { detail: key }))
+  } catch { /* quota */ }
 }
 
 // ── Fetch helpers ─────────────────────────────────────────────────────────────

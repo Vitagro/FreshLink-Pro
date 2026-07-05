@@ -126,6 +126,16 @@ export default function BOConcurrence({ user }: { user: User }) {
   const prixFileRef = useRef<HTMLInputElement>(null)
   const fluxFileRef = useRef<HTMLInputElement>(null)
 
+  // Recalcule PA/PV/tonnage/flux externes des qu'une synchro GestFlux/Iziry
+  // (onglet Comparatif Données Externes) met a jour le cache pendant la même
+  // session — sinon les autres onglets restaient figes sur l'etat au montage.
+  const [extSyncTick, setExtSyncTick] = useState(0)
+  useEffect(() => {
+    const onSync = () => setExtSyncTick(t => t + 1)
+    window.addEventListener("fl_ext_sync_updated", onSync)
+    return () => window.removeEventListener("fl_ext_sync_updated", onSync)
+  }, [])
+
   const canEdit = ["admin", "super_admin", "super_super_admin", "resp_commercial", "acheteur"].includes(user.role)
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 4000) }
 
@@ -170,7 +180,7 @@ export default function BOConcurrence({ user }: { user: User }) {
       if (v.paGf > 0 && (!m[k] || v.dateGf >= m[k].date)) m[k] = { pa: v.paGf, date: v.dateGf }
     })
     return m
-  }, [prix])
+  }, [prix, extSyncTick])
   // PV concurrent + volume = depuis les FACTURES, FILTRÉ par la plage de dates
   //   (réagit au changement de date / jour précis).
   const compPV = useMemo(() => {
@@ -189,7 +199,7 @@ export default function BOConcurrence({ user }: { user: User }) {
       if (v.pvIz > 0) m[k] = { pv: v.pvIz, vol: v.qteIzKg, ca: v.pvIz * v.qteIzKg }
     })
     return m
-  }, [ventes, dateFrom, dateTo])
+  }, [ventes, dateFrom, dateTo, extSyncTick])
 
   // Prix concurrent filtré par la plage ; flux = CSV + factures (auto), filtré
   const prixF = useMemo(() => prix.filter(e => inRange(e.date)), [prix, dateFrom, dateTo])
@@ -204,7 +214,7 @@ export default function BOConcurrence({ user }: { user: User }) {
   const fluxExterne = useMemo<FluxEntry[]>(() =>
     getExternalPriceHistory().map((p, i) => ({
       id: `fx_${i}`, date: p.date, concurrent: p.concurrent, sku: p.sku, prix: p.prix, volume: p.volume,
-    })), [])
+    })), [extSyncTick])
   const fluxF = useMemo(() => [...flux, ...fluxAuto, ...fluxExterne].filter(e => inRange(e.date)), [flux, fluxAuto, fluxExterne, dateFrom, dateTo])
 
   // ── Performance concurrent (Iziry) : agrégats depuis les FACTURES importées ──
@@ -238,7 +248,7 @@ export default function BOConcurrence({ user }: { user: User }) {
       nbCmds: docs.size, tonnage, ca, tonnageExterne,
       articles: top(byArticle), clients: top(byClient), zones: top(byZone), prevs: top(byPrev),
     }
-  }, [ventes, dateFrom, dateTo])
+  }, [ventes, dateFrom, dateTo, extSyncTick])
 
   // ── Prix & marge : croise le catalogue avec les relevés concurrents ───────
   // Articles réellement commandés (toutes commandes confondues) — pour le

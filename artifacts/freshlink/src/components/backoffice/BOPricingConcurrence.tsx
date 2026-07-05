@@ -112,6 +112,14 @@ export default function BOPricingConcurrence({ user }: Props) {
     })()
   }, [buildMaps])
 
+  // Recalcule des qu'une synchro GestFlux/Iziry (Comparatif Données Externes)
+  // met a jour le cache pendant la même session (sinon fige sur l'etat au montage).
+  useEffect(() => {
+    const onSync = () => buildMaps()
+    window.addEventListener("fl_ext_sync_updated", onSync)
+    return () => window.removeEventListener("fl_ext_sync_updated", onSync)
+  }, [buildMaps])
+
   const saveParams = (p: PricingParams) => { setParams(p); try { localStorage.setItem(LS_PARAMS, JSON.stringify(p)) } catch { /* noop */ } }
   const flash = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 8000) }
 
