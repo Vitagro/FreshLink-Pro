@@ -373,7 +373,7 @@ export default function BOPricingConcurrence({ user }: Props) {
         ? `✅ ${cible.length} PV diffusés. Message copié → collez-le (Ctrl+V) dans le groupe WhatsApp qui vient de s'ouvrir.`
         : waRes === "blocked"
         ? `⚠️ ${cible.length} PV diffusés en interne. Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups pour ce site, le message est déjà copié (Ctrl+V dans le groupe).`
-        : `⚠️ ${cible.length} PV diffusés en interne (notice envoyée aux prévendeurs) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_PV_URL manquant sur Vercel) — rien n'a été envoyé sur WhatsApp.`)
+        : `⚠️ ${cible.length} PV diffusés en interne (notice envoyée aux prévendeurs) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_PV_URL manquant côté serveur) — rien n'a été envoyé sur WhatsApp.`)
   }
 
   const alerterAchat = async () => {
@@ -392,7 +392,7 @@ export default function BOPricingConcurrence({ user }: Props) {
         ? `🚨 Alerte envoyée pour ${cible.length} article(s). Message copié → collez-le (Ctrl+V) dans le groupe WhatsApp achat ouvert.`
         : waRes === "blocked"
         ? `⚠️ Alerte envoyée en interne pour ${cible.length} article(s). Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups, le message est déjà copié (Ctrl+V dans le groupe).`
-        : `⚠️ Alerte envoyée en interne (notice à l'équipe achat) pour ${cible.length} article(s) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_ALERT_URL manquant sur Vercel) — rien n'a été envoyé sur WhatsApp.`)
+        : `⚠️ Alerte envoyée en interne (notice à l'équipe achat) pour ${cible.length} article(s) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_ALERT_URL manquant côté serveur) — rien n'a été envoyé sur WhatsApp.`)
   }
 
   const appliquerPV = async (r: Row) => {
