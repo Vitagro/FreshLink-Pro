@@ -39,8 +39,17 @@ async function fetchWaGroupUrl(which: "pv" | "alert"): Promise<string> {
 interface CompetitorEntry { sku: string; prixConcurrent: number; source?: string; date?: string }
 interface ConcPV { ref: string; libelle: string; unite: string; pv: number }
 interface ConcVente { article: string; pu: number; qt: number; secteur: string; client: string; type: string; date: string }
-interface PricingParams { decoteType: "dh" | "pct"; decoteVal: number; tolPA: number; margeMin: number }
-const DEFAULT_PARAMS: PricingParams = { decoteType: "dh", decoteVal: 0.5, tolPA: 0.2, margeMin: 8 }
+interface PricingParams {
+  decoteType: "dh" | "pct"; decoteVal: number; tolPA: number; margeMin: number
+  // Rappel programmé (HH:MM, "" = désactivé) — prépare le message et tente
+  // d'ouvrir le groupe WhatsApp tout seul à l'heure dite. Un humain doit
+  // rester disponible pour coller/valider : pas d'API WhatsApp payante ici,
+  // donc pas d'envoi garanti sans personne devant l'écran (cf. discussion).
+  scheduleAlertHeure: string
+  schedulePvHeure: string
+}
+const DEFAULT_PARAMS: PricingParams = { decoteType: "dh", decoteVal: 0.5, tolPA: 0.2, margeMin: 8, scheduleAlertHeure: "", schedulePvHeure: "" }
+const LS_AUTOSEND_LOG = "fl_pricing_autosend_log" // { alert: "2026-07-05", pv: "2026-07-05" } — anti double-declenchement
 
 function getJSON<T>(k: string): T[] { try { return JSON.parse(localStorage.getItem(k) ?? "[]") } catch { return [] } }
 function norm(s: unknown): string {
@@ -343,12 +352,15 @@ export default function BOPricingConcurrence({ user }: Props) {
     })
   }
 
-  const diffuserPV = async () => {
+  const diffuserPV = async (auto = false) => {
     const cible = rows.filter(r => r.pvImb > 0)
-    if (cible.length === 0) { flash(false, "Aucun PV à diffuser."); return }
-    if (!window.confirm(`Diffuser ${cible.length} PV imbattable(s) à la force de vente ?\nLes prévendeurs verront ces prix conseillés.`)) return
+    if (cible.length === 0) { if (!auto) flash(false, "Aucun PV à diffuser."); return }
+    if (!auto && !window.confirm(`Diffuser ${cible.length} PV imbattable(s) à la force de vente ?\nLes prévendeurs verront ces prix conseillés.`)) return
     // Onglet ouvert MAINTENANT (geste utilisateur encore actif) — rempli après les await.
-    const waWin = (() => { try { return window.open("about:blank", "_blank") } catch { return null } })()
+    // En mode auto (déclenché par le planificateur, sans clic), pas de geste
+    // utilisateur : le navigateur bloquera très probablement le popup — c'est
+    // pris en charge (waRes === "blocked" → message copié quand même).
+    const waWin = auto ? null : (() => { try { return window.open("about:blank", "_blank") } catch { return null } })()
     setBusy(true)
     const now = new Date().toISOString()
     const all = store.getArticles()
@@ -364,7 +376,7 @@ export default function BOPricingConcurrence({ user }: Props) {
     } catch { /* offline */ }
     const top = cible.slice(0, 40).map(r => `• ${r.a.nom} : ${money(r.pvImb)}`).join("\n")
     const corps = `${cible.length} prix de vente conseillés diffusés par ${user.name}.\n\n${top}${cible.length > 40 ? `\n… +${cible.length - 40} autres` : ""}`
-    addNotice("💰 Nouveaux PV conseillés (imbattables)", corps, "commercial", "notice")
+    addNotice(auto ? "💰 Nouveaux PV conseillés (imbattables) — rappel programmé" : "💰 Nouveaux PV conseillés (imbattables)", corps, "commercial", "notice")
     // Diffusion WhatsApp → groupe force de vente
     const waRes = await sendToWhatsAppGroup("pv", `💰 *PV conseillés Vita Fresh* — ${new Date().toLocaleDateString("fr-MA")}\n\n${top}${cible.length > 40 ? `\n… +${cible.length - 40} autres` : ""}`, waWin)
     setBusy(false)
@@ -372,28 +384,57 @@ export default function BOPricingConcurrence({ user }: Props) {
       waRes === "opened"
         ? `✅ ${cible.length} PV diffusés. Message copié → collez-le (Ctrl+V) dans le groupe WhatsApp qui vient de s'ouvrir.`
         : waRes === "blocked"
-        ? `⚠️ ${cible.length} PV diffusés en interne. Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups pour ce site, le message est déjà copié (Ctrl+V dans le groupe).`
+        ? `⚠️ ${cible.length} PV diffusés en interne. ${auto ? "Rappel programmé : ouvrez le groupe WhatsApp et collez (Ctrl+V), le message est déjà copié." : "Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups pour ce site, le message est déjà copié (Ctrl+V dans le groupe)."}`
         : `⚠️ ${cible.length} PV diffusés en interne (notice envoyée aux prévendeurs) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_PV_URL manquant côté serveur) — rien n'a été envoyé sur WhatsApp.`)
   }
 
-  const alerterAchat = async () => {
+  const alerterAchat = async (auto = false) => {
     const cible = articles.map(computeRow).filter(r => r.alertePA)
-    if (cible.length === 0) { flash(false, "Aucun écart PA défavorable détecté."); return }
-    if (!window.confirm(`Envoyer une alerte à l'équipe achat pour ${cible.length} article(s) où notre PA > PA concurrent ?`)) return
+    if (cible.length === 0) { if (!auto) flash(false, "Aucun écart PA défavorable détecté."); return }
+    if (!auto && !window.confirm(`Envoyer une alerte à l'équipe achat pour ${cible.length} article(s) où notre PA > PA concurrent ?`)) return
     // Onglet ouvert MAINTENANT (geste utilisateur encore actif) — rempli après les await.
-    const waWin = (() => { try { return window.open("about:blank", "_blank") } catch { return null } })()
+    const waWin = auto ? null : (() => { try { return window.open("about:blank", "_blank") } catch { return null } })()
     const lignes = cible.slice(0, 40).map(r => `• ${r.a.nom} : notre PA ${money(r.ourPA)} > concurrent ${money(r.compPA)} (écart +${money(r.ourPA - r.compPA)})`).join("\n")
     const corps = `${cible.length} article(s) où notre prix d'achat dépasse celui du concurrent — à renégocier.\n\n${lignes}${cible.length > 40 ? `\n… +${cible.length - 40} autres` : ""}`
-    addNotice("⚠️ PA plus cher que le concurrent", corps, "resp_achat", "reclamation")
+    addNotice(auto ? "⚠️ PA plus cher que le concurrent — rappel programmé" : "⚠️ PA plus cher que le concurrent", corps, "resp_achat", "reclamation")
     // Alerte WhatsApp → groupe achat
     const waRes = await sendToWhatsAppGroup("alert", `⚠️ *Alerte achat — PA trop cher* — ${new Date().toLocaleDateString("fr-MA")}\n\n${corps}`, waWin)
     flash(waRes === "opened",
       waRes === "opened"
         ? `🚨 Alerte envoyée pour ${cible.length} article(s). Message copié → collez-le (Ctrl+V) dans le groupe WhatsApp achat ouvert.`
         : waRes === "blocked"
-        ? `⚠️ Alerte envoyée en interne pour ${cible.length} article(s). Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups, le message est déjà copié (Ctrl+V dans le groupe).`
+        ? `⚠️ Alerte envoyée en interne pour ${cible.length} article(s). ${auto ? "Rappel programmé : ouvrez le groupe WhatsApp et collez (Ctrl+V), le message est déjà copié." : "Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups, le message est déjà copié (Ctrl+V dans le groupe)."}`
         : `⚠️ Alerte envoyée en interne (notice à l'équipe achat) pour ${cible.length} article(s) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_ALERT_URL manquant côté serveur) — rien n'a été envoyé sur WhatsApp.`)
   }
+
+  // ── Rappel programmé : verifie chaque minute si l'heure configuree est
+  // atteinte, et declenche au plus une fois par jour et par type (alert/pv).
+  // Necessite qu'un back-office reste ouvert sur cet ecran a l'heure dite —
+  // pas d'envoi garanti sans personne devant l'ecran (pas d'API WhatsApp
+  // payante branchee ici, cf. discussion avec Jawad).
+  useEffect(() => {
+    const check = () => {
+      if (!params.scheduleAlertHeure && !params.schedulePvHeure) return
+      const now = new Date()
+      const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`
+      const today = store.today()
+      let log: Record<string, string> = {}
+      try { log = JSON.parse(localStorage.getItem(LS_AUTOSEND_LOG) ?? "{}") } catch { /* noop */ }
+      if (params.scheduleAlertHeure && params.scheduleAlertHeure === hhmm && log.alert !== today) {
+        log.alert = today
+        try { localStorage.setItem(LS_AUTOSEND_LOG, JSON.stringify(log)) } catch { /* quota */ }
+        void alerterAchat(true)
+      }
+      if (params.schedulePvHeure && params.schedulePvHeure === hhmm && log.pv !== today) {
+        log.pv = today
+        try { localStorage.setItem(LS_AUTOSEND_LOG, JSON.stringify(log)) } catch { /* quota */ }
+        void diffuserPV(true)
+      }
+    }
+    const id = setInterval(check, 30000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.scheduleAlertHeure, params.schedulePvHeure, rows, articles])
 
   const appliquerPV = async (r: Row) => {
     const all = store.getArticles()
@@ -473,12 +514,32 @@ export default function BOPricingConcurrence({ user }: Props) {
             className="w-20 px-2 py-2 rounded-lg border border-indigo-200 bg-white text-sm text-center" />
         </div>
         <div className="flex-1" />
-        <button onClick={alerterAchat} className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700">
+        <button onClick={() => alerterAchat()} className="px-4 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700">
           🚨 Alerter achat (PA trop cher)
         </button>
-        <button onClick={diffuserPV} disabled={busy} className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">
+        <button onClick={() => diffuserPV()} disabled={busy} className="px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 disabled:opacity-50">
           {busy ? "⏳…" : "📤 Diffuser PV à la force de vente"}
         </button>
+      </div>
+
+      {/* ── Rappel programmé (gratuit) : necessite un back-office ouvert sur
+          cet ecran a l'heure dite — pas d'API WhatsApp payante branchee. ── */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-slate-600">⏰ Rappel alerte achat (auto)</label>
+          <input type="time" value={params.scheduleAlertHeure} onChange={e => saveParams({ ...params, scheduleAlertHeure: e.target.value })}
+            className="w-28 px-2 py-2 rounded-lg border border-slate-200 bg-white text-sm text-center" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-[11px] font-bold text-slate-600">⏰ Rappel diffusion PV (auto)</label>
+          <input type="time" value={params.schedulePvHeure} onChange={e => saveParams({ ...params, schedulePvHeure: e.target.value })}
+            className="w-28 px-2 py-2 rounded-lg border border-slate-200 bg-white text-sm text-center" />
+        </div>
+        {(params.scheduleAlertHeure || params.schedulePvHeure) && (
+          <button onClick={() => saveParams({ ...params, scheduleAlertHeure: "", schedulePvHeure: "" })}
+            className="text-[11px] font-semibold text-slate-500 hover:text-slate-700 pb-2">✕ Désactiver</button>
+        )}
+        <p className="text-[11px] text-slate-400 flex-1 min-w-[240px]">À l&apos;heure choisie, si un back-office reste ouvert sur cet écran, le message est préparé et le groupe WhatsApp s&apos;ouvre automatiquement (une personne doit rester disponible pour coller/valider — pas d&apos;envoi 100% automatique sans API WhatsApp payante).</p>
       </div>
 
       {/* ── Stratégies de pricing — appliquer en masse + recap gain/perte ── */}
