@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client } from "@/lib/store"
+import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, paDeviationConfirmMessage } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { CameraQualiteIA, ComparatifFournisseurs, NouveauFournisseurModal } from "@/components/mobile/AchatIAModules"
@@ -510,6 +510,18 @@ export default function MobileAchat({ user }: Props) {
       return l.articleId && qty > 0 && !isNaN(pa) && pa > 0
     })
     if (!valid) return
+
+    // Garde-fou anti-faute-de-frappe : si un PA saisi s'écarte fortement du
+    // PA precedent de l'article, on demande confirmation (FR + AR) avant
+    // d'ecraser le catalogue — evite un incident type "93 DH au lieu de 9,30".
+    for (const l of lignes) {
+      const art = articles.find(a => a.id === l.articleId)
+      if (!art) continue
+      const pa = resolvePA(l)
+      const deviation = store.checkPaDeviationSuspecte(art.id, pa)
+      if (deviation && !window.confirm(paDeviationConfirmMessage(deviation))) return
+    }
+
     setSending(true)
 
     // Build lignes + update article historique PA

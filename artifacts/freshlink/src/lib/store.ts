@@ -27,6 +27,19 @@ export function hasInvestorAccess(user: { role: string }): boolean {
   return user.role === "super_super_admin" || user.role === "super_admin" || user.role === "investisseur"
 }
 
+// Message de confirmation bilingue FR/AR affiché (mobile + BO) quand un PA
+// saisi s'écarte fortement du PA précédent — cf. store.checkPaDeviationSuspecte.
+export function paDeviationConfirmMessage(info: { articleNom: string; ancienPa: number; nouveauPa: number; deviationPct: number }): string {
+  const fmt = (n: number) => n.toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return (
+    `⚠️ Merci de vérifier le prix\n` +
+    `${info.articleNom} : vous avez saisi ${fmt(info.nouveauPa)} DH alors que le prix précédent était ${fmt(info.ancienPa)} DH (écart ${info.deviationPct}%).\n\n` +
+    `⚠️ يرجى التحقق من السعر\n` +
+    `${info.articleNom} : لقد أدخلت ${fmt(info.nouveauPa)} درهم بينما كان السعر السابق ${fmt(info.ancienPa)} درهم (فرق ${info.deviationPct}%).\n\n` +
+    `Confirmer ce nouveau prix ? / هل تؤكد هذا السعر الجديد؟`
+  )
+}
+
 export type UserAccessType = "mobile" | "backoffice" | "both"
 
 export type Civilite = "M." | "Mme" | "Dr." | "Pr."
@@ -2573,6 +2586,25 @@ export const store = {
     return [...byNom.values()]
   },
   saveArticles: (a: Article[]) => setLS("fl_articles", a),
+
+  // Seuil d'ecart PA jugé suspect (faute de frappe/virgule, ex: 93 au lieu de
+  // 9,30) — au-dela, mobile/BO doivent demander confirmation avant d'ecraser
+  // le PA courant de l'article (cf. incident Menthe/Tomate Cencara/Mangue AF :
+  // un PA errone saisi lors d'un achat écrasait silencieusement le catalogue).
+  PA_DEVIATION_SEUIL_PCT: 50,
+
+  // Retourne l'info de deviation si le nouveau PA saisi s'écarte de plus de
+  // PA_DEVIATION_SEUIL_PCT% du PA actuel de l'article, sinon null (RAS).
+  checkPaDeviationSuspecte: (articleId: string, nouveauPa: number): { articleNom: string; ancienPa: number; nouveauPa: number; deviationPct: number } | null => {
+    if (!(nouveauPa > 0)) return null
+    const art = store.getArticles().find(a => a.id === articleId)
+    if (!art) return null
+    const ancienPa = Number(art.prixAchat) || 0
+    if (!(ancienPa > 0)) return null // premiere saisie : rien a comparer
+    const deviationPct = Math.abs((nouveauPa - ancienPa) / ancienPa) * 100
+    if (deviationPct < store.PA_DEVIATION_SEUIL_PCT) return null
+    return { articleNom: art.nom, ancienPa, nouveauPa, deviationPct: Math.round(deviationPct) }
+  },
 
   // Enregistrer un historique de prix d'achat pour un article
   addHistoriquePrixAchat: (articleId: string, entry: HistoriquePrixAchat) => {

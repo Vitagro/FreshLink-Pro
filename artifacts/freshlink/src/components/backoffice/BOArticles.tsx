@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { store, type Article, type HistoriquePrixAchat, FAMILLE_GROUPES, getAllFamilles, addCustomFamille } from "@/lib/store"
+import { store, type Article, type HistoriquePrixAchat, FAMILLE_GROUPES, getAllFamilles, addCustomFamille, paDeviationConfirmMessage } from "@/lib/store"
 import { resolveArticlePhoto } from "@/lib/articlePhotoHelper"
 import { getArticlePhoto } from "@/lib/articlePhotos"
 import { deleteArticle } from "@/lib/supabase/db"
@@ -285,6 +285,11 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
 
   const handleSave = () => {
     if (!form.nom) return
+    // Garde-fou anti-faute-de-frappe (FR + AR) sur modification manuelle du PA
+    if (editArt && form.prixAchat !== editArt.prixAchat) {
+      const deviation = store.checkPaDeviationSuspecte(editArt.id, form.prixAchat)
+      if (deviation && !window.confirm(paDeviationConfirmMessage(deviation))) return
+    }
     const all = store.getArticles()
     let saved: Article | null = null
     if (editArt) {

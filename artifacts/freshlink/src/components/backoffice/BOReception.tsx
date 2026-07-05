@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type BonAchat, type PurchaseOrder, type Reception, type Article, type Fournisseur, type ContenantTare, ROLE_LABELS } from "@/lib/store"
+import { store, type BonAchat, type PurchaseOrder, type Reception, type Article, type Fournisseur, type ContenantTare, ROLE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
 type SourceTab = "bons" | "po" | "manuel" | "historique"
@@ -199,6 +199,11 @@ export default function BOReception({ user }: { user: { id: string; name: string
     const qteRecue = Number(quantitesRecues[selectedPO.articleId] ?? 0)
     const prixAchat = Number(prixRecus[selectedPO.articleId] ?? selectedPO.prixUnitaire)
     const art = articles.find(a => a.id === selectedPO.articleId)
+    // Garde-fou anti-faute-de-frappe (FR + AR) avant d'écraser le PA catalogue
+    if (prixAchat > 0) {
+      const deviation = store.checkPaDeviationSuspecte(selectedPO.articleId, prixAchat)
+      if (deviation && !window.confirm(paDeviationConfirmMessage(deviation))) return
+    }
     const lignes = [{
       articleId: selectedPO.articleId,
       articleNom: selectedPO.articleNom,
@@ -261,6 +266,12 @@ export default function BOReception({ user }: { user: { id: string; name: string
         }
       })
     if (lignes.length === 0) return
+    // Garde-fou anti-faute-de-frappe (FR + AR) avant d'écraser le PA catalogue
+    for (const l of lignes) {
+      if (l.prixAchat <= 0) continue
+      const deviation = store.checkPaDeviationSuspecte(l.articleId, l.prixAchat)
+      if (deviation && !window.confirm(paDeviationConfirmMessage(deviation))) return
+    }
     const fourNom = fournisseurs.find(f => f.id === manuelFournisseur)?.nom || manuelFournisseur
     const r: Reception = {
       id: store.genId(), date: store.today(),

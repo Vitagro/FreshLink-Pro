@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type Article, type TransfertStock, type CaisseVide, type CaisseVideMouvement, type ContenantTare, DEFAULT_CONTENANTS_TARE, FAMILLES_ARTICLES, type BonLivraison, type Retour } from "@/lib/store"
+import { store, type Article, type TransfertStock, type CaisseVide, type CaisseVideMouvement, type ContenantTare, DEFAULT_CONTENANTS_TARE, FAMILLES_ARTICLES, type BonLivraison, type Retour, paDeviationConfirmMessage } from "@/lib/store"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { deleteArticle } from "@/lib/supabase/db"
 
@@ -290,6 +290,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
       const idx = (k: string) => head.indexOf(k)
       const all = store.getArticles()
       let updated = 0
+      const suspects: NonNullable<ReturnType<typeof store.checkPaDeviationSuspecte>>[] = []
       for (const line of rows.slice(1)) {
         const c = line.split(sep).map(x => x.trim().replace(/^"|"$/g, ""))
         const id = idx("id") >= 0 ? c[idx("id")] : ""
@@ -297,7 +298,12 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
         const art = all.find(a => (id && a.id === id) || (nom && a.nom.toLowerCase() === nom.toLowerCase()))
         if (!art) continue
         const num = (k: string) => { const j = idx(k); if (j < 0) return undefined; const n = parseFloat(String(c[j]).replace(",", ".")); return isNaN(n) ? undefined : n }
-        const pa = num("prixachat"); if (pa !== undefined) art.prixAchat = pa
+        const pa = num("prixachat")
+        if (pa !== undefined) {
+          const deviation = store.checkPaDeviationSuspecte(art.id, pa)
+          if (deviation) suspects.push(deviation)
+          art.prixAchat = pa
+        }
         const meth = idx("pvmethode") >= 0 ? c[idx("pvmethode")] : ""
         if (meth === "pourcentage" || meth === "montant" || meth === "manuel") art.pvMethode = meth
         const pvVal = num("pvvaleur"); if (pvVal !== undefined) art.pvValeur = pvVal
@@ -305,6 +311,13 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
         const pvDirect = num("prixvente")
         if (pvVal === undefined && pvDirect !== undefined) { art.pvMethode = "manuel"; art.pvValeur = pvDirect }
         updated++
+      }
+      // Garde-fou anti-faute-de-frappe (FR + AR) : un seul recap pour tout le
+      // fichier plutot qu'une popup par ligne.
+      if (suspects.length > 0) {
+        const liste = suspects.slice(0, 10).map(d => `• ${paDeviationConfirmMessage(d)}`).join("\n\n")
+        const suite = suspects.length > 10 ? `\n\n… +${suspects.length - 10} autre(s) écart important(s)` : ""
+        if (!window.confirm(`⚠️ ${suspects.length} écart(s) de prix important(s) détecté(s) dans ce fichier :\n\n${liste}${suite}\n\nImporter quand même ?`)) return
       }
       store.saveArticles(all); setArticles(store.getArticles())
       setSaved(`${updated} prix mis à jour depuis le CSV`); setTimeout(() => setSaved(""), 3500)

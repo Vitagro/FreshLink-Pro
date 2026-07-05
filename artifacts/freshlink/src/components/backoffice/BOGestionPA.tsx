@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react"
 import * as XLSX from "xlsx"
-import { store, type User, type Article } from "@/lib/store"
+import { store, type User, type Article, paDeviationConfirmMessage } from "@/lib/store"
 
 // ── Cycle "commande" (confirmé par le client) ────────────────────────────────
 // La collecte des commandes pour un jour J court de J-1 14h00 à J 04h00 (prépa
@@ -114,6 +114,18 @@ export default function BOGestionPA({ user }: { user: User }) {
         if (i < 0) { err++; return }
         if ((Number(all[i].prixAchat) || 0) !== pa) { all[i] = { ...all[i], prixAchat: pa }; changed.push(all[i]); upd++ }
       })
+      // Garde-fou anti-faute-de-frappe (FR + AR) : import en masse -> un seul
+      // recap au lieu d'une popup par ligne, sinon inutilisable sur 50+ lignes.
+      const suspects = changed
+        .map(a => store.checkPaDeviationSuspecte(a.id, a.prixAchat))
+        .filter((d): d is NonNullable<typeof d> => d !== null)
+      if (suspects.length > 0) {
+        const liste = suspects.slice(0, 10).map(d => `• ${paDeviationConfirmMessage(d)}`).join("\n\n")
+        const suite = suspects.length > 10 ? `\n\n… +${suspects.length - 10} autre(s) écart important(s) / ${suspects.length - 10} فرق(وق) إضافي(ة) أخرى` : ""
+        if (!window.confirm(`⚠️ ${suspects.length} écart(s) de prix important(s) détecté(s) dans ce fichier :\n\n${liste}${suite}\n\nImporter quand même ?`)) {
+          setImporting(false); if (fileRef.current) fileRef.current.value = ""; return
+        }
+      }
       if (changed.length) {
         store.saveArticles(all); setArticles(all)
         const db = await import("@/lib/supabase/db")

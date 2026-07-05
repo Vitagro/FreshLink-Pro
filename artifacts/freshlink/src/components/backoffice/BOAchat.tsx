@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type BonAchat, type Article, type Fournisseur, type ChargeArticle } from "@/lib/store"
+import { store, type BonAchat, type Article, type Fournisseur, type ChargeArticle, paDeviationConfirmMessage } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
@@ -221,6 +221,13 @@ export default function BOAchat() {
   const handleSubmitBon = async () => {
     const fournisseur = fournisseurs.find(f => f.id === formFournisseurId)
     if (!fournisseur) return
+    // Garde-fou anti-faute-de-frappe (FR + AR) avant d'écraser le PA catalogue
+    for (const l of formLignes) {
+      const pa = computePALigne(l)
+      if (pa <= 0) continue
+      const deviation = store.checkPaDeviationSuspecte(l.articleId, pa)
+      if (deviation && !window.confirm(paDeviationConfirmMessage(deviation))) return
+    }
     const lignes = formLignes.map(l => {
       const art = articles.find(a => a.id === l.articleId)!
       const pa = computePALigne(l)
