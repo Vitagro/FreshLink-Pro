@@ -20,6 +20,16 @@ interface GfProduct {
   id: string; ref: string; nom_fr: string; nom_ar: string
   famille: string; prix_achat: number; unite: string; marque: string
 }
+// Table "achat" GestFlux — le prix REELLEMENT negocie du jour (table
+// "reception" ne porte aucun prix ; "products.prix_achat" est un prix
+// catalogue generique, pas le prix du jour — verifie via /synthese-achat).
+// statut "non_traite" = demande pas encore achetee (qte_achetee/prix = 0).
+interface GfAchat {
+  id: string; date: string; produit_id: string | null; article: string
+  qte_demandee: number; qte_achetee: number; nb_caisses: number
+  prix: number; statut: string; frais_supp: number; gratuite: number
+  acheteur_name: string | null
+}
 interface IzCommande {
   id: string; numero: string; client_id: string; prevendeur_id: string
   statut: string; montant_total: number; notes: string; created_at: string
@@ -55,6 +65,7 @@ type MappingStore = Record<string, MappingEntry>   // key = "gf:norm" | "iz:norm
 const CACHE = {
   gfRecep:      "fl_ext_gf_reception",
   gfProducts:   "fl_ext_gf_products",
+  gfAchat:      "fl_ext_gf_achat",
   izCommandes:  "fl_ext_iz_commandes",
   izBL:         "fl_ext_iz_bl",
   izFact:       "fl_ext_iz_factures",
@@ -114,7 +125,7 @@ const IZ_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const APRIL = "2026-04-01"
 
 async function syncAll(full: boolean, gToken: string | null, iToken: string | null): Promise<{
-  gfRecep: GfReception[]; gfProducts: GfProduct[]
+  gfRecep: GfReception[]; gfProducts: GfProduct[]; gfAchat: GfAchat[]
   izCommandes: IzCommande[]; izBL: IzBL[]; izFact: IzFacture[]
   izLignesFact: IzLigneFacture[]; izClients: IzClient[]; izArticles: IzArticle[]
 }> {
@@ -122,7 +133,7 @@ async function syncAll(full: boolean, gToken: string | null, iToken: string | nu
   const since = full ? APRIL : today
 
   const [
-    gfRecep, gfProducts,
+    gfRecep, gfProducts, gfAchat,
     izCommandes, izBL, izFact, izLignesFact, izClients, izArticles,
   ] = await Promise.all([
     // GestFlux
@@ -131,6 +142,9 @@ async function syncAll(full: boolean, gToken: string | null, iToken: string | nu
     // GestFlux products always fresh (small table)
     sbFetch<GfProduct>(GF_URL, GF_KEY, gToken, "products",
       "select=id,ref,nom_fr,nom_ar,famille,prix_achat,unite,marque&limit=500"),
+    // GestFlux achat — SEULE source du prix d'achat reellement negocie du jour
+    sbFetch<GfAchat>(GF_URL, GF_KEY, gToken, "achat",
+      `select=id,date,produit_id,article,qte_demandee,qte_achetee,nb_caisses,prix,statut,frais_supp,gratuite,acheteur_name&date=gte.${since}&order=date.desc&limit=${full ? 6000 : 500}`),
 
     // Iziry commandes
     sbFetch<IzCommande>(IZ_URL, IZ_KEY, iToken, "commandes",
@@ -151,7 +165,7 @@ async function syncAll(full: boolean, gToken: string | null, iToken: string | nu
       "select=id,reference,libelle,unite,actif&limit=400"),
   ])
 
-  return { gfRecep, gfProducts, izCommandes, izBL, izFact, izLignesFact, izClients, izArticles }
+  return { gfRecep, gfProducts, gfAchat, izCommandes, izBL, izFact, izLignesFact, izClients, izArticles }
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -202,6 +216,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
 
   const [gfRecep,      setGfRecep]      = useState<GfReception[]>(()    => loadCache(CACHE.gfRecep))
   const [gfProducts,   setGfProducts]   = useState<GfProduct[]>(()      => loadCache(CACHE.gfProducts))
+  const [gfAchat,      setGfAchat]      = useState<GfAchat[]>(()        => loadCache(CACHE.gfAchat))
   const [izCommandes,  setIzCommandes]  = useState<IzCommande[]>(()     => loadCache(CACHE.izCommandes))
   const [izBL,         setIzBL]         = useState<IzBL[]>(()           => loadCache(CACHE.izBL))
   const [izFact,       setIzFact]       = useState<IzFacture[]>(()      => loadCache(CACHE.izFact))
@@ -244,6 +259,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
 
       const newGf    = full ? data.gfRecep       : merge(gfRecep,      data.gfRecep)
       const newGfPro = data.gfProducts.length    ? data.gfProducts    : gfProducts
+      const newGfAch = full ? data.gfAchat       : merge(gfAchat,      data.gfAchat)
       const newCmd   = full ? data.izCommandes   : merge(izCommandes,  data.izCommandes)
       const newBL    = full ? data.izBL          : merge(izBL,         data.izBL)
       const newFact  = full ? data.izFact        : merge(izFact,       data.izFact)
@@ -253,6 +269,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
 
       setGfRecep(newGf);           saveCache(CACHE.gfRecep,      newGf)
       setGfProducts(newGfPro);     saveCache(CACHE.gfProducts,   newGfPro)
+      setGfAchat(newGfAch);        saveCache(CACHE.gfAchat,      newGfAch)
       setIzCommandes(newCmd);      saveCache(CACHE.izCommandes,  newCmd)
       setIzBL(newBL);              saveCache(CACHE.izBL,         newBL)
       setIzFact(newFact);          saveCache(CACHE.izFact,       newFact)
@@ -263,12 +280,12 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
       const ts = new Date().toLocaleString("fr-MA")
       setLastSync(ts); localStorage.setItem(CACHE.lastSync, ts)
       setStatus("ok")
-      flash(`✓ Sync OK — ${newGf.length} réceptions GF · ${newCmd.length} cmds Iziry · ${newBL.length} BL · ${newFact.length} factures`)
+      flash(`✓ Sync OK — ${newGf.length} réceptions GF · ${newGfAch.length} achats GF · ${newCmd.length} cmds Iziry · ${newBL.length} BL · ${newFact.length} factures`)
     } catch {
       setStatus("error")
       flash("Erreur de synchronisation. Vérifiez la connexion.")
     }
-  }, [gfRecep, gfProducts, izCommandes, izBL, izFact, izLignesFact, izClients, izArticles])
+  }, [gfRecep, gfProducts, gfAchat, izCommandes, izBL, izFact, izLignesFact, izClients, izArticles])
 
   useEffect(() => {
     if (gfRecep.length === 0 && izBL.length === 0) {
@@ -387,6 +404,30 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
     ))
   }, [gfRecep, dateFrom, dateTo, search])
 
+  // Prix REELLEMENT negocie du jour, depuis la table "achat" (celle de
+  // /synthese-achat) — "reception" ne porte pas de prix, et products.prix_achat
+  // est un prix catalogue generique qui ne reflete pas l'achat du jour.
+  // Exclut les lignes "non_traite" (demande pas encore achetee, prix = 0).
+  const gfAchatFiltered = useMemo(() => {
+    return gfAchat.filter(a => inRange(a.date) && a.qte_achetee > 0 && a.prix > 0 && (
+      !search || normName(a.article).includes(normName(search))
+    ))
+  }, [gfAchat, dateFrom, dateTo, search])
+
+  const gfAchatPrixByNorm = useMemo(() => {
+    const m: Record<string, { sum: number; qte: number }> = {}
+    gfAchatFiltered.forEach(a => {
+      const k = normName(a.article)
+      const prev = m[k] ?? { sum: 0, qte: 0 }
+      prev.sum += a.prix * a.qte_achetee
+      prev.qte += a.qte_achetee
+      m[k] = prev
+    })
+    const avg: Record<string, number> = {}
+    Object.entries(m).forEach(([k, v]) => { avg[k] = v.qte > 0 ? v.sum / v.qte : 0 })
+    return avg
+  }, [gfAchatFiltered])
+
   const gfAgg = useMemo(() => {
     const m: Record<string, {
       article: string; produit_id: string; qteGf: number; count: number; lastDate: string
@@ -400,9 +441,8 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
       m[k] = prev
     })
     return Object.entries(m).map(([k, v]) => {
-      // produit_id est très souvent null côté GestFlux — repli par nom.
-      const gfProd  = gfProductById[v.produit_id] ?? gfProductByNormName[k]
-      const prixGf  = gfProd?.prix_achat ?? 0
+      // Prix = table "achat" (negocie du jour), pas products.prix_achat (catalogue).
+      const prixGf  = gfAchatPrixByNorm[k] ?? 0
       const prixIz  = izPrixByNorm[k] ?? 0
       // Apply approved mapping override
       const mapEntry = mappings[`gf:${k}`]
@@ -417,7 +457,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
     })
       .filter(r => familleFiltre === "toutes" || r.famille === familleFiltre)
       .sort((a, b) => (a.nomFl ?? a.article).localeCompare(b.nomFl ?? b.article, "fr"))
-  }, [gfFiltered, gfProductById, gfProductByNormName, izPrixByNorm, flByNorm, mappings, familleFiltre, paDuJour])
+  }, [gfFiltered, gfAchatPrixByNorm, izPrixByNorm, flByNorm, mappings, familleFiltre, paDuJour])
 
   // ── Iziry Commandes ───────────────────────────────────────────────────────
   const cmdFiltered = useMemo(() => {
