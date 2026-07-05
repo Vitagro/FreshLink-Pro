@@ -2267,8 +2267,15 @@ function getLS<T>(key: string, def: T): T {
   if (typeof window === "undefined") return def
   try {
     const v = localStorage.getItem(key)
-    return v ? JSON.parse(v) : def
-  } catch { return def }
+    if (v) return JSON.parse(v)
+  } catch { /* fall through to cloned default below */ }
+  // Clone plutôt que retourner `def` par référence : un appelant qui fait
+  // arr.push(...) sur le résultat (ex: addFournisseur, addX) mutait sinon la
+  // constante DEFAULT_* partagée en mémoire — corrompant tous les appels
+  // suivants pour le reste de la session (reproduit avec addFournisseur sur
+  // un appareil jamais synchronisé : la mutation apparaissait dupliquée dans
+  // le state React sans qu'aucun setState en trop ait été appelé).
+  try { return JSON.parse(JSON.stringify(def)) } catch { return def }
 }
 
 function setLS<T>(key: string, val: T): void {
