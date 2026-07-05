@@ -4,13 +4,35 @@ import { useState, useEffect, useMemo, useRef } from "react"
 import * as XLSX from "xlsx"
 import { store, type User, type Article } from "@/lib/store"
 
+// ── Cycle "commande" (confirmé par le client) ────────────────────────────────
+// La collecte des commandes pour un jour J court de J-1 14h00 à J 04h00 (prépa
+// nocturne du marché de gros). Avant 14h, "aujourd'hui" désigne J ; à partir
+// de 14h, la collecte de J+1 a déjà commencé, donc "aujourd'hui" bascule sur
+// J+1. (Le cycle "achat" lui-même reste un jour calendaire classique 00:00-23:59
+// — non modifié ici.)
+function commandeOperationalDate(): string {
+  const d = new Date()
+  if (d.getHours() >= 14) d.setDate(d.getDate() + 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+// Bornes precises [debut, fin) pour une date operationnelle "commande" donnee.
+function commandeDayBounds(dateStr: string): { start: Date; end: Date } | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+  if (!m) return null
+  const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3])
+  return {
+    start: new Date(y, mo - 1, da - 1, 14, 0, 0, 0),
+    end:   new Date(y, mo - 1, da, 4, 0, 0, 0),
+  }
+}
+
 export default function BOGestionPA({ user }: { user: User }) {
   const [articles, setArticles] = useState<Article[]>([])
   const [search, setSearch] = useState("")
   const [onlyMissing, setOnlyMissing] = useState(true)
   const [scope, setScope] = useState<"all" | "ordered">("ordered")
-  const [from, setFrom] = useState("")
-  const [to, setTo] = useState("")
+  const [from, setFrom] = useState(() => commandeOperationalDate())
+  const [to, setTo] = useState(() => commandeOperationalDate())
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [importing, setImporting] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -23,13 +45,16 @@ export default function BOGestionPA({ user }: { user: User }) {
   }, [])
   const flash = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 6000) }
 
-  // Articles COMMANDÉS (optionnellement sur une période)
+  // Articles COMMANDÉS — fenêtre "commande" J-1 14h00 -> J 04h00 (voir
+  // commandeDayBounds ci-dessus), pas un simple jour calendaire.
   const orderedIds = useMemo(() => {
     const ids = new Set<string>()
+    const boundsFrom = from ? commandeDayBounds(from) : null
+    const boundsTo   = to   ? commandeDayBounds(to)   : null
     store.getCommandes().forEach(c => {
       const d = new Date((c as { date?: string; createdAt?: string }).date ?? (c as { createdAt?: string }).createdAt ?? 0)
-      if (from && d < new Date(from)) return
-      if (to && d > new Date(to + "T23:59:59")) return
+      if (boundsFrom && d < boundsFrom.start) return
+      if (boundsTo && d >= boundsTo.end) return
       ;((c as { lignes?: { articleId?: string }[] }).lignes ?? []).forEach(l => { if (l.articleId) ids.add(l.articleId) })
     })
     return ids
@@ -60,7 +85,7 @@ export default function BOGestionPA({ user }: { user: User }) {
   const doExport = () => {
     const src = scope === "ordered" ? articles.filter(a => orderedIds.has(a.id)) : articles
     if (!src.length) { flash(false, scope === "ordered" ? "Aucun article commandé sur cette période." : "Aucun article."); return }
-    const rows = src.map(a => ({ ref: a.id, nom: a.nom, famille: a.famille ?? "", unite: a.unite ?? "", PA_actuel: Number(a.prixAchat) || 0 }))
+    const rows = src.map(a => ({ ref: a.id, nom: a.nom, nom_ar: a.nomAr ?? "", famille: a.famille ?? "", unite: a.unite ?? "", PA_actuel: Number(a.prixAchat) || 0 }))
     const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "PA")
     XLSX.writeFile(wb, `PA_${scope === "ordered" ? "commandes" : "tous"}_${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -126,7 +151,7 @@ export default function BOGestionPA({ user }: { user: User }) {
             <div className="flex items-end gap-2">
               <label className="flex flex-col gap-1"><span className="text-[10px] text-muted-foreground">Du</span><input type="date" value={from} onChange={e => setFrom(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm" /></label>
               <label className="flex flex-col gap-1"><span className="text-[10px] text-muted-foreground">Au</span><input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm" /></label>
-              <span className="text-xs text-muted-foreground pb-2">{orderedIds.size} commandé(s)</span>
+              <span className="text-xs text-muted-foreground pb-2" title="Fenetre commande : veille 14h00 -> jour J 04h00">{orderedIds.size} commandé(s) · cycle J-1 14h→J 4h</span>
             </div>
           )}
           <button onClick={doExport} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">📤 Exporter Excel</button>
@@ -156,7 +181,10 @@ export default function BOGestionPA({ user }: { user: User }) {
             {filtered.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-muted-foreground text-sm">Aucun article{onlyMissing ? " sans PA" : ""}.</td></tr>}
             {filtered.slice(0, 400).map(a => (
               <tr key={a.id} className="border-t border-border">
-                <td className="px-3 py-2 text-foreground font-medium">{a.nom}</td>
+                <td className="px-3 py-2 text-foreground font-medium">
+                  {a.nom}
+                  {a.nomAr && <span dir="rtl" className="block text-xs text-muted-foreground font-normal">{a.nomAr}</span>}
+                </td>
                 <td className="px-3 py-2 text-muted-foreground font-mono text-xs hidden sm:table-cell">{a.id}</td>
                 <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell">{a.unite}</td>
                 <td className="px-3 py-2 text-right">
