@@ -406,6 +406,14 @@ export interface ItinerairePoint {
   heureArrivee?: string
 }
 
+export type FournisseurType = "marche_gros" | "ferme" | "intermediaire" | "autre"
+export const FOURNISSEUR_TYPE_LABELS: Record<FournisseurType, string> = {
+  marche_gros: "Marché de gros",
+  ferme: "Ferme / Producteur",
+  intermediaire: "Intermédiaire",
+  autre: "Autre",
+}
+
 export interface Fournisseur {
   id: string
   nom: string
@@ -415,6 +423,7 @@ export interface Fournisseur {
   adresse?: string
   ville?: string
   region?: string
+  type?: FournisseurType          // categorie du fournisseur (choisie a la creation)
   specialites: string[]           // fruits & légumes fournis
   modalitePaiement?: ModalitePaiement
   delaiPaiement?: number          // jours
@@ -423,6 +432,7 @@ export interface Fournisseur {
   rc?: string                     // Registre de commerce
   notes?: string
   itineraires: ItinerairePoint[]  // tournées/marchés approvisionnement
+  gpsVerifie?: boolean            // false = position saisie sans confirmation sur place
 }
 
 export interface Livreur {
@@ -3385,9 +3395,13 @@ export const store = {
     return `${prefix}-${seq}` // e.g. "CMD-260323-001"
   },
 
-  today: () => new Date().toISOString().split("T")[0],
+  // Date calendaire LOCALE (pas toISOString(), qui est en UTC — au Maroc
+  // (UTC+1, sans heure d'ete), une commande creee entre 00h00 et 00h59
+  // heure locale se voyait attribuer la date de la veille, l'UTC n'ayant
+  // pas encore bascule sur le jour courant).
+  today: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` },
   now: () => new Date().toISOString(),
-  yesterday: () => { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split("T")[0] },
+  yesterday: () => { const d = new Date(); d.setDate(d.getDate() - 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` },
   // Date par défaut "jour opérationnel", pour les écrans de reporting
   // (Intelligence Concurrence, Prix/Marge, etc.) — pas la date calendaire brute :
   //  - commandes : cycle du jour clos à 14h → avant 14h on regarde J, après on

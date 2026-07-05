@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react"
 import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
-import { CameraQualiteIA, ComparatifFournisseurs } from "@/components/mobile/AchatIAModules"
+import { CameraQualiteIA, ComparatifFournisseurs, NouveauFournisseurModal } from "@/components/mobile/AchatIAModules"
 
 interface Props { user: User }
 
@@ -180,6 +180,7 @@ export default function MobileAchat({ user }: Props) {
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [lignes, setLignes] = useState<LigneForm[]>([EMPTY_LIGNE()])
   const [fournisseurId, setFournisseurId] = useState("")
+  const [showNewFournisseur, setShowNewFournisseur] = useState(false)
   const [sending, setSending] = useState(false)
   const [success, setSuccess] = useState(false)
   const [emailDest, setEmailDest] = useState("")
@@ -951,7 +952,11 @@ export default function MobileAchat({ user }: Props) {
 
       {/* Fournisseur */}
       <div className="bg-card rounded-xl p-4 border border-border flex flex-col gap-2">
-        <label className="text-xs font-bold text-foreground uppercase tracking-wide">Fournisseur *</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-foreground uppercase tracking-wide">Fournisseur *</label>
+          <button type="button" onClick={() => setShowNewFournisseur(true)}
+            className="text-xs font-bold text-primary hover:underline">+ Nouveau</button>
+        </div>
         <select value={fournisseurId} onChange={e => setFournisseurId(e.target.value)}
           className="w-full px-3 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
           <option value="">-- Selectionner un fournisseur --</option>
@@ -963,6 +968,18 @@ export default function MobileAchat({ user }: Props) {
           <p className="text-xs text-muted-foreground">Tel: {fournisseur.telephone}</p>
         )}
       </div>
+
+      {showNewFournisseur && (
+        <NouveauFournisseurModal
+          articles={articles}
+          onClose={() => setShowNewFournisseur(false)}
+          onCreated={f => {
+            setFournisseurs(prev => [...prev, f])
+            setFournisseurId(f.id)
+            setShowNewFournisseur(false)
+          }}
+        />
+      )}
 
       {/* ── Inline Article Selector ─────────────────────────────────────────── */}
       <div className="bg-card rounded-xl border border-border flex flex-col overflow-hidden">

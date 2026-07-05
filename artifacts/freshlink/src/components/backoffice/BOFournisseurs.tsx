@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import {
   store, type Fournisseur, type ItinerairePoint,
   SPECIALITES_FRUITS_LEGUMES, MODALITE_LABELS, type ModalitePaiement,
+  FOURNISSEUR_TYPE_LABELS, type FournisseurType,
 } from "@/lib/store"
 import BOFournisseurDetail from "./BOFournisseurDetail"
 
@@ -11,6 +12,7 @@ const JOURS = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"
 
 const emptyFournisseur = (): Omit<Fournisseur, "id"> => ({
   nom: "", contact: "", telephone: "", email: "", adresse: "", ville: "Casablanca", region: "Casablanca-Settat",
+  type: undefined,
   specialites: [], modalitePaiement: "cash", delaiPaiement: 0, plafondCredit: 0, ice: "", rc: "", notes: "", itineraires: [],
 })
 
@@ -57,6 +59,7 @@ export default function BOFournisseurs({ user }: { user: { id: string; role: str
     setForm({
       nom: f.nom, contact: f.contact, telephone: f.telephone || "", email: f.email,
       adresse: f.adresse || "", ville: f.ville || "Casablanca", region: f.region || "Casablanca-Settat",
+      type: f.type,
       specialites: f.specialites || [], modalitePaiement: f.modalitePaiement || "cash",
       delaiPaiement: f.delaiPaiement || 0, plafondCredit: f.plafondCredit || 0,
       ice: f.ice || "", rc: f.rc || "",
@@ -307,6 +310,19 @@ export default function BOFournisseurs({ user }: { user: { id: string; role: str
               {/* INFO */}
               {activeTab === "info" && (
                 <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-foreground">Type de fournisseur</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(Object.entries(FOURNISSEUR_TYPE_LABELS) as [FournisseurType, string][]).map(([val, label]) => (
+                        <button key={val} type="button" onClick={() => setForm(f => ({ ...f, type: val }))}
+                          className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors ${
+                            form.type === val ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"
+                          }`}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {[
                       { f: "nom", label: "Raison sociale *", placeholder: "Marché Central" },

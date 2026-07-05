@@ -3,7 +3,10 @@
 import { callLLM, triggerN3Alert } from "@/lib/ai"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { type Article, type Fournisseur, type User, type HistoriquePrixAchat } from "@/lib/store"
+import {
+  store, type Article, type Fournisseur, type User, type HistoriquePrixAchat,
+  type FournisseurType, FOURNISSEUR_TYPE_LABELS, SPECIALITES_FRUITS_LEGUMES,
+} from "@/lib/store"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
 // ── Shared API call ──────────────────────────────────────────────────────────
@@ -1091,6 +1094,254 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
       )}
 
       <canvas ref={canvasRef} className="hidden" />
+    </div>
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// NOUVEAU FOURNISSEUR — creation terrain par l'acheteur
+// Flux : 1) type de fournisseur  2) coordonnees  3) capture GPS + confirmation
+// "êtes-vous chez le fournisseur ?" — si non, le point GPS (position actuelle
+// de l'acheteur, pas celle du fournisseur) est quand meme enregistre mais
+// marque comme non verifie pour que le BO sache qu'il faut le corriger.
+// ────────────────────────────────────────────────────────────────────────────
+
+interface NouveauFournisseurModalProps {
+  articles: Article[]
+  onClose: () => void
+  onCreated: (f: Fournisseur) => void
+}
+
+type NFStep = "type" | "form" | "confirm"
+type SpecialiteMode = "famille" | "article"
+
+const FOURNISSEUR_TYPES = Object.entries(FOURNISSEUR_TYPE_LABELS) as [FournisseurType, string][]
+
+export function NouveauFournisseurModal({ articles, onClose, onCreated }: NouveauFournisseurModalProps) {
+  const [step, setStep] = useState<NFStep>("type")
+  const [type, setType] = useState<FournisseurType | null>(null)
+  const [nom, setNom] = useState("")
+  const [contact, setContact] = useState("")
+  const [telephone, setTelephone] = useState("")
+  const [ville, setVille] = useState("")
+  const [notes, setNotes] = useState("")
+  const [saving, setSaving] = useState(false)
+  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null)
+  const [gpsStatus, setGpsStatus] = useState<"loading" | "granted" | "denied">("loading")
+
+  // Spécialités — soit par famille (catégories génériques), soit article par
+  // article (produits précis) — aucune limite de sélection dans les deux cas.
+  const [specialiteMode, setSpecialiteMode] = useState<SpecialiteMode>("famille")
+  const [specialites, setSpecialites] = useState<string[]>([])
+  const [articleSearch, setArticleSearch] = useState("")
+  const toggleSpecialite = (val: string) => {
+    setSpecialites(prev => prev.includes(val) ? prev.filter(x => x !== val) : [...prev, val])
+  }
+  const filteredArticlesForSpec = articles.filter(a =>
+    !articleSearch.trim() || a.nom.toLowerCase().includes(articleSearch.trim().toLowerCase())
+  )
+
+  const captureGPS = useCallback(() => {
+    setGpsStatus("loading")
+    if (!navigator.geolocation) { setGpsStatus("denied"); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => { setGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsStatus("granted") },
+      () => setGpsStatus("denied"),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }, [])
+
+  const goToConfirm = () => {
+    if (!nom.trim()) return
+    setStep("confirm")
+    captureGPS()
+  }
+
+  const finalize = async (presentSurPlace: boolean) => {
+    setSaving(true)
+    const fournisseur: Fournisseur = {
+      id: store.genId(),
+      nom: nom.trim(), contact: contact.trim(), telephone: telephone.trim(), email: "",
+      ville: ville.trim() || undefined, type: type ?? "autre", specialites,
+      notes: presentSurPlace
+        ? (notes.trim() || undefined)
+        : ["⚠️ Position GPS non confirmée sur place au moment de la création — données à vérifier.", notes.trim()].filter(Boolean).join("\n"),
+      itineraires: gps ? [{ nom: nom.trim() || "Point de création", lat: gps.lat, lng: gps.lng }] : [],
+      gpsVerifie: presentSurPlace && !!gps,
+    }
+    store.addFournisseur(fournisseur)
+    try {
+      const db = await import("@/lib/supabase/db")
+      await db.upsertFournisseur(fournisseur)
+    } catch { /* offline — reste en local, se synchronisera plus tard */ }
+    setSaving(false)
+    onCreated(fournisseur)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="w-full max-w-lg bg-white rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-green-50 shrink-0">
+          <p className="text-sm font-bold text-slate-800">Nouveau fournisseur</p>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+        </div>
+
+        <div className="p-5 flex flex-col gap-4 overflow-y-auto">
+          {step === "type" && (
+            <>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Type de fournisseur</p>
+              <div className="grid grid-cols-2 gap-2">
+                {FOURNISSEUR_TYPES.map(([val, label]) => (
+                  <button key={val} type="button" onClick={() => { setType(val); setStep("form") }}
+                    className={`px-3 py-4 rounded-xl text-sm font-semibold border-2 transition-colors ${
+                      type === val ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 text-slate-600 hover:border-green-300"
+                    }`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {step === "form" && (
+            <>
+              <button onClick={() => setStep("type")} className="text-xs font-semibold text-slate-400 hover:text-slate-600 self-start">← Type : {type ? FOURNISSEUR_TYPE_LABELS[type] : ""}</button>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-700">Raison sociale / Nom *</label>
+                <input type="text" value={nom} onChange={e => setNom(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="ex: Souk Had Soualem — Stand 12" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-700">Nom du contact</label>
+                <input type="text" value={contact} onChange={e => setContact(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="ex: Ahmed" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-700">Téléphone</label>
+                <input type="tel" value={telephone} onChange={e => setTelephone(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="06 00 00 00 00" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-700">Ville</label>
+                <input type="text" value={ville} onChange={e => setVille(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Casablanca" />
+              </div>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-700">Spécialités {specialites.length > 0 && <span className="text-green-600">({specialites.length})</span>}</label>
+                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px] font-semibold">
+                    <button type="button" onClick={() => setSpecialiteMode("famille")}
+                      className={`px-2.5 py-1 ${specialiteMode === "famille" ? "bg-green-600 text-white" : "text-slate-500"}`}>
+                      Par famille
+                    </button>
+                    <button type="button" onClick={() => setSpecialiteMode("article")}
+                      className={`px-2.5 py-1 ${specialiteMode === "article" ? "bg-green-600 text-white" : "text-slate-500"}`}>
+                      Par article
+                    </button>
+                  </div>
+                </div>
+
+                {specialiteMode === "famille" && (
+                  <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto p-1">
+                    {SPECIALITES_FRUITS_LEGUMES.map(s => (
+                      <button key={s} type="button" onClick={() => toggleSpecialite(s)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
+                          specialites.includes(s) ? "bg-green-600 text-white border-green-600" : "border-slate-200 text-slate-600"
+                        }`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {specialiteMode === "article" && (
+                  <div className="flex flex-col gap-2">
+                    <input type="text" value={articleSearch} onChange={e => setArticleSearch(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      placeholder="Rechercher un article..." />
+                    <div className="flex flex-col gap-1 max-h-48 overflow-y-auto border border-slate-100 rounded-lg p-1.5">
+                      {filteredArticlesForSpec.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-2">Aucun article trouvé.</p>
+                      )}
+                      {filteredArticlesForSpec.map(a => (
+                        <label key={a.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">
+                          <input type="checkbox" checked={specialites.includes(a.nom)} onChange={() => toggleSpecialite(a.nom)}
+                            className="w-4 h-4 accent-green-600 shrink-0" />
+                          <span className="text-sm text-slate-700">{a.nom}</span>
+                          <span className="ml-auto text-[10px] text-slate-400">{a.famille}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-slate-700">Remarques (optionnel)</label>
+                <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                  placeholder="Produits disponibles, horaires, conditions..." />
+              </div>
+              <button onClick={goToConfirm} disabled={!nom.trim()}
+                className="mt-2 py-3 rounded-xl bg-green-600 text-white text-sm font-bold disabled:opacity-40">
+                Continuer
+              </button>
+            </>
+          )}
+
+          {step === "confirm" && (
+            <>
+              <div className="flex flex-col items-center gap-2 py-2">
+                {gpsStatus === "loading" && (
+                  <>
+                    <span className="w-6 h-6 border-2 border-green-500/40 border-t-green-600 rounded-full animate-spin" />
+                    <p className="text-xs text-slate-500">Localisation en cours...</p>
+                  </>
+                )}
+                {gpsStatus === "granted" && gps && (
+                  <>
+                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <p className="text-xs font-mono text-slate-500">{gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}</p>
+                  </>
+                )}
+                {gpsStatus === "denied" && (
+                  <>
+                    <p className="text-xs text-amber-600 text-center">Position indisponible — verifiez l&apos;autorisation de localisation. Vous pouvez continuer sans GPS.</p>
+                    <button onClick={captureGPS} className="text-xs font-semibold text-green-700 underline">Reessayer</button>
+                  </>
+                )}
+              </div>
+
+              <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
+                <p className="text-sm font-bold text-amber-800 text-center">Êtes-vous actuellement chez ce fournisseur ?</p>
+                <p className="text-[11px] text-amber-700 text-center mt-1">La position captée servira à localiser {nom || "ce fournisseur"} sur la carte.</p>
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={() => finalize(false)} disabled={saving || gpsStatus === "loading"}
+                  className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-600 text-sm font-bold disabled:opacity-40">
+                  Non
+                </button>
+                <button onClick={() => finalize(true)} disabled={saving || gpsStatus === "loading"}
+                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2">
+                  {saving && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                  Oui, valider
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 text-center">
+                Si vous répondez « Non », le fournisseur est quand même créé avec votre position actuelle, mais marqué à vérifier.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
