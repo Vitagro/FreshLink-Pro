@@ -88,6 +88,7 @@ const BOSettings             = React.lazy(() => import("./BOSettings"))
 const BOFinance              = React.lazy(() => import("./BOFinance"))
 const BOFiscalite            = React.lazy(() => import("./BOFiscalite"))
 const BOArticles             = React.lazy(() => import("./BOArticles"))
+const BOFamilles             = React.lazy(() => import("./BOFamilles"))
 const BOGestionPA            = React.lazy(() => import("./BOGestionPA"))
 const BOWhatsApp             = React.lazy(() => import("./BOWhatsApp"))
 const BOAffectationCommerciale = React.lazy(() => import("./BOAffectationCommerciale"))
@@ -162,7 +163,7 @@ export type Tab =
   | "commercial" | "affectation" | "zones_secteurs" | "dispatch"
   | "stock" | "retour" | "cash"
   | "recap" | "rapport_livraison" | "preparation"
-  | "fournisseurs" | "articles"
+  | "fournisseurs" | "articles" | "familles"
   | "finance" | "fiscalite" | "whatsapp"
   | "users" | "database" | "settings" | "gsheets"
   | "comptes_externes"
@@ -339,6 +340,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
     label: "Stock & Catalogue", labelAr: "المخزون والفهرس",
     items: [
       { id: "articles",     label: "Catalogue Produits",    labelAr: "الفواكه والخضر",   permKey: "canViewStock",      icon: <Icon d="M4 6h16M4 10h16M4 14h16M4 18h16" /> },
+      { id: "familles",     label: "Gestion des Familles",  labelAr: "إدارة الفئات",     permKey: "canViewStock",      icon: <Icon d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
       { id: "stock",        label: "Stock & Inventaire",    labelAr: "المخزون",          permKey: "canViewStock",      icon: <Icon d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
       { id: "shelf_life",   label: "Shelf Life & DLC",      labelAr: "تاريخ الصلاحية",  permKey: "canViewStock",      icon: <Icon d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /> },
       { id: "forecast",     label: "Forecast & Achat Auto", labelAr: "التوقعات",         permKey: "canViewStock",      icon: <Icon d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> },
@@ -430,7 +432,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Vue d'ensemble",              labelAr: "نظرة عامة",            ids: ["dashboard", "recap", "rapport_livraison"] },
   { label: "Communication",               labelAr: "التواصل",              ids: ["messagerie", "whatsapp", "feedback"] },
   { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["achat", "po", "reception", "fournisseurs", "credit_fournisseur", "sourcing", "pa_historique", "gestion_pa", "rapport_marche", "analyse_achat", "analyse_reception", "temps_achat"] },
-  { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["articles", "stock", "shelf_life", "forecast", "caisses_vides"] },
+  { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["articles", "familles", "stock", "shelf_life", "forecast", "caisses_vides"] },
   { label: "Commercial & Ventes",         labelAr: "التجاري والمبيعات",    ids: ["commandes_unifiees", "affectation", "zones_secteurs", "alertes_clients", "documents", "prospection", "moteur_commercial"] },
   { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "category_pricing", "pricing_concurrent", "intelligence_prix", "concurrence"] },
   { label: "Marketing & E-commerce",      labelAr: "التسويق والمتجر الإلكتروني", ids: ["marketplace", "promo_codes", "loyalty", "gifts_v3", "loterie", "shop_analytics"] },
@@ -462,6 +464,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   stock:             (u) => <BOStock user={u} />,
   retour:            (_u) => <BORetour />,
   articles:          (u) => <BOArticles user={u} />,
+  familles:          (u) => <BOFamilles user={u} />,
   finance:           (u) => <BOFinance user={u} />,
   fiscalite:         (u) => <BOFiscalite user={u} />,
   whatsapp:          (u) => <BOWhatsApp user={u} />,

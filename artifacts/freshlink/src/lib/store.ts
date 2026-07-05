@@ -1270,6 +1270,13 @@ export interface ProcessConfig {
   // → rapport d'écart achat vs préparation → livraison → passage cash-man en fin de livraison
   modeCrossdocking?: boolean
   notes?: string
+  // Familles d'articles personnalisées (créées depuis Catalogue Produits /
+  // Gestion des Familles). Stockées ici (et non dans leur propre clé locale)
+  // pour beneficier gratuitement du meme mecanisme de sync cross-appareil que
+  // le reste de ProcessConfig — sinon une famille creee sur un appareil
+  // restait invisible des autres, source de doublons/confusion (ex: "Herbes"
+  // vs "Herbes aromatiques" saisis independamment).
+  famillesCustom?: string[]
 }
 
 export const DEFAULT_PROCESS_CONFIG: ProcessConfig = {
@@ -1749,10 +1756,12 @@ export function getFamilleGroupe(famille: string): string {
 }
 
 // ── Familles personnalisées (créées par l'utilisateur) ─────────────────────────
-const LS_FAMILLES_CUSTOM = "fl_familles_custom"
+// Stockées dans ProcessConfig (fl_process_config) — deja synchronise
+// cross-appareil via autoSync, contrairement a l'ancienne cle locale
+// fl_familles_custom qui restait piegee sur l'appareil ou elle etait creee.
 export function getCustomFamilles(): string[] {
   if (typeof window === "undefined") return []
-  try { return JSON.parse(localStorage.getItem(LS_FAMILLES_CUSTOM) ?? "[]") } catch { return [] }
+  return store.getProcessConfig().famillesCustom ?? []
 }
 /** Ajoute une famille perso (si pas déjà présente, insensible à la casse) → liste à jour */
 export function addCustomFamille(nom: string): string[] {
@@ -1762,12 +1771,12 @@ export function addCustomFamille(nom: string): string[] {
   const exists = [...FAMILLES_ARTICLES, ...cur].some(x => x.toLowerCase() === f.toLowerCase())
   if (exists) return cur
   const next = [...cur, f]
-  try { localStorage.setItem(LS_FAMILLES_CUSTOM, JSON.stringify(next)) } catch { /* noop */ }
+  store.saveProcessConfig({ ...store.getProcessConfig(), famillesCustom: next })
   return next
 }
 export function removeCustomFamille(nom: string): string[] {
   const next = getCustomFamilles().filter(x => x !== nom)
-  try { localStorage.setItem(LS_FAMILLES_CUSTOM, JSON.stringify(next)) } catch { /* noop */ }
+  store.saveProcessConfig({ ...store.getProcessConfig(), famillesCustom: next })
   return next
 }
 /** Toutes les familles : prédéfinies + perso + celles déjà utilisées par des articles */
@@ -2586,6 +2595,19 @@ export const store = {
     return [...byNom.values()]
   },
   saveArticles: (a: Article[]) => setLS("fl_articles", a),
+
+  // Reaffecte en masse tous les articles d'une famille vers une autre (fusion
+  // ou renommage) — retourne le nombre d'articles touches. Le caller est
+  // responsable de propager vers Supabase (upsertArticle) les ids modifies.
+  reassignFamille: (oldNom: string, newNom: string): string[] => {
+    const arts = store.getArticles()
+    const touchedIds: string[] = []
+    arts.forEach((a, i) => {
+      if (a.famille === oldNom) { arts[i] = { ...a, famille: newNom }; touchedIds.push(a.id) }
+    })
+    if (touchedIds.length > 0) store.saveArticles(arts)
+    return touchedIds
+  },
 
   // Seuil d'ecart PA jugé suspect (faute de frappe/virgule, ex: 93 au lieu de
   // 9,30) — au-dela, mobile/BO doivent demander confirmation avant d'ecraser
