@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import { callLLM, triggerN3Alert } from "@/lib/ai"
+import { buildAgentDataContext } from "@/lib/agentContext"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { type User } from "@/lib/store"
 
@@ -607,13 +608,15 @@ function AgentChat({ agent, user }: { agent: typeof AGENTS[0]; user: User }) {
     setLoading(true)
 
     try {
+      const dataContext = buildAgentDataContext(agent.id, user)
       const contextualPrompt = `${agent.systemPrompt}
 
 CONTEXTE SESSION :
 - Utilisateur connecte : role="${user.role}", nom="${user.name}"
 - Adapte OBLIGATOIREMENT ton ton, ton niveau de detail et ta langue selon ce role.
 - Si l'utilisateur ecrit en Darija reponds en Darija. Si Francais reponds en Francais. Si Anglais reponds en Anglais.
-- Formate tes reponses avec des tableaux Markdown quand c'est pertinent pour la lisibilite.`
+- Formate tes reponses avec des tableaux Markdown quand c'est pertinent pour la lisibilite.
+${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse — ne devine jamais, ne dis jamais des generalites si tu as la vraie donnee ci-dessus.` : ""}`
 
       const historyForLLM = msgs.slice(-14).map(m => ({ role: m.role, text: m.text }))
       historyForLLM.push({ role: "user", text })

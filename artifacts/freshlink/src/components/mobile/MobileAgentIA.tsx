@@ -1,6 +1,7 @@
 "use client"
 
 import { callLLM, triggerN3Alert as n3Alert } from "@/lib/ai"
+import { buildAgentDataContext } from "@/lib/agentContext"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { type User } from "@/lib/store"
 
@@ -335,10 +336,12 @@ export default function MobileAgentIA({ user }: Props) {
     setLoading(true)
     try {
       const history = msgs.slice(-8).map(m => ({ role: m.role, content: m.text }))
+      const dataContext = buildAgentDataContext(agent.id, user)
       const contextPrompt = `${agent.systemPrompt}
 
 CONTEXTE : L'utilisateur qui te parle a le rôle "${user.role}" dans FreshLink Pro. Son nom est ${user.name}.
-Adapte ton ton, ta langue et ton niveau de détail exactement selon ce rôle.`
+Adapte ton ton, ta langue et ton niveau de détail exactement selon ce rôle.
+${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta réponse — ne devine jamais, ne dis jamais des généralités si tu as la vraie donnée ci-dessus.` : ""}`
       const historyMsgs = msgs.slice(-12).map(m => ({ role: m.role, text: m.text }))
       historyMsgs.push({ role: "user", text: msg })
       const reply = await callLLM(contextPrompt, historyMsgs, { temperature: 0.65, max_tokens: 1200 })
