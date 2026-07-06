@@ -1,0 +1,39 @@
+Bonjour Replit Agent. Tu vas m'aider à corriger, optimiser et auditer mon application ERP/Application Mobile basée sur le dépôt GitHub suivant : https://github.com/VitaCore26/FreshLink (qui tourne sur erp.vita-core.org). L'application utilise Supabase comme base de données/backend.
+
+Voici la liste des tâches à réaliser, classées par ordre strict de priorité. Prends le temps d'analyser le code existant pour chaque point avant d'appliquer les modifications.
+
+---
+
+### PRIORITÉ 1 : Traductions & Affichage bilingue (Français/Arabe)
+1. **Facturation et Bons de Livraison (BL) :** Actuellement, les articles ne s'affichent qu'en français. Modifie le code pour récupérer et afficher le nom bilingue (Français + Arabe) tel qu'il est stocké dans la base de données.
+2. **Application Mobile Prédeandeur :** Corrige l'affichage dans l'interface mobile pour que les articles apparaissent également en Français et en Arabe.
+
+### PRIORITÉ 2 : Application Mobile Acheteur & Gestion des articles
+3. **Tri et Filtres :** Dans le module mobile des acheteurs, consolide la liste des articles. Trie-les obligatoirement par ordre alphabétique et ajoute une option/un accordéon permettant de cocher/décocher ou masquer/afficher les familles d'articles.
+4. **Coût des charges :** Donne la main à l'acheteur sur le mobile pour rectifier le coût des charges. Ajoute également la possibilité d'affecter directement le coût des charges qui a été renseigné sur le Back-Office (BO).
+
+### PRIORITÉ 3 : Application Mobile Prédeandeur (Comportement)
+5. **Quantité par défaut :** Sur l'application mobile prévendeur, change le comportement par défaut lors de la sélection d'un article. La quantité par défaut doit être de "1 UM" (Unité de Mesure) et non de "0 kg" comme c'est le cas actuellement.
+
+### PRIORITÉ 4 : Logique des Triangles/Trips et Préparation
+6. **Bons de préparation groupés :** Dans le module de préparation, si je sélectionne plusieurs clients à la fois, le système ne doit PLUS tout regrouper sur une seule feuille globale. Génère à la place un bon de préparation distinct par client ET par article (séparation propre par client).
+
+### PRIORITÉ 5 : Gestion des Bons de Livraison (BL) et Validation
+7. **Modification de BL / Liste déroulante :** Sur l'interface "Modifier BL" (Bon de livraison Client), remplace le champ client par une liste déroulante filtrée. Cette liste ne doit afficher QUE les clients assignés à la "Trip" (tournée) et au bon de préparation concerné (pas tous les clients de la base). De plus, n'affiche pas la totalité absolue des quantités, mais filtre par rapport au bon de préparation.
+8. **Validation Numérique vs Impression :** - **Validation Numérique :** Quand je valide la préparation de manière numérique, les quantités validées doivent être injectées/collées directement et automatiquement sur le BL.
+   - **Validation par Impression :** Quand je valide via l'impression, l'utilisateur doit obligatoirement avoir la main pour rectifier manuellement les quantités directement sur le BL.
+
+### PRIORITÉ 6 : Infrastructure & Base de données
+9. **Liaison Supabase :** Analyse la synchronisation et les appels API entre l'ERP et Supabase. Assure une liaison forte, gère correctement les erreurs de connexion, et mets en place des politiques de sécurité ou des déclencheurs (triggers) si nécessaire pour éviter les désynchronisations de stocks ou de statuts.
+
+---
+
+### PRIORITÉ 7 : Design, Ergonomie & Audit Global
+
+10. **Design et Organisation UI/UX :** Propose et implémente une charte graphique et une organisation plus forte, moderne et professionnelle pour l'interface de l'ERP. Améliore la lisibilité des tableaux, la clarté des boutons d'action (Valider, Imprimer, Modifier) et rends l'application mobile plus "user-friendly" (responsive, inputs faciles à cliquer sur téléphone).
+
+11. **Audit de A à Z :** Enfin, effectue un audit complet du code du projet. Recherche les bugs potentiels, les failles de sécurité, les requêtes Supabase lentes ou mal optimisées, et le code mort. Fais-moi un rapport de tes découvertes et applique les corrections nécessaires pour stabiliser l'ERP de bout en bout.
+
+---
+
+Procède étape par étape. Commençons par analyser la structure du projet pour résoudre le point 1 et 2 (l'affichage Français/Arabe). Dis-moi quels fichiers tu identifies pour cette modification.

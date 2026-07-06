@@ -1,0 +1,28 @@
+modules = ["nodejs-24", "python-3.11"]
+
+[deployment]
+router = "application"
+deploymentTarget = "autoscale"
+
+[deployment.postBuild]
+args = ["pnpm", "store", "prune"]
+env = { "CI" = "true" }
+
+[workflows]
+runButton = "Project"
+
+[agent]
+stack = "PNPM_WORKSPACE"
+expertMode = true
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+VITE_GESTFLUX_URL = "https://dngqklliynfoqkalttpu.supabase.co"
+VITE_GESTFLUX_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRuZ3FrbGxpeW5mb3FrYWx0dHB1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5MTY3NTQsImV4cCI6MjA4OTQ5Mjc1NH0.wJADBNlsyDq7t1wAPZkNpJkPZFpfUrbczdphoXZVyhA"
+VITE_IZIRY_URL = "https://gmbvrjxteoxbiyternfz.supabase.co"
+VITE_IZIRY_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtYnZyanh0ZW94Yml5dGVybmZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU1OTgxNjAsImV4cCI6MjA5MTE3NDE2MH0.lZ53-ZzyM9hdV2AE1N6OyPRj9_45mwlKXFglA9ZlJBE"

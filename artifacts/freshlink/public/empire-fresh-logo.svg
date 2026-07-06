@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <rect width="120" height="120" rx="20" fill="#1a4f2a"/>
+  <circle cx="60" cy="48" r="22" fill="#2d7a47"/>
+  <path d="M60 30 C52 38 42 44 42 52 C42 64 52 70 60 70 C68 70 78 64 78 52 C78 44 68 38 60 30Z" fill="#4caf6e"/>
+  <path d="M60 34 C55 40 50 46 50 53 C50 61 55 66 60 66 C65 66 70 61 70 53 C70 46 65 40 60 34Z" fill="#7dd4a2"/>
+  <path d="M60 36 L60 66" stroke="#1a4f2a" stroke-width="1.5" stroke-dasharray="2,2"/>
+  <path d="M53 46 Q60 42 67 46" stroke="#1a4f2a" stroke-width="1.2" fill="none"/>
+  <path d="M51 53 Q60 49 69 53" stroke="#1a4f2a" stroke-width="1.2" fill="none"/>
+  <rect x="24" y="78" width="72" height="2" rx="1" fill="#b8962e"/>
+  <text x="60" y="94" font-family="Arial,sans-serif" font-size="9" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="1">EMPIRE FRESH</text>
+  <text x="60" y="107" font-family="Arial,sans-serif" font-size="5.5" font-weight="600" fill="#b8962e" text-anchor="middle" letter-spacing="1.5">DISTRIBUTION</text>
+</svg>

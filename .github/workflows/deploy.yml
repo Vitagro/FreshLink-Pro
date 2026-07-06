@@ -1,0 +1,167 @@
+name: Deploy ERP to Hostinger
+
+# Runs on every push to main. Builds the Vite SPA and the bundled Express API
+# separately, ships only build artifacts to Hostinger over SSH (no git, no
+# node_modules for the API — it's a self-contained esbuild bundle), swaps
+# them into place atomically, and rolls back automatically if the post-deploy
+# health check fails.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-erp
+  cancel-in-progress: false
+
+env:
+  REMOTE_SPA_DIR: /home/u387018932/domains/vita-agro.com/public_html/erp
+  REMOTE_SPA_RELEASE_DIR: /home/u387018932/domains/vita-agro.com/public_html/erp-releases/${{ github.sha }}
+  REMOTE_SPA_BACKUP_DIR: /home/u387018932/domains/vita-agro.com/public_html/erp-prev
+  REMOTE_API_DIR: /home/u387018932/apps/erp
+  REMOTE_API_RELEASE_DIR: /home/u387018932/apps/erp-releases/${{ github.sha }}
+  REMOTE_API_BACKUP_DIR: /home/u387018932/apps/erp-prev
+  SITE_URL: https://erp.vita-agro.com
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Build SPA
+        env:
+          VITE_GESTFLUX_URL: ${{ secrets.VITE_GESTFLUX_URL }}
+          VITE_GESTFLUX_ANON_KEY: ${{ secrets.VITE_GESTFLUX_ANON_KEY }}
+          VITE_IZIRY_URL: ${{ secrets.VITE_IZIRY_URL }}
+          VITE_IZIRY_ANON_KEY: ${{ secrets.VITE_IZIRY_ANON_KEY }}
+        run: pnpm --filter "./artifacts/freshlink" run build
+
+      - name: Build API
+        run: pnpm --filter "./artifacts/api-server" run build
+
+      - name: Package SPA
+        run: tar -czf spa-deploy.tar.gz -C artifacts/freshlink/dist/public .
+
+      - name: Package API
+        run: tar -czf api-deploy.tar.gz -C artifacts/api-server dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: erp-build
+          path: |
+            spa-deploy.tar.gz
+            api-deploy.tar.gz
+          retention-days: 3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: erp-build
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null && break
+            echo "ssh-keyscan attempt $i failed, retrying..."
+            sleep 5
+          done
+
+      - name: Upload new releases (does not touch the live app yet)
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          $SSH "mkdir -p '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_API_RELEASE_DIR }}'"
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz"
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz"
+          $SSH "tar -xzf '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz' -C '${{ env.REMOTE_SPA_RELEASE_DIR }}' && rm '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz'"
+          $SSH "tar -xzf '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz' -C '${{ env.REMOTE_API_RELEASE_DIR }}' && rm '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz'"
+
+      - name: Swap into place (backup current releases first)
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          $SSH "rm -rf '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_DIR }}' '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
+          $SSH "rm -rf '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_DIR }}' '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_RELEASE_DIR }}' '${{ env.REMOTE_API_DIR }}' && mkdir -p '${{ env.REMOTE_API_DIR }}/tmp'"
+
+      - name: Write .htaccess (Passenger config + secrets) and restart
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          cat > erp.htaccess <<EOF
+          PassengerAppRoot ${{ env.REMOTE_API_DIR }}
+          PassengerAppType node
+          PassengerNodejs /opt/alt/alt-nodejs22/root/bin/node
+          PassengerStartupFile dist/index.mjs
+          PassengerAppEnv production
+          PassengerBaseURI /api
+          PassengerRestartDir ${{ env.REMOTE_API_DIR }}/tmp
+
+          SetEnv SUPABASE_SERVICE_ROLE_KEY "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          SetEnv DEVICE_SECRET "${{ secrets.DEVICE_SECRET }}"
+          SetEnv NEXT_PUBLIC_SUPABASE_URL "${{ secrets.SUPABASE_URL }}"
+          SetEnv VITE_SUPABASE_URL "${{ secrets.SUPABASE_URL }}"
+          SetEnv VITE_GESTFLUX_URL "${{ secrets.VITE_GESTFLUX_URL }}"
+          SetEnv VITE_GESTFLUX_ANON_KEY "${{ secrets.VITE_GESTFLUX_ANON_KEY }}"
+          SetEnv VITE_IZIRY_URL "${{ secrets.VITE_IZIRY_URL }}"
+          SetEnv VITE_IZIRY_ANON_KEY "${{ secrets.VITE_IZIRY_ANON_KEY }}"
+          SetEnv RESEND_API_KEY "${{ secrets.RESEND_API_KEY }}"
+          SetEnv SHOP_ADMIN_PASSWORD "${{ secrets.SHOP_ADMIN_PASSWORD }}"
+          SetEnv ANTHROPIC_API_KEY "${{ secrets.ANTHROPIC_API_KEY }}"
+          SetEnv WA_GROUP_PV_URL "${{ secrets.WA_GROUP_PV_URL }}"
+          SetEnv WA_GROUP_ALERT_URL "${{ secrets.WA_GROUP_ALERT_URL }}"
+
+          RewriteEngine On
+          RewriteCond %{REQUEST_URI} !^/api/
+          RewriteCond %{REQUEST_FILENAME} !-f
+          RewriteCond %{REQUEST_FILENAME} !-d
+          RewriteRule ^ /index.html [L]
+          EOF
+          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" erp.htaccess \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_DIR }}/.htaccess"
+          $SSH "touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
+
+      - name: Health check
+        id: health
+        run: |
+          sleep 8
+          spa_code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "${{ env.SITE_URL }}")
+          api_body=$(curl -sS --max-time 20 "${{ env.SITE_URL }}/api/sync-read?table=fl_clients")
+          echo "spa_code=$spa_code"
+          echo "api_body=$api_body"
+          # API must return real JSON from Express (device-guard 401 is expected
+          # and fine — a 503/HTML page means the Node process failed to start).
+          if [ "$spa_code" != "200" ] || ! echo "$api_body" | grep -q '"ok"'; then
+            echo "unhealthy=true" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Rollback on failed health check
+        if: failure() && steps.health.outputs.unhealthy == 'true'
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          $SSH "rm -rf '${{ env.REMOTE_SPA_DIR }}' && mv '${{ env.REMOTE_SPA_BACKUP_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
+          $SSH "rm -rf '${{ env.REMOTE_API_DIR }}' && mv '${{ env.REMOTE_API_BACKUP_DIR }}' '${{ env.REMOTE_API_DIR }}' && touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
+          echo "::error::Deploy failed health check — rolled back to previous release."
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
