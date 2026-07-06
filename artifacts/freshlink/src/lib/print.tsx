@@ -702,9 +702,8 @@ function buildBLHtml(bl: BOBonLivraison, opts: PrintBLOpts, company?: CompanyCon
 <div class="stripe"></div>
 <div class="lh">
   <div class="lh-brand">
-    <img src="${logo}" class="lh-logo" onerror="this.style.display='none'" alt="${companyNom}"/>
+    <img src="${logo}" class="lh-logo" style="width:130px;height:130px" onerror="this.style.display='none'" alt="${companyNom}"/>
     <div class="lh-co">
-      <div class="lh-tag">Fruits &amp; Légumes — Distribution Réseau Maroc</div>
       <div class="lh-meta">${adresse}<br>Tél: ${telephone}${legalLine}</div>
     </div>
   </div>

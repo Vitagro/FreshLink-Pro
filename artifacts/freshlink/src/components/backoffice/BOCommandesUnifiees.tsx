@@ -124,13 +124,36 @@ function canDeleteModify(u: User): boolean {
   return ["super_super_admin","super_admin","admin","resp_commercial"].includes(u.role)
 }
 
+// ── Cycle "commande" (même règle que Gestion des PA) : la collecte pour un
+// jour J court de J-1 14h00 à J 04h00. Avant 14h, "aujourd'hui" désigne J ;
+// à partir de 14h, la collecte de J+1 a déjà commencé.
+function commandeOperationalDate(): string {
+  const d = new Date()
+  if (d.getHours() >= 14) d.setDate(d.getDate() + 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+function commandeCycleRange(dateStr: string): { debut: string; fin: string; cutoffLabel: string } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+  if (!m) return { debut: dateStr, fin: dateStr, cutoffLabel: "" }
+  const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3])
+  const veille = new Date(y, mo - 1, da - 1)
+  const debut = `${veille.getFullYear()}-${String(veille.getMonth() + 1).padStart(2, "0")}-${String(veille.getDate()).padStart(2, "0")}`
+  return { debut, fin: dateStr, cutoffLabel: `${veille.toLocaleDateString("fr-MA", { day: "2-digit", month: "2-digit" })} 14h` }
+}
+
+// Les commandes ERP stockent une date-only "YYYY-MM-DD" (store.today(), sans
+// heure réelle) alors que les commandes web ont un vrai timestamp
+// (created_at). Afficher une heure pour une date-only revient à formater
+// minuit UTC en heure locale Maroc → toujours "01:00" affiché, quelle que
+// soit l'heure réelle de la commande (bug signalé : "j'ai toujours 01:00").
+// On n'affiche l'heure QUE si la valeur porte un vrai composant horaire.
 function fmt(iso: string) {
   if (!iso) return "—"
+  const hasTime = iso.includes("T") && iso.length > 10
   try {
-    return new Date(iso).toLocaleString("fr-MA", {
-      day: "2-digit", month: "2-digit", year: "2-digit",
-      hour: "2-digit", minute: "2-digit",
-    })
+    return new Date(iso).toLocaleString("fr-MA", hasTime
+      ? { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }
+      : { day: "2-digit", month: "2-digit", year: "2-digit" })
   } catch { return iso }
 }
 
@@ -513,6 +536,13 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const newCount  = cmds.filter(c => ["nouveau","en_attente"].includes(c.statut)).length
   const totalCA   = filtered.reduce((s, c) => s + c.montant, 0)
 
+  // ── Alerte cycle commande : nb livrées depuis le début du cycle en cours ──
+  const cycleAlerte = (() => {
+    const { debut, fin, cutoffLabel } = commandeCycleRange(commandeOperationalDate())
+    const livrees = cmds.filter(c => c.statut === "livre" && c.date.slice(0, 10) >= debut && c.date.slice(0, 10) <= fin).length
+    return { livrees, cutoffLabel }
+  })()
+
   // ── Export modèle : commandes par CLIENT × ARTICLE × QUANTITÉ ─────────────────
   // Respecte les filtres actifs (statut, source, zone, période, recherche...) —
   // une ligne par combinaison client/article, quantités et montants cumulés sur
@@ -587,6 +617,12 @@ export default function BOCommandesUnifiees({ user }: Props) {
             Actualiser
           </button>
         </div>
+      </div>
+
+      {/* ── Alerte cycle commande ── */}
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm px-4 py-2.5 flex items-center gap-2">
+        <span>✅</span>
+        <span><strong>{cycleAlerte.livrees}</strong> commande(s) livrée(s) depuis {cycleAlerte.cutoffLabel} (cycle commande J-1 14h → J 4h).</span>
       </div>
 
       {/* ── Flux logistique : Reçues -> En préparation -> Assignées -> Livrées ── */}
@@ -789,6 +825,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
           title="Au"
           className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-slate-700"
         />
+        <button type="button" onClick={() => { const { debut, fin } = commandeCycleRange(commandeOperationalDate()); setFilterDateDebut(debut); setFilterDateFin(fin) }}
+          title="Commandes du cycle J-1 14h → J 4h"
+          className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap">
+          🌙 Cycle commande
+        </button>
 
         {/* Recherche libre */}
         <input
