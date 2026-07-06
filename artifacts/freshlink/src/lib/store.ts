@@ -1277,6 +1277,9 @@ export interface ProcessConfig {
   // restait invisible des autres, source de doublons/confusion (ex: "Herbes"
   // vs "Herbes aromatiques" saisis independamment).
   famillesCustom?: string[]
+  // Familles "supprimées" par l'utilisateur (prédéfinies masquées ou perso
+  // retirées) — voir getAllFamilles/desactiverFamille dans ce fichier.
+  famillesDesactivees?: string[]
 }
 
 export const DEFAULT_PROCESS_CONFIG: ProcessConfig = {
@@ -1779,10 +1782,34 @@ export function removeCustomFamille(nom: string): string[] {
   store.saveProcessConfig({ ...store.getProcessConfig(), famillesCustom: next })
   return next
 }
-/** Toutes les familles : prédéfinies + perso + celles déjà utilisées par des articles */
+// ── Familles désactivées ("supprimées") — s'applique aussi bien aux familles
+// prédéfinies (constantes en dur, donc "supprimer" = masquer de la liste) qu'aux
+// familles perso. Une famille encore utilisée par un article reste toujours
+// visible (voir getAllFamilles) même si elle est dans cette liste — la
+// suppression réelle est bloquée tant que des articles l'utilisent (BOFamilles).
+export function getFamillesDesactivees(): string[] {
+  if (typeof window === "undefined") return []
+  return store.getProcessConfig().famillesDesactivees ?? []
+}
+export function desactiverFamille(nom: string): string[] {
+  const cur = getFamillesDesactivees()
+  if (cur.includes(nom)) return cur
+  const next = [...cur, nom]
+  store.saveProcessConfig({ ...store.getProcessConfig(), famillesDesactivees: next })
+  return next
+}
+export function reactiverFamille(nom: string): string[] {
+  const next = getFamillesDesactivees().filter(x => x !== nom)
+  store.saveProcessConfig({ ...store.getProcessConfig(), famillesDesactivees: next })
+  return next
+}
+
+/** Toutes les familles : prédéfinies + perso + celles déjà utilisées par des articles, moins celles désactivées */
 export function getAllFamilles(usedFamilles: string[] = []): string[] {
-  const set = new Set<string>([...FAMILLES_ARTICLES, ...getCustomFamilles(), ...usedFamilles.filter(Boolean)])
-  return [...set]
+  const used = usedFamilles.filter(Boolean)
+  const desactivees = new Set(getFamillesDesactivees())
+  const set = new Set<string>([...FAMILLES_ARTICLES, ...getCustomFamilles(), ...used])
+  return [...set].filter(f => !desactivees.has(f) || used.includes(f))
 }
 
 // ── Secteurs = Zones unifiés (source de vérité unique mobile/BO/shop) ─────────

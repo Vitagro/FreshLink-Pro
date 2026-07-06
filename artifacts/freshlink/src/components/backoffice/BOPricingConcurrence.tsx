@@ -146,28 +146,40 @@ export default function BOPricingConcurrence({ user }: Props) {
   const saveParams = (p: PricingParams) => { setParams(p); try { localStorage.setItem(LS_PARAMS, JSON.stringify(p)) } catch { /* noop */ } }
   const flash = (ok: boolean, text: string) => { setMsg({ ok, text }); setTimeout(() => setMsg(null), 8000) }
 
-  // WhatsApp groupe : les liens d'invitation ne permettent pas de pré-remplir le
-  // message → on copie le texte dans le presse-papier puis on ouvre le groupe
-  // pour que l'utilisateur colle (Ctrl/Cmd+V) et envoie.
-  // Résultat fiable de l'envoi WhatsApp :
-  //   "opened"   → l'onglet du groupe s'est bien ouvert (message copié à coller)
-  //   "blocked"  → lien OK mais le navigateur a bloqué le popup
-  //   "noconfig" → WA_GROUP_*_URL absent côté serveur
-  // IMPORTANT : window.open doit garder l'« activation utilisateur ». Comme on
-  // appelle cette fonction APRÈS des await (upsert Supabase + fetch des liens),
-  // le geste est perdu et le popup serait bloqué. On ouvre donc un onglet vide
-  // SYNCHRONEMENT dans le handler (waWin), puis on y charge le lien ici.
-  const sendToWhatsAppGroup = async (
-    which: "pv" | "alert",
-    message: string,
-    waWin: Window | null,
-  ): Promise<"opened" | "blocked" | "noconfig"> => {
-    try { await navigator.clipboard?.writeText(message) } catch { /* noop */ }
-    const link = await fetchWaGroupUrl(which)
-    if (!link) { try { if (waWin && !waWin.closed) waWin.close() } catch { /* noop */ } return "noconfig" }
-    if (waWin && !waWin.closed) { try { waWin.location.href = link; return "opened" } catch { /* noop */ } }
-    const w = (() => { try { return window.open(link, "_blank", "noopener") } catch { return null } })()
-    return w ? "opened" : "blocked"
+  // WhatsApp groupe : les liens d'invitation ne permettent pas de pré-remplir
+  // le message (contrairement à wa.me pour un contact) — impossible d'envoyer
+  // directement. Le clipboard-write + window.open automatiques (ancienne
+  // version) échouaient trop souvent : le clipboard nécessite un geste
+  // utilisateur "frais", or ces fonctions tournent après plusieurs await
+  // (upsert Supabase...), qui invalident le geste initial → "rien n'est écrit"
+  // en collant. Solution : on affiche une popup récap avec le texte visible
+  // en clair (copiable manuellement, aucune ambiguïté), un bouton Copier qui
+  // s'exécute sur SON PROPRE clic (geste toujours frais → fiable), un export
+  // Excel de la liste, et un lien <a> direct vers le groupe (jamais bloqué
+  // par le navigateur, contrairement à window.open).
+  interface WaPreview { kind: "pv" | "alert"; titre: string; texte: string; lien: string; rows: { Article: string; Valeur: string }[] }
+  const [waPreview, setWaPreview] = useState<WaPreview | null>(null)
+  const [waCopied, setWaCopied] = useState(false)
+
+  const openWaPreview = async (kind: "pv" | "alert", titre: string, texte: string, rows: { Article: string; Valeur: string }[]) => {
+    const lien = await fetchWaGroupUrl(kind)
+    setWaCopied(false)
+    setWaPreview({ kind, titre, texte, lien, rows })
+  }
+
+  const copierWaTexte = async () => {
+    if (!waPreview) return
+    try { await navigator.clipboard.writeText(waPreview.texte); setWaCopied(true); setTimeout(() => setWaCopied(false), 3000) }
+    catch { flash(false, "Copie impossible — sélectionnez le texte manuellement (Ctrl+A puis Ctrl+C).") }
+  }
+
+  const exporterWaExcel = async () => {
+    if (!waPreview) return
+    const XLSX = await import("xlsx")
+    const ws = XLSX.utils.json_to_sheet(waPreview.rows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, waPreview.kind === "pv" ? "PV conseillés" : "Alerte PA")
+    XLSX.writeFile(wb, `${waPreview.kind === "pv" ? "pv_conseilles" : "alerte_pa"}_${new Date().toISOString().slice(0, 10)}.xlsx`)
   }
 
   const findComp = useCallback((nom: string, map: Record<string, number>): number => {
@@ -356,11 +368,6 @@ export default function BOPricingConcurrence({ user }: Props) {
     const cible = rows.filter(r => r.pvImb > 0)
     if (cible.length === 0) { if (!auto) flash(false, "Aucun PV à diffuser."); return }
     if (!auto && !window.confirm(`Diffuser ${cible.length} PV imbattable(s) à la force de vente ?\nLes prévendeurs verront ces prix conseillés.`)) return
-    // Onglet ouvert MAINTENANT (geste utilisateur encore actif) — rempli après les await.
-    // En mode auto (déclenché par le planificateur, sans clic), pas de geste
-    // utilisateur : le navigateur bloquera très probablement le popup — c'est
-    // pris en charge (waRes === "blocked" → message copié quand même).
-    const waWin = auto ? null : (() => { try { return window.open("about:blank", "_blank") } catch { return null } })()
     setBusy(true)
     const now = new Date().toISOString()
     const all = store.getArticles()
@@ -377,34 +384,22 @@ export default function BOPricingConcurrence({ user }: Props) {
     const top = cible.slice(0, 40).map(r => `• ${r.a.nom} : ${money(r.pvImb)}`).join("\n")
     const corps = `${cible.length} prix de vente conseillés diffusés par ${user.name}.\n\n${top}${cible.length > 40 ? `\n… +${cible.length - 40} autres` : ""}`
     addNotice(auto ? "💰 Nouveaux PV conseillés (imbattables) — rappel programmé" : "💰 Nouveaux PV conseillés (imbattables)", corps, "commercial", "notice")
-    // Diffusion WhatsApp → groupe force de vente
-    const waRes = await sendToWhatsAppGroup("pv", `💰 *PV conseillés Vita Fresh* — ${new Date().toLocaleDateString("fr-MA")}\n\n${top}${cible.length > 40 ? `\n… +${cible.length - 40} autres` : ""}`, waWin)
+    const texte = `💰 *PV conseillés Vita Fresh* — ${new Date().toLocaleDateString("fr-MA")}\n\n${cible.map(r => `• ${r.a.nom} : ${money(r.pvImb)}`).join("\n")}`
+    await openWaPreview("pv", "PV conseillés prêts à diffuser", texte, cible.map(r => ({ Article: r.a.nom, Valeur: money(r.pvImb) })))
     setBusy(false)
-    flash(waRes === "opened",
-      waRes === "opened"
-        ? `✅ ${cible.length} PV diffusés. Message copié → collez-le (Ctrl+V) dans le groupe WhatsApp qui vient de s'ouvrir.`
-        : waRes === "blocked"
-        ? `⚠️ ${cible.length} PV diffusés en interne. ${auto ? "Rappel programmé : ouvrez le groupe WhatsApp et collez (Ctrl+V), le message est déjà copié." : "Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups pour ce site, le message est déjà copié (Ctrl+V dans le groupe)."}`
-        : `⚠️ ${cible.length} PV diffusés en interne (notice envoyée aux prévendeurs) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_PV_URL manquant côté serveur) — rien n'a été envoyé sur WhatsApp.`)
+    flash(true, `✅ ${cible.length} PV diffusés en interne (notice envoyée aux prévendeurs).`)
   }
 
   const alerterAchat = async (auto = false) => {
     const cible = articles.map(computeRow).filter(r => r.alertePA)
     if (cible.length === 0) { if (!auto) flash(false, "Aucun écart PA défavorable détecté."); return }
     if (!auto && !window.confirm(`Envoyer une alerte à l'équipe achat pour ${cible.length} article(s) où notre PA > PA concurrent ?`)) return
-    // Onglet ouvert MAINTENANT (geste utilisateur encore actif) — rempli après les await.
-    const waWin = auto ? null : (() => { try { return window.open("about:blank", "_blank") } catch { return null } })()
     const lignes = cible.slice(0, 40).map(r => `• ${r.a.nom} : notre PA ${money(r.ourPA)} > concurrent ${money(r.compPA)} (écart +${money(r.ourPA - r.compPA)})`).join("\n")
     const corps = `${cible.length} article(s) où notre prix d'achat dépasse celui du concurrent — à renégocier.\n\n${lignes}${cible.length > 40 ? `\n… +${cible.length - 40} autres` : ""}`
     addNotice(auto ? "⚠️ PA plus cher que le concurrent — rappel programmé" : "⚠️ PA plus cher que le concurrent", corps, "resp_achat", "reclamation")
-    // Alerte WhatsApp → groupe achat
-    const waRes = await sendToWhatsAppGroup("alert", `⚠️ *Alerte achat — PA trop cher* — ${new Date().toLocaleDateString("fr-MA")}\n\n${corps}`, waWin)
-    flash(waRes === "opened",
-      waRes === "opened"
-        ? `🚨 Alerte envoyée pour ${cible.length} article(s). Message copié → collez-le (Ctrl+V) dans le groupe WhatsApp achat ouvert.`
-        : waRes === "blocked"
-        ? `⚠️ Alerte envoyée en interne pour ${cible.length} article(s). ${auto ? "Rappel programmé : ouvrez le groupe WhatsApp et collez (Ctrl+V), le message est déjà copié." : "Le navigateur a bloqué l'ouverture de WhatsApp — autorisez les popups, le message est déjà copié (Ctrl+V dans le groupe)."}`
-        : `⚠️ Alerte envoyée en interne (notice à l'équipe achat) pour ${cible.length} article(s) mais le groupe WhatsApp n'est pas configuré côté serveur (WA_GROUP_ALERT_URL manquant côté serveur) — rien n'a été envoyé sur WhatsApp.`)
+    const texte = `⚠️ *Alerte achat — PA trop cher* — ${new Date().toLocaleDateString("fr-MA")}\n\n${corps}`
+    await openWaPreview("alert", "Alerte achat prête à envoyer", texte, cible.map(r => ({ Article: r.a.nom, Valeur: `Notre PA ${money(r.ourPA)} vs concurrent ${money(r.compPA)} (écart +${money(r.ourPA - r.compPA)})` })))
+    flash(true, `🚨 Alerte envoyée en interne pour ${cible.length} article(s).`)
   }
 
   // ── Rappel programmé : verifie chaque minute si l'heure configuree est
@@ -728,6 +723,44 @@ export default function BOPricingConcurrence({ user }: Props) {
             )
           })()}
           <p className="text-[11px] text-slate-400">📈 Marge concurrent = (PV facture − PA concurrent de l&apos;article) × quantité, agrégée par {margeDim === "article" ? "produit" : margeDim === "type" ? "type client" : "secteur"} sur la période choisie.</p>
+        </div>
+      )}
+
+      {/* ── Popup diffusion WhatsApp : texte en clair + copier + Excel + lien direct ── */}
+      {waPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={e => e.target === e.currentTarget && setWaPreview(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800">💬 {waPreview.titre}</h3>
+              <button onClick={() => setWaPreview(null)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <div className="p-5 flex flex-col gap-3">
+              <p className="text-xs text-slate-500">Le texte ci-dessous est prêt — copiez-le puis collez-le (Ctrl+V) dans le groupe WhatsApp, ou téléchargez la liste en Excel à joindre en fichier.</p>
+              <textarea readOnly value={waPreview.texte} rows={10}
+                onFocus={e => e.currentTarget.select()}
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-primary" />
+              <div className="flex flex-wrap gap-2">
+                <button onClick={copierWaTexte}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-bold ${waCopied ? "bg-emerald-600 text-white" : "bg-slate-800 text-white hover:bg-slate-900"}`}>
+                  {waCopied ? "✓ Copié !" : "📋 Copier le texte"}
+                </button>
+                <button onClick={exporterWaExcel} className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
+                  ⬇ Excel ({waPreview.rows.length} ligne{waPreview.rows.length > 1 ? "s" : ""})
+                </button>
+                {waPreview.lien ? (
+                  <a href={waPreview.lien} target="_blank" rel="noopener noreferrer"
+                    className="px-4 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 text-white hover:bg-emerald-700 inline-flex items-center">
+                    💬 Ouvrir WhatsApp
+                  </a>
+                ) : (
+                  <span className="px-4 py-2.5 rounded-xl text-sm font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                    ⚠️ Groupe non configuré côté serveur
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400">La notice interne a déjà été envoyée (visible dans l&apos;app) — ceci ne concerne que la diffusion WhatsApp, qui reste manuelle (pas d&apos;API WhatsApp payante branchée).</p>
+            </div>
+          </div>
         </div>
       )}
     </div>

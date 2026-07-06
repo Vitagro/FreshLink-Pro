@@ -136,6 +136,8 @@ export default function BOConcurrence({ user }: { user: User }) {
     return () => window.removeEventListener("fl_ext_sync_updated", onSync)
   }, [])
 
+  const [tonnageDim, setTonnageDim] = useState<"jour" | "article" | "client" | "prevendeur">("jour")
+
   const canEdit = ["admin", "super_admin", "super_super_admin", "resp_commercial", "acheteur"].includes(user.role)
   const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 4000) }
 
@@ -249,6 +251,63 @@ export default function BOConcurrence({ user }: { user: User }) {
       articles: top(byArticle), clients: top(byClient), zones: top(byZone), prevs: top(byPrev),
     }
   }, [ventes, dateFrom, dateTo, extSyncTick])
+
+  // ── Tonnage interne (Commande / Achat / Facturation) — par jour, article,
+  // client, prévendeur. "Facturation" = Bons de Livraison déjà rattachés à
+  // une facture (factureId renseigné) ; "Achat" = réceptions fournisseur
+  // (pas de notion de client/prévendeur, colonnes laissées vides pour ces
+  // deux dimensions).
+  const analyseTonnage = useMemo(() => {
+    const add = (m: Record<string, number>, k: string | undefined, v: number | undefined) => {
+      const key = (k ?? "").trim(); const val = Number(v) || 0
+      if (!key || !val) return
+      m[key] = (m[key] ?? 0) + val
+    }
+    const byJour = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
+    const byArticle = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
+    const byClient = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
+    const byPrevendeur = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
+
+    store.getCommandes().filter(c => inRange(c.date)).forEach(c => {
+      const jour = String(c.date ?? "").slice(0, 10)
+      let total = 0
+      c.lignes.forEach(l => { add(byArticle.commande, l.articleNom, l.quantite); total += Number(l.quantite) || 0 })
+      add(byJour.commande, jour, total)
+      add(byClient.commande, c.clientNom, total)
+      add(byPrevendeur.commande, c.commercialNom, total)
+    })
+
+    store.getReceptions().filter(r => inRange(r.date)).forEach(r => {
+      const jour = String(r.date ?? "").slice(0, 10)
+      let total = 0
+      r.lignes.forEach(l => { add(byArticle.achat, l.articleNom, l.quantiteRecue); total += Number(l.quantiteRecue) || 0 })
+      add(byJour.achat, jour, total)
+    })
+
+    store.getBonsLivraison().filter(b => inRange(b.date) && !!b.factureId).forEach(b => {
+      const jour = String(b.date ?? "").slice(0, 10)
+      let total = 0
+      b.lignes.forEach(l => { add(byArticle.facture, l.articleNom, l.quantite); total += Number(l.quantite) || 0 })
+      add(byJour.facture, jour, total)
+      add(byClient.facture, b.clientNom, total)
+      add(byPrevendeur.facture, b.prevendeurNom, total)
+    })
+
+    const buildRows = (dim: "jour" | "article" | "client" | "prevendeur") => {
+      const src = dim === "jour" ? byJour : dim === "article" ? byArticle : dim === "client" ? byClient : byPrevendeur
+      const keys = [...new Set([...Object.keys(src.commande), ...Object.keys(src.achat), ...Object.keys(src.facture)])]
+      const rows = keys.map(k => ({ k, commande: src.commande[k] ?? 0, achat: src.achat[k] ?? 0, facture: src.facture[k] ?? 0 }))
+      return dim === "jour"
+        ? rows.sort((a, b) => b.k.localeCompare(a.k))
+        : rows.sort((a, b) => (b.commande + b.achat + b.facture) - (a.commande + a.achat + a.facture))
+    }
+
+    const sumOf = (m: Record<string, number>) => Object.values(m).reduce((s, v) => s + v, 0)
+    return {
+      jour: buildRows("jour"), article: buildRows("article"), client: buildRows("client"), prevendeur: buildRows("prevendeur"),
+      totaux: { commande: sumOf(byJour.commande), achat: sumOf(byJour.achat), facture: sumOf(byJour.facture) },
+    }
+  }, [dateFrom, dateTo])
 
   // ── Prix & marge : croise le catalogue avec les relevés concurrents ───────
   // Articles réellement commandés (toutes commandes confondues) — pour le
@@ -515,6 +574,67 @@ export default function BOConcurrence({ user }: { user: User }) {
             </div>
           )}
           </>)}
+
+          {/* ── Tonnage interne : Commande / Achat / Facturation ──────────── */}
+          {/* Indépendant de la donnée concurrent ci-dessus — s'affiche même si aucune synchro concurrent n'a été lancée. */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-black text-slate-800">📦 Tonnage interne (nos données)</p>
+              <div className="flex gap-1 p-1 rounded-xl bg-slate-100">
+                {([["jour", "Par jour"], ["article", "Par article"], ["client", "Par client"], ["prevendeur", "Par prévendeur"]] as [typeof tonnageDim, string][]).map(([k, l]) => (
+                  <button key={k} onClick={() => setTonnageDim(k)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold ${tonnageDim === k ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { l: "Tonnage commandé", v: analyseTonnage.totaux.commande, c: "text-blue-600" },
+                { l: "Tonnage acheté", v: analyseTonnage.totaux.achat, c: "text-lime-700" },
+                { l: "Tonnage facturé", v: analyseTonnage.totaux.facture, c: "text-emerald-700" },
+              ].map(k => (
+                <div key={k.l} className="rounded-xl bg-slate-50 border border-slate-100 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{k.l}</p>
+                  <p className={`text-lg font-black ${k.c}`}>{fmt(k.v)} kg</p>
+                </div>
+              ))}
+            </div>
+
+            {analyseTonnage[tonnageDim].length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-6">Aucune donnée{dateFrom || dateTo ? " sur cette période" : ""}.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[560px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                      <th className="px-3 py-2">{tonnageDim === "jour" ? "Jour" : tonnageDim === "article" ? "Article" : tonnageDim === "client" ? "Client" : "Prévendeur"}</th>
+                      <th className="px-3 py-2 text-right">Commandé (kg)</th>
+                      <th className="px-3 py-2 text-right">Acheté (kg)</th>
+                      <th className="px-3 py-2 text-right">Facturé (kg)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analyseTonnage[tonnageDim].slice(0, 30).map(r => (
+                      <tr key={r.k} className="border-b border-slate-50 hover:bg-slate-50/50">
+                        <td className="px-3 py-2 font-semibold text-slate-800">{r.k}</td>
+                        <td className="px-3 py-2 text-right text-blue-600">{r.commande > 0 ? fmt(r.commande) : "—"}</td>
+                        <td className="px-3 py-2 text-right text-lime-700">
+                          {(tonnageDim === "client" || tonnageDim === "prevendeur") ? "—" : r.achat > 0 ? fmt(r.achat) : "—"}
+                        </td>
+                        <td className="px-3 py-2 text-right text-emerald-700">{r.facture > 0 ? fmt(r.facture) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {(tonnageDim === "client" || tonnageDim === "prevendeur") && (
+              <p className="text-[11px] text-slate-400">ℹ️ Le tonnage acheté n&apos;a pas de notion de client/prévendeur (achats fournisseur) — colonne non applicable ici.</p>
+            )}
+          </div>
         </div>
       )}
 
