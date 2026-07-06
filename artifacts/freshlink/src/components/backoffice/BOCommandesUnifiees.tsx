@@ -25,6 +25,7 @@ interface CmdUnifiee {
   notes?:      string
   table:       "fl_commandes_web" | "fl_commandes"
   rawPayload?: Record<string, unknown>  // payload complet ERP pour mise à jour
+  heurelivraison?: string  // vraie heure saisie a la prise de commande (HH:MM) — pas derivee de `date`
 }
 
 interface LigneCmd {
@@ -94,6 +95,7 @@ function normalizeERP(row: { id: string; payload: Record<string, unknown>; updat
     nom_client: String(p.clientNom ?? p.nom_client ?? "—"),
     telephone:  String(p.clientTel ?? p.telephone ?? ""),
     adresse:    p.adresse_livraison ? String(p.adresse_livraison) : (p.adresse ? String(p.adresse) : undefined),
+    heurelivraison: p.heurelivraison ? String(p.heurelivraison) : (p.creneau ? String(p.creneau) : undefined),
     lignes: lignes.map(l => ({
       nom:      String(l.articleNom ?? l.nom ?? "Article"),
       quantite: Number(l.quantite ?? 1),
@@ -942,9 +944,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
                     <td className="px-4 py-3 font-mono text-xs font-bold text-green-700 whitespace-nowrap">
                       {cmd.numero.slice(0, 16)}
                     </td>
-                    {/* Date */}
+                    {/* Date + heure de livraison souhaitée (seule heure reellement saisie —
+                        cmd.date lui-meme est une date-only sans heure, cf. fmt()) */}
                     <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
-                      {fmt(cmd.date)}
+                      <div>{fmt(cmd.date)}</div>
+                      {cmd.heurelivraison && <div className="text-[11px] text-slate-400">🕐 {cmd.heurelivraison}</div>}
                     </td>
                     {/* Client */}
                     <td className="px-4 py-3">
@@ -1061,7 +1065,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
             <div className="sticky top-0 bg-white border-b border-border px-5 py-4 flex items-start justify-between">
               <div>
                 <h3 className="font-bold text-slate-800 font-mono">{selected.numero}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{fmt(selected.date)}</p>
+                <p className="text-xs text-slate-400 mt-0.5">{fmt(selected.date)}{selected.heurelivraison ? ` · 🕐 ${selected.heurelivraison}` : ""}</p>
               </div>
               <button
                 onClick={() => setSelected(null)}
