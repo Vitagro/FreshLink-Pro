@@ -701,11 +701,9 @@ function buildBLHtml(bl: BOBonLivraison, opts: PrintBLOpts, company?: CompanyCon
 <div style="max-width:794px;margin:0 auto;padding:24px 28px">
 <div class="stripe"></div>
 <div class="lh">
-  <div class="lh-brand">
-    <img src="${logo}" class="lh-logo" style="width:130px;height:130px" onerror="this.style.display='none'" alt="${companyNom}"/>
-    <div class="lh-co">
-      <div class="lh-meta">${adresse}<br>Tél: ${telephone}${legalLine}</div>
-    </div>
+  <div class="lh-brand" style="flex-direction:column;align-items:flex-start;gap:8px">
+    <img src="${logo}" class="lh-logo" style="width:150px;height:150px" onerror="this.style.display='none'" alt="${companyNom}"/>
+    <div class="lh-meta" style="margin-top:0">${adresse}<br>Tél: ${telephone}${legalLine}</div>
   </div>
   <div class="lh-doc">
     <div class="lh-title">${docLabel}</div>
