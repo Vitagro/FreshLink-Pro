@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react"
 import { store, passwordMatches, type EmailConfig, type MotifRetour, type CompanyConfig, type CompanyContacts, type WorkflowConfig, type WorkflowStep, type ContenantTare, DEFAULT_WORKFLOW_STEPS, type ProcessConfig, DEFAULT_PROCESS_CONFIG, type TransportCompany, ROLE_LABELS, type UserRole } from "@/lib/store"
 import { useRealtimeSync } from "@/lib/supabase/useRealtimeSync"
-import { seedDemoData } from "@/lib/seedData"
 // EmailJS retiré — l'envoi d'email passe par Resend (serveur, /api/send-email)
 import { createClient } from "@/lib/supabase/client"
+import SupabaseStorageCard from "./SupabaseStorageCard"
 
 function AccessDenied() {
   return (
@@ -347,9 +347,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
   const [dgMsg, setDgMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [showClearConfirm, setShowClearConfirm]   = useState(false)
   const [showWipeConfirm, setShowWipeConfirm]         = useState(false)
-  const [showResetConfirm, setShowResetConfirm]       = useState(false)
   const [wipingAll, setWipingAll]                     = useState(false)
-  const [resetingDemo, setResetingDemo]               = useState(false)
   const [showAdvancedReset, setShowAdvancedReset]     = useState(false)
   const [showRevokeConfirm, setShowRevokeConfirm]     = useState(false)
   const [revokingAll, setRevokingAll]                 = useState(false)
@@ -411,8 +409,6 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
   const [mcMarge, setMcMarge]         = useState(() => store.getMarcheConfig?.()?.margeSecuriteMin ?? 30)
   const [mcPrixCarb, setMcPrixCarb]   = useState(() => store.getEmailConfig?.()?.prixCarburantL ?? 15)
   const [savedMarche, setSavedMarche] = useState(false)
-  const [seedMsg, setSeedMsg] = useState<{ ok: boolean; text: string } | null>(null)
-  const [seeding, setSeeding] = useState(false)
 
   // ── Mon Compte state ────────────────────────────────────────────────────────
   const [monNom, setMonNom] = useState(user.name)
@@ -516,19 +512,6 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
     reader.readAsText(file)
     // reset input
     if (importRef.current) importRef.current.value = ""
-  }
-
-  const handleSeedDemo = () => {
-    setSeeding(true)
-    try {
-      seedDemoData(store)
-      setSeedMsg({ ok: true, text: "Données démo chargées avec succès — 6 clients, 8 articles, 3 fournisseurs, 5 commandes, 3 voyages et plus." })
-    } catch {
-      setSeedMsg({ ok: false, text: "Erreur lors du chargement des données démo." })
-    } finally {
-      setSeeding(false)
-      setTimeout(() => setSeedMsg(null), 6000)
-    }
   }
 
   const ERP_TABLES_SYNC = [
@@ -709,21 +692,6 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
     }
     setRevokingAll(false)
     setTimeout(() => setRevokeMsg(null), 8000)
-  }
-
-  const handleResetToDemo = async () => {
-    setResetingDemo(true); setShowResetConfirm(false)
-    try {
-      // 1. Vider localStorage
-      WIPE_ALL_TABLES.forEach(k => localStorage.setItem(k, JSON.stringify([])))
-      // 2. Charger les données démo
-      await seedDemoData(store)
-      setDgMsg({ ok: true, text: "✅ Données démo rechargées avec succès. Rechargement..." })
-      setTimeout(() => window.location.reload(), 2000)
-    } catch {
-      setDgMsg({ ok: false, text: "Erreur lors de la réinitialisation démo." })
-    }
-    setResetingDemo(false)
   }
 
   const handleTestSupabase = async () => {
@@ -2023,59 +1991,6 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
             </div>
           )}
 
-          {/* Données Démo */}
-          <div className="bg-card rounded-2xl border border-emerald-200 p-6 flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 bg-emerald-50">
-                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-                </svg>
-              </div>
-              <div>
-                <h3 className="font-semibold text-emerald-700 text-sm">Charger les données démo / تحميل بيانات تجريبية</h3>
-                <p className="text-xs text-muted-foreground">Pré-remplir l&apos;app avec des clients, articles, commandes et livraisons réalistes</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {[
-                { label: "Clients", value: "6", icon: "M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" },
-                { label: "Articles", value: "8", icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" },
-                { label: "Commandes", value: "5", icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" },
-                { label: "Voyages", value: "3", icon: "M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" },
-              ].map(item => (
-                <div key={item.label} className="flex flex-col items-center gap-1 p-3 rounded-xl bg-emerald-50 border border-emerald-100">
-                  <svg className="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                  </svg>
-                  <span className="text-lg font-bold text-emerald-700">{item.value}</span>
-                  <span className="text-xs text-emerald-600">{item.label}</span>
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Ajoute des données marocaines réalistes (fruits & légumes, Casablanca) sans écraser les données existantes. Idéal pour explorer toutes les fonctionnalités. Les données portent le préfixe <code className="bg-muted px-1 rounded font-mono">seed-</code> et peuvent être supprimées via &quot;Effacer toutes les données&quot;.
-            </p>
-            {seedMsg && (
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs ${seedMsg.ok ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}>
-                {seedMsg.ok
-                  ? <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-                  : <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                }
-                {seedMsg.text}
-              </div>
-            )}
-            <button
-              onClick={handleSeedDemo}
-              disabled={seeding}
-              className="self-start flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
-              {seeding
-                ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-                : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" /></svg>
-              }
-              {seeding ? "Chargement…" : "Charger les données démo"}
-            </button>
-          </div>
-
           {/* Sauvegarde */}
           <div className="bg-card rounded-2xl border border-border p-6 flex flex-col gap-4">
             <div className="flex items-center gap-3">
@@ -2101,6 +2016,9 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
               Exporter (.json)
             </button>
           </div>
+
+          {/* Suivi stockage Supabase */}
+          <SupabaseStorageCard />
 
           {/* Restauration */}
           <div className="bg-card rounded-2xl border border-border p-6 flex flex-col gap-4">
@@ -2148,10 +2066,10 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
               </div>
             </div>
 
-            {/* ── Deux actions principales ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Action principale */}
+            <div className="grid grid-cols-1 gap-4">
 
-              {/* Action 1 : Tout effacer sauf Jawad */}
+              {/* Tout effacer sauf Jawad */}
               <div className="border-2 border-red-200 rounded-2xl p-5 bg-red-50/40 flex flex-col gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">🗑️</span>
@@ -2178,40 +2096,6 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
                         Oui, effacer tout
                       </button>
                       <button onClick={() => setShowWipeConfirm(false)}
-                        className="flex-1 py-2 rounded-xl text-xs font-semibold border border-border hover:bg-muted transition-colors">
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action 2 : Réinitialiser aux données démo */}
-              <div className="border-2 border-amber-200 rounded-2xl p-5 bg-amber-50/40 flex flex-col gap-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl">🔄</span>
-                  <div>
-                    <p className="text-sm font-black text-amber-700">Données démo</p>
-                    <p className="text-[11px] text-amber-500 mt-0.5">Local uniquement · Restaure l&apos;état démo</p>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Recharge les <strong>données d&apos;exemple</strong> du système : clients démo, articles, commandes types, utilisateurs demo…
-                </p>
-                {!showResetConfirm ? (
-                  <button onClick={() => setShowResetConfirm(true)} disabled={resetingDemo}
-                    className="mt-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-amber-800 bg-amber-100 border border-amber-300 hover:bg-amber-200 transition-colors disabled:opacity-50">
-                    {resetingDemo ? "Réinitialisation..." : "Réinitialiser aux données démo"}
-                  </button>
-                ) : (
-                  <div className="mt-auto flex flex-col gap-2">
-                    <p className="text-xs font-bold text-amber-700">Les données actuelles seront remplacées.</p>
-                    <div className="flex gap-2">
-                      <button onClick={handleResetToDemo}
-                        className="flex-1 py-2 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors">
-                        Oui, réinitialiser
-                      </button>
-                      <button onClick={() => setShowResetConfirm(false)}
                         className="flex-1 py-2 rounded-xl text-xs font-semibold border border-border hover:bg-muted transition-colors">
                         Annuler
                       </button>
