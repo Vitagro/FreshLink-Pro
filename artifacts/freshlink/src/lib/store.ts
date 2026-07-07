@@ -561,6 +561,7 @@ export type WorkflowValidation = "direct" | "responsable" | "admin"
 export interface Commande {
   id: string
   date: string
+  createdAt?: string   // vrai timestamp ISO de la prise de commande (distinct de `heurelivraison`, qui est l'heure de livraison souhaitée)
   commercialId: string
   commercialNom: string
   clientId: string

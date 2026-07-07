@@ -1,0 +1,255 @@
+"use client"
+
+import { useState, useEffect, useCallback } from "react"
+import { store, isMobileRole, type User } from "@/lib/store"
+
+interface Props { user: User }
+
+function canAccess(u: User) {
+  return ["super_super_admin", "super_admin", "admin"].includes(u.role)
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  prevendeur: "Prévendeur", resp_logistique: "Resp. Logistique", magasinier: "Magasinier",
+  dispatcheur: "Dispatcheur", livreur: "Livreur", acheteur: "Acheteur",
+  ctrl_achat: "Contrôle Achat", ctrl_prep: "Contrôle Préparation",
+  chef_depot: "Chef Dépôt", suivi_commande: "Suivi Commande",
+  client: "Client", fournisseur: "Fournisseur",
+}
+
+// Groupes de données mobile pouvant être effacés d'un coup — local + Supabase.
+const DATA_GROUPS: { key: string; label: string; icon: string; desc: string; tables: string[] }[] = [
+  { key: "po",        label: "Commandes fournisseurs (PO)", icon: "📦", desc: "Bons d'achat et commandes fournisseurs saisis depuis le mobile.", tables: ["fl_purchase_orders", "fl_bons_achat"] },
+  { key: "demandes",  label: "Demandes d'achat",            icon: "📝", desc: "Demandes d'achat créées par les acheteurs/magasiniers sur mobile.", tables: ["fl_demandes_achat"] },
+  { key: "commandes", label: "Commandes clients",           icon: "🧾", desc: "Commandes prises par les prévendeurs sur mobile + commandes web.", tables: ["fl_commandes", "fl_commandes_web"] },
+]
+
+export default function BOMobileGestion({ user }: Props) {
+  const [users, setUsers]         = useState<User[]>([])
+  const [search, setSearch]       = useState("")
+  const [msg, setMsg]             = useState<{ ok: boolean; text: string } | null>(null)
+  const [confirmUser, setConfirmUser] = useState<User | null>(null)
+  const [confirmGroup, setConfirmGroup] = useState<string | null>(null)
+  const [busyGroup, setBusyGroup] = useState<string | null>(null)
+  const [restartLoading, setRestartLoading] = useState(false)
+  const [restartMsg, setRestartMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const load = useCallback(() => {
+    setUsers(store.getUsers().filter(u => isMobileRole(u.role)))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  if (!canAccess(user)) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="text-4xl mb-3">🔒</div>
+          <p className="text-sm text-gray-500">Accès réservé aux administrateurs.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const filtered = users.filter(u => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return u.name.toLowerCase().includes(q) || (u.phone ?? "").includes(q) || (ROLE_LABELS[u.role] ?? u.role).toLowerCase().includes(q)
+  })
+
+  async function deleteProfile(u: User) {
+    setConfirmUser(null)
+    store.saveUsers(store.getUsers().filter(x => x.id !== u.id))
+    try {
+      await fetch("/api/sync-write", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ table: "fl_users", deletes: [u.id] }),
+      })
+    } catch { /* offline */ }
+    setMsg({ ok: true, text: `✅ Profil ${u.name} supprimé.` })
+    setTimeout(() => setMsg(null), 4000)
+    load()
+  }
+
+  async function clearGroup(group: typeof DATA_GROUPS[number]) {
+    setBusyGroup(group.key); setConfirmGroup(null)
+    try {
+      let sbErrors = 0
+      for (const table of group.tables) {
+        localStorage.setItem(table, JSON.stringify([]))
+        const res = await fetch("/api/sync-write", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ table, clearAll: true }),
+        })
+        const data = await res.json()
+        if (!data.ok) sbErrors++
+      }
+      setMsg(sbErrors > 0
+        ? { ok: false, text: `Effacement partiel — ${sbErrors} table(s) Supabase non effacée(s).` }
+        : { ok: true, text: `✅ ${group.label} effacé(e)s (local + Supabase). Les mobiles se videront au prochain sync.` })
+    } catch {
+      setMsg({ ok: false, text: `Erreur lors de l'effacement de ${group.label}.` })
+    }
+    setBusyGroup(null)
+    setTimeout(() => setMsg(null), 6000)
+  }
+
+  async function restartMobiles() {
+    setRestartLoading(true); setRestartMsg(null)
+    try {
+      const { createClient } = await import("@/lib/supabase/client")
+      const sb = createClient()
+      const channel = sb.channel("freshlink-erp-realtime-v3")
+      await channel.subscribe()
+      await channel.send({
+        type: "broadcast", event: "force_restart",
+        payload: { requestedBy: user.name, ts: new Date().toISOString() },
+      })
+      sb.removeChannel(channel)
+      setRestartMsg({ ok: true, text: "✅ Signal envoyé — tous les mobiles connectés vont se recharger d'ici 2 secondes." })
+    } catch (e) {
+      setRestartMsg({ ok: false, text: `Erreur: ${String(e)}` })
+    }
+    setRestartLoading(false)
+    setTimeout(() => setRestartMsg(null), 8000)
+  }
+
+  return (
+    <div className="p-4 md:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+
+      {/* En-tête */}
+      <div>
+        <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">📱 Gestion Mobile</h2>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Profils des utilisateurs mobile, effacement des données terrain et redémarrage à distance — tout au même endroit.
+        </p>
+      </div>
+
+      {msg && (
+        <div className={`px-4 py-3 rounded-xl text-sm font-semibold border ${msg.ok ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+          {msg.text}
+        </div>
+      )}
+
+      {/* Redémarrer les mobiles */}
+      <div className="rounded-2xl border border-red-200 overflow-hidden">
+        <div className="px-5 py-4 bg-red-50 flex items-center gap-3 border-b border-red-200">
+          <span className="text-xl">🔄</span>
+          <div>
+            <p className="font-bold text-red-900 text-sm">Redémarrer les appareils mobile</p>
+            <p className="text-xs text-red-700">Force le rechargement immédiat de l&apos;app sur tous les téléphones connectés (prévendeurs, livreurs, acheteurs…).</p>
+          </div>
+        </div>
+        <div className="p-5 bg-white flex flex-col gap-3">
+          {restartMsg && (
+            <div className={`px-4 py-2.5 rounded-xl text-sm border ${restartMsg.ok ? "bg-green-50 border-green-200 text-green-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+              {restartMsg.text}
+            </div>
+          )}
+          <button
+            onClick={restartMobiles}
+            disabled={restartLoading}
+            className="self-start flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-bold hover:bg-red-700 transition-colors disabled:opacity-50 shadow-sm">
+            {restartLoading ? "Envoi..." : "Redémarrer tous les mobiles"}
+          </button>
+        </div>
+      </div>
+
+      {/* Effacer des données mobile */}
+      <div className="rounded-2xl border border-amber-200 overflow-hidden">
+        <div className="px-5 py-4 bg-amber-50 flex items-center gap-3 border-b border-amber-200">
+          <span className="text-xl">🗑️</span>
+          <div>
+            <p className="font-bold text-amber-900 text-sm">Effacer des données mobile</p>
+            <p className="text-xs text-amber-700">Vide une catégorie de données (local + Supabase). Irréversible — les mobiles repartiront de zéro sur cette catégorie.</p>
+          </div>
+        </div>
+        <div className="p-5 bg-white grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {DATA_GROUPS.map(group => (
+            <div key={group.key} className="border-2 border-amber-100 rounded-2xl p-4 bg-amber-50/30 flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{group.icon}</span>
+                <p className="text-sm font-black text-amber-800">{group.label}</p>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed flex-1">{group.desc}</p>
+              {confirmGroup !== group.key ? (
+                <button
+                  onClick={() => setConfirmGroup(group.key)}
+                  disabled={busyGroup === group.key}
+                  className="mt-auto px-3 py-2 rounded-xl text-xs font-bold text-amber-800 bg-amber-100 border border-amber-300 hover:bg-amber-200 transition-colors disabled:opacity-50">
+                  {busyGroup === group.key ? "Effacement..." : "Effacer"}
+                </button>
+              ) : (
+                <div className="mt-auto flex flex-col gap-2">
+                  <p className="text-[11px] font-bold text-amber-700">Confirmer l&apos;effacement ?</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => clearGroup(group)}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors">
+                      Oui
+                    </button>
+                    <button onClick={() => setConfirmGroup(null)}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Profils mobile */}
+      <div className="rounded-2xl border border-border overflow-hidden">
+        <div className="px-5 py-4 bg-muted/30 flex items-center justify-between gap-3 flex-wrap border-b border-border">
+          <div>
+            <p className="font-bold text-gray-900 text-sm">👤 Profils mobile ({users.length})</p>
+            <p className="text-xs text-muted-foreground">Prévendeurs, livreurs, acheteurs, magasiniers, dispatcheurs…</p>
+          </div>
+          <input
+            type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Nom, téléphone, rôle..."
+            className="px-3 py-1.5 rounded-full text-xs border border-gray-200 outline-none focus:border-blue-400 w-56"
+          />
+        </div>
+        <div className="p-3 flex flex-col gap-2">
+          {filtered.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 text-sm">Aucun profil mobile trouvé.</div>
+          ) : filtered.map(u => (
+            <div key={u.id} className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-border hover:bg-slate-50 transition-colors flex-wrap">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm text-gray-900">{u.name}</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    {ROLE_LABELS[u.role] ?? u.role}
+                  </span>
+                  {!u.actif && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">Inactif</span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{u.phone || "—"}</p>
+              </div>
+              {confirmUser?.id !== u.id ? (
+                <button onClick={() => setConfirmUser(u)}
+                  className="px-3 py-2 rounded-xl bg-gray-100 hover:bg-red-100 text-gray-600 hover:text-red-600 text-xs font-semibold transition-all shrink-0">
+                  🗑️ Supprimer
+                </button>
+              ) : (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs font-bold text-red-700">Confirmer ?</span>
+                  <button onClick={() => deleteProfile(u)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition-colors">
+                    Oui
+                  </button>
+                  <button onClick={() => setConfirmUser(null)}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted transition-colors">
+                    Annuler
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}

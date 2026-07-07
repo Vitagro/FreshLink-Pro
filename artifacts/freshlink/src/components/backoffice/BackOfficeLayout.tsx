@@ -145,6 +145,7 @@ const BODocuments            = React.lazy(() => import("./BODocuments"))
 const BOCategoryPricing      = React.lazy(() => import("./BOCategoryPricing"))
 const BOExternalLinks        = React.lazy(() => import("./BOExternalLinks"))
 const BODeviceAccess         = React.lazy(() => import("./BODeviceAccess"))
+const BOMobileGestion        = React.lazy(() => import("./BOMobileGestion"))
 const BOCommandesUnifiees    = React.lazy(() => import("./BOCommandesUnifiees"))
 const BOAlertesClients       = React.lazy(() => import("./BOAlertesClients"))
 const BOImportExterne        = React.lazy(() => import("./BOImportExterne"))
@@ -185,6 +186,7 @@ export type Tab =
   | "firebase_archive"
   | "liens_externes"
   | "device_access"
+  | "mobile_gestion"
   | "commandes_web"
   | "commandes_unifiees"
   | "alertes_clients"
@@ -398,6 +400,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
       { id: "users",             label: "Utilisateurs",          labelAr: "المستخدمون",        permKey: "canViewDatabase", icon: <Icon d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /> },
       { id: "roles_permissions", label: "Roles & Permissions",   labelAr: "الأدوار والصلاحيات", permKey: "canViewDatabase", icon: <Icon d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /> },
       { id: "device_access",     label: "Acces Appareils",       labelAr: "أجهزة الوصول",     permKey: "canViewDatabase", icon: <Icon d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
+      { id: "mobile_gestion",    label: "Gestion Mobile",        labelAr: "إدارة الموبايل",   permKey: "canViewDatabase", icon: <Icon d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /> },
       { id: "depots",            label: "Multi-Depots",          labelAr: "المستودعات",        permKey: "canViewDatabase", icon: <Icon d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /> },
       { id: "web_integration",   label: "Integration Site Web",  labelAr: "ربط الموقع",        permKey: "canViewDatabase", icon: <Icon d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /> },
       { id: "camera_perms",      label: "Droits Camera",         labelAr: "صلاحيات الكاميرا",  permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z M15 13a3 3 0 11-6 0 3 3 0 016 0z" /> },
@@ -440,7 +443,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
   { label: "Finance & Contrôle de Gestion", labelAr: "المالية ومراقبة التسيير", ids: ["finance", "fiscalite", "cash", "caisse_acheteur", "analyse_credit", "finance_cdg", "performance_incentives", "investissement"] },
   { label: "Ressources Humaines",         labelAr: "الموارد البشرية",      ids: ["rh_productivite", "rh_comptabilite", "hr_documents", "template_editor", "agents_ia"] },
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "device_access", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -535,6 +538,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   sourcing:              (u)  => <BOSourcing user={u} />,
   pricing:               (u)  => <BOPricing  user={u} />,
   device_access:         (u)  => <BODeviceAccess user={u} />,
+  mobile_gestion:        (u)  => <BOMobileGestion user={u} />,
   import_externe:        (_u) => <BOImportExterne />,
 }
 

@@ -25,7 +25,9 @@ interface CmdUnifiee {
   notes?:      string
   table:       "fl_commandes_web" | "fl_commandes"
   rawPayload?: Record<string, unknown>  // payload complet ERP pour mise à jour
-  heurelivraison?: string  // vraie heure saisie a la prise de commande (HH:MM) — pas derivee de `date`
+  heurelivraison?: string  // heure de livraison souhaitée (préférence client, PAS l'heure de prise de commande)
+  heureCommande?: string   // heure réelle de prise de commande (HH:MM), dérivée de createdAtIso
+  createdAtIso?: string    // timestamp ISO complet (createdAt/created_at/updated_at) — sert au tri chronologique réel
 }
 
 interface LigneCmd {
@@ -88,10 +90,19 @@ function normalizeERP(row: { id: string; payload: Record<string, unknown>; updat
     : cat.includes("marchand") ? "Marchand"
     : cat.includes("particulier") ? "Particulier"
     : rawType || undefined
+  // Heure réelle de prise de commande : dérivée du vrai timestamp ISO (createdAt
+  // pour les commandes ERP/mobile récentes, created_at pour les commandes web).
+  // Pour les commandes créées AVANT ce champ (pas de createdAt/created_at), on
+  // se rabat sur row.updated_at (horodatage de synchro Supabase) — un proxy
+  // imparfait mais bien plus juste que d'afficher heurelivraison (préférence de
+  // livraison du client) comme s'il s'agissait de l'heure de prise de commande.
+  const createdIso = p.createdAt ? String(p.createdAt) : (p.created_at ? String(p.created_at) : (row.updated_at ? String(row.updated_at) : undefined))
   return {
     id:         row.id,
     numero:     String(p.numero ?? row.id),
     date:       String(p.date ?? p.created_at ?? row.updated_at ?? ""),
+    createdAtIso: createdIso,
+    heureCommande: timeOnly(createdIso),
     nom_client: String(p.clientNom ?? p.nom_client ?? "—"),
     telephone:  String(p.clientTel ?? p.telephone ?? ""),
     adresse:    p.adresse_livraison ? String(p.adresse_livraison) : (p.adresse ? String(p.adresse) : undefined),
@@ -159,6 +170,15 @@ function fmt(iso: string) {
   } catch { return iso }
 }
 
+// Extrait l'heure (HH:MM) d'un vrai timestamp ISO — undefined si la valeur
+// est date-only (pas de "T"), pour ne jamais afficher une heure fabriquée.
+function timeOnly(iso?: string): string | undefined {
+  if (!iso || !iso.includes("T") || iso.length <= 10) return undefined
+  try {
+    return new Date(iso).toLocaleTimeString("fr-MA", { hour: "2-digit", minute: "2-digit" })
+  } catch { return undefined }
+}
+
 // ── Composant principal ───────────────────────────────────────────────────────
 
 export default function BOCommandesUnifiees({ user }: Props) {
@@ -171,8 +191,9 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const [filterZone, setFilterZone]       = useState("tous")
   const [filterCategorie, setFilterCategorie] = useState("tous")
   const [sortMode, setSortMode] = useState<"date" | "alpha">("date")
-  const [filterDateDebut, setFilterDateDebut] = useState("")
-  const [filterDateFin, setFilterDateFin]     = useState("")
+  // Vue par défaut = cycle commande en cours (J-1 14h → J 4h) — pas l'historique complet.
+  const [filterDateDebut, setFilterDateDebut] = useState(() => commandeCycleRange(commandeOperationalDate()).debut)
+  const [filterDateFin, setFilterDateFin]     = useState(() => commandeCycleRange(commandeOperationalDate()).fin)
   const [selected, setSelected]           = useState<CmdUnifiee | null>(null)
   const [updating, setUpdating]           = useState(false)
   // Sélection multiple — clé "table-id" pour distinguer fl_commandes / fl_commandes_web
@@ -211,7 +232,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       })
     if (lignes.length === 0) { setMsg({ ok: false, text: "Ajoutez au moins une ligne valide." }); return }
     const cmd: Commande = {
-      id: store.genCommande(), date: store.today(),
+      id: store.genCommande(), date: store.today(), createdAt: new Date().toISOString(),
       commercialId: user.id, commercialNom: user.name + " (BO)",
       clientId: client.id, clientNom: client.nom,
       secteur: client.secteur, zone: client.zone, gpsLat: client.gpsLat ?? 0, gpsLng: client.gpsLng ?? 0,
@@ -503,8 +524,13 @@ export default function BOCommandesUnifiees({ user }: Props) {
   }
 
   // ── Filtrage ─────────────────────────────────────────────────────────────────
+  const cycleDefault = commandeCycleRange(commandeOperationalDate())
+  const isDefaultDateRange = filterDateDebut === cycleDefault.debut && filterDateFin === cycleDefault.fin
   const filtered = cmds.filter(c => {
     if (flowStage !== "tous" && !FLOW_STAGES[flowStage]?.includes(c.statut)) return false
+    // Vue par défaut (aucun flux ni statut explicitement demandé) : cache les
+    // commandes déjà livrées — onglet "✅ Livrées" ou filtre Statut pour les revoir.
+    if (flowStage === "tous" && filterStatut === "tous" && c.statut === "livre") return false
     if (filterSource !== "tous" && c.source !== filterSource) return false
     if (filterStatut !== "tous" && c.statut !== filterStatut) return false
     if (filterZone !== "tous" && c.zone !== filterZone) return false
@@ -524,7 +550,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
     return true
   }).sort((a, b) => sortMode === "alpha"
     ? a.nom_client.localeCompare(b.nom_client, "fr")
-    : new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
+    // Tri chronologique décroissant (plus récent d'abord) — utilise le vrai
+    // timestamp (createdAtIso) plutôt que `date` seule (date-only pour les
+    // commandes ERP), sinon les commandes du même jour restent dans un ordre
+    // arbitraire au lieu d'être classées par heure réelle de prise.
+    : new Date(b.createdAtIso || b.date || 0).getTime() - new Date(a.createdAtIso || a.date || 0).getTime())
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(rowKey(c)))
   const toggleSelectAll = () => {
@@ -854,9 +884,9 @@ export default function BOCommandesUnifiees({ user }: Props) {
           </button>
         </div>
 
-        {(search || filterStatut !== "tous" || filterSource !== "tous" || filterZone !== "tous" || filterCategorie !== "tous" || filterDateDebut || filterDateFin) && (
+        {(search || filterStatut !== "tous" || filterSource !== "tous" || filterZone !== "tous" || filterCategorie !== "tous" || !isDefaultDateRange) && (
           <button
-            onClick={() => { setSearch(""); setFilterStatut("tous"); setFilterSource("tous"); setFilterZone("tous"); setFilterCategorie("tous"); setFilterDateDebut(""); setFilterDateFin("") }}
+            onClick={() => { setSearch(""); setFilterStatut("tous"); setFilterSource("tous"); setFilterZone("tous"); setFilterCategorie("tous"); setFilterDateDebut(cycleDefault.debut); setFilterDateFin(cycleDefault.fin) }}
             className="px-3 py-2 rounded-xl border border-border text-sm text-slate-500 hover:bg-slate-50"
           >
             ✕ Reset
@@ -944,10 +974,10 @@ export default function BOCommandesUnifiees({ user }: Props) {
                     <td className="px-4 py-3 font-mono text-xs font-bold text-green-700 whitespace-nowrap">
                       {cmd.numero.slice(0, 16)}
                     </td>
-                    {/* Date + heure de livraison souhaitée (seule heure reellement saisie —
-                        cmd.date lui-meme est une date-only sans heure, cf. fmt()) */}
+                    {/* Date + heure de prise de commande (📝, vrai timestamp createdAt) +
+                        heure de livraison souhaitée (🕐, préférence client — pas la même chose) */}
                     <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
-                      <div>{fmt(cmd.date)}</div>
+                      <div>{fmt(cmd.date)}{cmd.heureCommande ? ` · 📝 ${cmd.heureCommande}` : ""}</div>
                       {cmd.heurelivraison && <div className="text-[11px] text-slate-400">🕐 {cmd.heurelivraison}</div>}
                     </td>
                     {/* Client */}
@@ -1065,7 +1095,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
             <div className="sticky top-0 bg-white border-b border-border px-5 py-4 flex items-start justify-between">
               <div>
                 <h3 className="font-bold text-slate-800 font-mono">{selected.numero}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">{fmt(selected.date)}{selected.heurelivraison ? ` · 🕐 ${selected.heurelivraison}` : ""}</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {fmt(selected.date)}
+                  {selected.heureCommande ? ` · 📝 Prise à ${selected.heureCommande}` : ""}
+                  {selected.heurelivraison ? ` · 🕐 Livraison ${selected.heurelivraison}` : ""}
+                </p>
               </div>
               <button
                 onClick={() => setSelected(null)}

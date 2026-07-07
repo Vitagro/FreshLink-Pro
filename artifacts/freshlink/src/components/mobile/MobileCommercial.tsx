@@ -602,7 +602,7 @@ export default function MobileCommercial({ user }: Props) {
     if (fresh) { setGpsLat(fresh.lat); setGpsLng(fresh.lng) }
 
     const commande = {
-      id: store.genCommande(), date: store.today(),
+      id: store.genCommande(), date: store.today(), createdAt: new Date().toISOString(),
       commercialId: vendeurId, commercialNom: vendeurNom,
       clientId: client.id, clientNom: client.nom,
       secteur: client.secteur, zone: client.zone,
