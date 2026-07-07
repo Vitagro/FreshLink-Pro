@@ -26,7 +26,8 @@ interface CmdUnifiee {
   table:       "fl_commandes_web" | "fl_commandes"
   rawPayload?: Record<string, unknown>  // payload complet ERP pour mise à jour
   heurelivraison?: string  // heure de livraison souhaitée (préférence client, PAS l'heure de prise de commande)
-  heureCommande?: string   // heure réelle de prise de commande (HH:MM), dérivée de createdAt
+  heureCommande?: string   // heure réelle de prise de commande (HH:MM), dérivée de createdAtIso
+  createdAtIso?: string    // timestamp ISO complet (createdAt/created_at/updated_at) — sert au tri chronologique réel
 }
 
 interface LigneCmd {
@@ -90,13 +91,17 @@ function normalizeERP(row: { id: string; payload: Record<string, unknown>; updat
     : cat.includes("particulier") ? "Particulier"
     : rawType || undefined
   // Heure réelle de prise de commande : dérivée du vrai timestamp ISO (createdAt
-  // pour les commandes ERP/mobile récentes, created_at pour les commandes web),
-  // jamais de `date` seule (qui est date-only, sans heure — cf. fmt()).
-  const createdIso = p.createdAt ? String(p.createdAt) : (p.created_at ? String(p.created_at) : undefined)
+  // pour les commandes ERP/mobile récentes, created_at pour les commandes web).
+  // Pour les commandes créées AVANT ce champ (pas de createdAt/created_at), on
+  // se rabat sur row.updated_at (horodatage de synchro Supabase) — un proxy
+  // imparfait mais bien plus juste que d'afficher heurelivraison (préférence de
+  // livraison du client) comme s'il s'agissait de l'heure de prise de commande.
+  const createdIso = p.createdAt ? String(p.createdAt) : (p.created_at ? String(p.created_at) : (row.updated_at ? String(row.updated_at) : undefined))
   return {
     id:         row.id,
     numero:     String(p.numero ?? row.id),
     date:       String(p.date ?? p.created_at ?? row.updated_at ?? ""),
+    createdAtIso: createdIso,
     heureCommande: timeOnly(createdIso),
     nom_client: String(p.clientNom ?? p.nom_client ?? "—"),
     telephone:  String(p.clientTel ?? p.telephone ?? ""),
@@ -545,7 +550,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
     return true
   }).sort((a, b) => sortMode === "alpha"
     ? a.nom_client.localeCompare(b.nom_client, "fr")
-    : new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
+    // Tri chronologique décroissant (plus récent d'abord) — utilise le vrai
+    // timestamp (createdAtIso) plutôt que `date` seule (date-only pour les
+    // commandes ERP), sinon les commandes du même jour restent dans un ordre
+    // arbitraire au lieu d'être classées par heure réelle de prise.
+    : new Date(b.createdAtIso || b.date || 0).getTime() - new Date(a.createdAtIso || a.date || 0).getTime())
 
   const allFilteredSelected = filtered.length > 0 && filtered.every(c => selectedIds.has(rowKey(c)))
   const toggleSelectAll = () => {
