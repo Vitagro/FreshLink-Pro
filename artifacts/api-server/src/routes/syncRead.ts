@@ -50,7 +50,7 @@ router.get("/", async (req: Request, res: Response) => {
   }
   try {
     const r = await fetch(
-      `${SB_URL}/rest/v1/${table}?select=id,payload&limit=20000`,
+      `${SB_URL}/rest/v1/${table}?select=id,payload,updated_at&limit=20000`,
       { headers: { apikey: SB_SERVICE_KEY, Authorization: `Bearer ${SB_SERVICE_KEY}` } },
     );
     if (!r.ok) {
@@ -58,7 +58,7 @@ router.get("/", async (req: Request, res: Response) => {
       res.status(502).json({ ok: false, error: `Supabase ${r.status}: ${txt.slice(0, 200)}` });
       return;
     }
-    const data = (await r.json()) as { id: string; payload: unknown }[];
+    const data = (await r.json()) as { id: string; payload: unknown; updated_at?: string }[];
     res.json({ ok: true, data: Array.isArray(data) ? data : [] });
   } catch (e) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : "Erreur interne" });
