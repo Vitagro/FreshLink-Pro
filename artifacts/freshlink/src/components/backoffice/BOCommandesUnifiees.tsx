@@ -257,7 +257,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       // Toutes les commandes (web ET ERP) sont stockées dans fl_commandes {id, payload}.
       const res  = await fetch("/api/sync-read?table=fl_commandes", { cache: "no-store" })
       const json = await res.json()
-      const rows: { id: string; payload: Record<string, unknown> }[] = json?.ok ? (json.data ?? []) : []
+      const rows: { id: string; payload: Record<string, unknown>; updated_at?: string }[] = json?.ok ? (json.data ?? []) : []
       const orders: CmdUnifiee[] = rows
         .filter(r => r.payload && !String(r.id).startsWith("__"))
         .map(r => normalizeERP(r))

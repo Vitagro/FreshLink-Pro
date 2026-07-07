@@ -10,8 +10,13 @@ import { useState, useEffect, useCallback } from "react"
 const CAP_GB_KEY = "fl_supabase_storage_cap_gb"
 const DEFAULT_CAP_GB = 1 // plan gratuit Supabase par défaut — ajustez selon votre plan réel
 
-function fmtGo(bytes: number): string {
-  return (bytes / (1024 ** 3)).toFixed(2)
+// Affiche l'unité adaptée à l'ordre de grandeur réel — un usage de quelques
+// centaines de Ko affiché en "0.00 Go" est indiscernable d'un bucket vide.
+function fmtBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} Ko`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(2)} Mo`
+  return `${(bytes / 1024 ** 3).toFixed(2)} Go`
 }
 
 function relTime(iso: string | null): string {
@@ -87,7 +92,7 @@ export default function SupabaseStorageCard() {
           </div>
           <div className="flex items-center justify-between text-xs">
             <span className="font-bold text-foreground">
-              {totalBytes != null ? fmtGo(totalBytes) : "—"} Go
+              {totalBytes != null ? fmtBytes(totalBytes) : "—"}
               <span className="font-normal text-muted-foreground"> / {capGb} Go</span>
             </span>
             <span className={near ? "font-bold text-red-600" : "text-muted-foreground"}>{percent}%</span>
