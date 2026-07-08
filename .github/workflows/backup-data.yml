@@ -64,6 +64,12 @@ jobs:
           SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "find '${{ env.REMOTE_BACKUP_DIR }}' -name 'backup-*.tar.gz' -mtime +${{ env.KEEP_DAYS }} -delete" || true
 
+      - name: Verify — list current backups on server
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          echo "Contents of ${{ env.REMOTE_BACKUP_DIR }}:"
+          $SSH "ls -lh '${{ env.REMOTE_BACKUP_DIR }}'"
+
       - name: Clean up SSH key and local dump
         if: always()
         run: rm -f ~/.ssh/deploy_key; rm -rf backup-output backup-*.tar.gz
