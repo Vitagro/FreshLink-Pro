@@ -570,6 +570,7 @@ export default function MobileAchat({ user }: Props) {
     const bon = {
       id: store.genId(),
       date: store.today(),
+      createdVia: "mobile" as const,
       acheteurId: user.id,
       acheteurNom: user.name,
       fournisseurId,

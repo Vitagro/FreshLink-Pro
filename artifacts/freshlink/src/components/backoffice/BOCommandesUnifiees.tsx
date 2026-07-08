@@ -233,6 +233,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
     if (lignes.length === 0) { setMsg({ ok: false, text: "Ajoutez au moins une ligne valide." }); return }
     const cmd: Commande = {
       id: store.genCommande(), date: store.today(), createdAt: new Date().toISOString(),
+      createdVia: "backoffice",
       commercialId: user.id, commercialNom: user.name + " (BO)",
       clientId: client.id, clientNom: client.nom,
       secteur: client.secteur, zone: client.zone, gpsLat: client.gpsLat ?? 0, gpsLng: client.gpsLng ?? 0,

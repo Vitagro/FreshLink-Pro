@@ -17,11 +17,14 @@ const ROLE_LABELS: Record<string, string> = {
   client: "Client", fournisseur: "Fournisseur",
 }
 
-// Groupes de données mobile pouvant être effacés d'un coup — local + Supabase.
+// Groupes de données MOBILE pouvant être effacés — jamais les commandes/bons
+// créés depuis le back-office ou le site web, même s'ils partagent la même
+// table. Le filtre se fait sur le champ `createdVia: "mobile"` de chaque
+// enregistrement (absent = créé avant ce champ, ou créé ailleurs → jamais
+// supprimé par ce panneau).
 const DATA_GROUPS: { key: string; label: string; icon: string; desc: string; tables: string[] }[] = [
-  { key: "po",        label: "Commandes fournisseurs (PO)", icon: "📦", desc: "Bons d'achat et commandes fournisseurs saisis depuis le mobile.", tables: ["fl_purchase_orders", "fl_bons_achat"] },
-  { key: "demandes",  label: "Demandes d'achat",            icon: "📝", desc: "Demandes d'achat créées par les acheteurs/magasiniers sur mobile.", tables: ["fl_demandes_achat"] },
-  { key: "commandes", label: "Commandes clients",           icon: "🧾", desc: "Commandes prises par les prévendeurs sur mobile + commandes web.", tables: ["fl_commandes", "fl_commandes_web"] },
+  { key: "po",        label: "Commandes fournisseurs (PO)", icon: "📦", desc: "Bons d'achat saisis depuis le mobile uniquement (PO ne sont jamais créés sur mobile).", tables: ["fl_purchase_orders", "fl_bons_achat"] },
+  { key: "commandes", label: "Commandes clients",           icon: "🧾", desc: "Commandes prises par les prévendeurs sur mobile uniquement — jamais les commandes back-office ou site web.", tables: ["fl_commandes"] },
 ]
 
 export default function BOMobileGestion({ user }: Props) {
@@ -73,19 +76,32 @@ export default function BOMobileGestion({ user }: Props) {
   async function clearGroup(group: typeof DATA_GROUPS[number]) {
     setBusyGroup(group.key); setConfirmGroup(null)
     try {
+      let totalDeleted = 0
       let sbErrors = 0
       for (const table of group.tables) {
-        localStorage.setItem(table, JSON.stringify([]))
-        const res = await fetch("/api/sync-write", {
+        // Ne jamais faire un clearAll — on ne supprime QUE les lignes dont le
+        // payload porte createdVia:"mobile" (jamais les enregistrements
+        // back-office/web, ni les anciens enregistrements sans ce champ).
+        const readRes = await fetch(`/api/sync-read?table=${table}`, { cache: "no-store" })
+        const readData = await readRes.json()
+        const rows: { id: string; payload?: Record<string, unknown> }[] = readData?.ok ? (readData.data ?? []) : []
+        const mobileIds = rows.filter(r => r.payload?.createdVia === "mobile").map(r => r.id)
+        if (mobileIds.length === 0) continue
+        const writeRes = await fetch("/api/sync-write", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ table, clearAll: true }),
+          body: JSON.stringify({ table, deletes: mobileIds }),
         })
-        const data = await res.json()
-        if (!data.ok) sbErrors++
+        const writeData = await writeRes.json()
+        if (!writeData.ok) { sbErrors++; continue }
+        totalDeleted += mobileIds.length
+        try {
+          const local = JSON.parse(localStorage.getItem(table) ?? "[]") as { id: string }[]
+          localStorage.setItem(table, JSON.stringify(local.filter(r => !mobileIds.includes(r.id))))
+        } catch { /* local cache best-effort */ }
       }
       setMsg(sbErrors > 0
         ? { ok: false, text: `Effacement partiel — ${sbErrors} table(s) Supabase non effacée(s).` }
-        : { ok: true, text: `✅ ${group.label} effacé(e)s (local + Supabase). Les mobiles se videront au prochain sync.` })
+        : { ok: true, text: `✅ ${totalDeleted} enregistrement(s) mobile effacé(s) dans ${group.label} (back-office et web non touchés).` })
     } catch {
       setMsg({ ok: false, text: `Erreur lors de l'effacement de ${group.label}.` })
     }

@@ -603,6 +603,7 @@ export default function MobileCommercial({ user }: Props) {
 
     const commande = {
       id: store.genCommande(), date: store.today(), createdAt: new Date().toISOString(),
+      createdVia: "mobile" as const,
       commercialId: vendeurId, commercialNom: vendeurNom,
       clientId: client.id, clientNom: client.nom,
       secteur: client.secteur, zone: client.zone,
