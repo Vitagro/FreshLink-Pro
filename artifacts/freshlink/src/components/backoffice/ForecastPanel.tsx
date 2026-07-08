@@ -119,6 +119,7 @@ export default function ForecastPanel() {
     const bon = {
       id: store.genId(),
       date: store.today(),
+      createdVia: "backoffice" as const,
       acheteurId: "",
       acheteurNom: "FORECAST AUTO",
       fournisseurId: "forecast",

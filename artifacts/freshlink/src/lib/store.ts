@@ -529,6 +529,7 @@ export interface NonAchatSignalement {
 export interface BonAchat {
   id: string
   date: string
+  createdVia?: "mobile" | "backoffice"   // origine reelle de la creation — sert a scoper les suppressions "donnees mobile"
   acheteurId: string
   acheteurNom: string
   fournisseurId: string
@@ -562,6 +563,7 @@ export interface Commande {
   id: string
   date: string
   createdAt?: string   // vrai timestamp ISO de la prise de commande (distinct de `heurelivraison`, qui est l'heure de livraison souhaitée)
+  createdVia?: "mobile" | "backoffice"   // origine reelle de la creation — sert a scoper les suppressions "donnees mobile" sans jamais toucher les commandes creees depuis le BO
   commercialId: string
   commercialNom: string
   clientId: string
@@ -749,6 +751,7 @@ export interface PurchaseOrder {
   statut: "ouvert" | "envoyé" | "receptionné" | "annulé"
   notes: string
   createdBy: string
+  createdVia?: "mobile" | "backoffice" | "system"   // origine reelle de la creation — sert a scoper les suppressions "donnees mobile"
   // besoin calcul fields
   commandeQty?: number
   stockQty?: number
@@ -3122,6 +3125,7 @@ export const store = {
         statut: "ouvert",
         notes: `PO auto-genere — besoinNet: ${b.besoinNet} ${b.unite} (cmd: ${b.commandeQty}, stock: ${b.stockQty})`,
         createdBy: "system",
+        createdVia: "system",
         commandeQty: b.commandeQty,
         stockQty: b.stockQty,
         retourQty: b.retourQty,

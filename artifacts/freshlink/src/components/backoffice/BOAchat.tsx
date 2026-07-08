@@ -244,6 +244,7 @@ export default function BOAchat() {
     const bon: BonAchat = {
       id: store.genId(),
       date: store.today(),
+      createdVia: "backoffice",
       acheteurId: "admin",
       acheteurNom: "Back Office",
       fournisseurId: formFournisseurId,

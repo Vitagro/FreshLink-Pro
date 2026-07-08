@@ -243,6 +243,7 @@ export default function BoPurchaseOrders() {
       statut: "ouvert",
       notes: fNotes,
       createdBy: "Back Office",
+      createdVia: "backoffice",
     }
     store.addPurchaseOrder(po)
 
