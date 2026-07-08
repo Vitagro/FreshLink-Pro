@@ -2,9 +2,16 @@ name: Deploy static sites to Hostinger
 
 # Deploys the 3 static marketing sites under sites/ to their subdomains.
 # Static HTML, no build step. Same Hostinger account/SSH secrets as the ERP
-# deploy (deploy.yml) — vita-agro.com, tech.vita-agro.com and fresh.vita-agro.com
-# all live under the same domains/vita-agro.com/public_html tree, alongside the
-# already-live erp/ and shop/ subfolders (never touched by this workflow).
+# deploy (deploy.yml).
+#
+# Confirmed via probe-hosting-paths.yml (2026-07-08): tech.vita-agro.com and
+# fresh.vita-agro.com are each their OWN document root
+# (~/domains/<sub>.vita-agro.com/public_html/), NOT subfolders under
+# vita-agro.com/public_html — that first guess put files in the wrong place
+# (left a harmless default.php placeholder still being served). Only
+# vita-agro.com root shares public_html with the already-live erp/ and shop/
+# subfolders, so that one only ever replaces index.html — never the whole
+# directory.
 on:
   push:
     branches: [main]
@@ -16,7 +23,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  REMOTE_BASE: /home/u387018932/domains/vita-agro.com/public_html
+  REMOTE_ROOT_BASE: /home/u387018932/domains/vita-agro.com/public_html
+  REMOTE_TECH_BASE: /home/u387018932/domains/tech.vita-agro.com/public_html
+  REMOTE_FRESH_BASE: /home/u387018932/domains/fresh.vita-agro.com/public_html
 
 jobs:
   deploy:
@@ -35,23 +44,30 @@ jobs:
             sleep 5
           done
 
-      # ── tech.vita-agro.com and fresh.vita-agro.com: isolated subfolders,
-      # safe to swap wholesale (same atomic-release pattern as erp/). ──
-      - name: Deploy subfolder sites (tech, fresh)
+      # ── One-time cleanup: remove the orphaned folders created by the first
+      # (wrong-path) deploy attempt, under vita-agro.com/public_html. ──
+      - name: Clean up orphaned tech/fresh folders under vita-agro.com
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          $SSH "rm -rf '${{ env.REMOTE_ROOT_BASE }}/tech' '${{ env.REMOTE_ROOT_BASE }}/tech-releases' '${{ env.REMOTE_ROOT_BASE }}/fresh' '${{ env.REMOTE_ROOT_BASE }}/fresh-releases'"
+
+      # ── tech.vita-agro.com and fresh.vita-agro.com: each has its own
+      # public_html, currently holding only Hostinger's default.php
+      # placeholder. Upload index.html directly and disable default.php so it
+      # can't shadow it in Apache's DirectoryIndex order. ──
+      - name: Deploy tech.vita-agro.com and fresh.vita-agro.com
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          for name in vita-tech:tech vita-fresh:fresh; do
-            src="${name%%:*}"; sub="${name##*:}"
-            release_dir="${{ env.REMOTE_BASE }}/${sub}-releases/${{ github.sha }}"
-            backup_dir="${{ env.REMOTE_BASE }}/${sub}-prev"
-            live_dir="${{ env.REMOTE_BASE }}/${sub}"
-            tar -czf "${src}.tar.gz" -C "sites/${src}" .
-            $SSH "mkdir -p '$release_dir'"
-            $SCP "${src}.tar.gz" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${release_dir}/site.tar.gz"
-            $SSH "tar -xzf '${release_dir}/site.tar.gz' -C '$release_dir' && rm '${release_dir}/site.tar.gz'"
-            $SSH "rm -rf '$backup_dir'; [ -d '$live_dir' ] && mv '$live_dir' '$backup_dir'; mv '$release_dir' '$live_dir'"
-          done
+          deploy_one() {
+            src="$1"; base="$2"
+            $SSH "[ -f '$base/default.php' ] && mv '$base/default.php' '$base/default.php.disabled' || true"
+            $SSH "[ -f '$base/index.html' ] && cp '$base/index.html' '$base/index.html.prev' || true"
+            $SCP "sites/${src}/index.html" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/index.html.new"
+            $SSH "mv '$base/index.html.new' '$base/index.html'"
+          }
+          deploy_one vita-tech "${{ env.REMOTE_TECH_BASE }}"
+          deploy_one vita-fresh "${{ env.REMOTE_FRESH_BASE }}"
 
       # ── vita-agro.com (root domain): only replace index.html — public_html
       # also holds the erp/ and shop/ subfolders, never move/replace the whole
@@ -60,39 +76,43 @@ jobs:
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          $SSH "[ -f '${{ env.REMOTE_BASE }}/index.html' ] && cp '${{ env.REMOTE_BASE }}/index.html' '${{ env.REMOTE_BASE }}/index.html.prev' || true"
-          $SCP sites/vita-agro/index.html "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_BASE }}/index.html.new"
-          $SSH "mv '${{ env.REMOTE_BASE }}/index.html.new' '${{ env.REMOTE_BASE }}/index.html'"
+          $SSH "[ -f '${{ env.REMOTE_ROOT_BASE }}/index.html' ] && cp '${{ env.REMOTE_ROOT_BASE }}/index.html' '${{ env.REMOTE_ROOT_BASE }}/index.html.prev' || true"
+          $SCP sites/vita-agro/index.html "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_ROOT_BASE }}/index.html.new"
+          $SSH "mv '${{ env.REMOTE_ROOT_BASE }}/index.html.new' '${{ env.REMOTE_ROOT_BASE }}/index.html'"
 
+      # ── Content-aware health check — a wrong path can still return HTTP 200
+      # (Hostinger's default.php placeholder does), so check for a string
+      # unique to each real page, not just the status code. ──
       - name: Health check
         id: health
         run: |
           sleep 5
           fail=0
-          for url in https://vita-agro.com https://tech.vita-agro.com https://fresh.vita-agro.com; do
-            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 20 "$url")
-            echo "$url -> $code"
-            if [ "$code" != "200" ]; then
-              echo "::error::$url returned $code"
+          check() {
+            body=$(curl -sS --max-time 20 "$1")
+            if ! echo "$body" | grep -q "$2"; then
+              echo "::error::$1 does not contain expected marker '$2' — got: $(echo "$body" | head -c 200)"
               fail=1
+            else
+              echo "$1 -> OK ('$2' found)"
             fi
-          done
+          }
+          check https://vita-agro.com "Vita Agro Capital"
+          check https://tech.vita-agro.com "Vita Tech"
+          check https://fresh.vita-agro.com "Vita Fresh"
           if [ "$fail" = "1" ]; then
             echo "unhealthy=true" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
-      - name: Rollback subfolder sites on failed health check
+      - name: Rollback on failed health check
         if: failure() && steps.health.outputs.unhealthy == 'true'
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          for sub in tech fresh; do
-            live_dir="${{ env.REMOTE_BASE }}/${sub}"
-            backup_dir="${{ env.REMOTE_BASE }}/${sub}-prev"
-            $SSH "[ -d '$backup_dir' ] && rm -rf '$live_dir' && mv '$backup_dir' '$live_dir' || true"
+          for base in "${{ env.REMOTE_TECH_BASE }}" "${{ env.REMOTE_FRESH_BASE }}" "${{ env.REMOTE_ROOT_BASE }}"; do
+            $SSH "[ -f '$base/index.html.prev' ] && mv '$base/index.html.prev' '$base/index.html' || true"
           done
-          $SSH "[ -f '${{ env.REMOTE_BASE }}/index.html.prev' ] && mv '${{ env.REMOTE_BASE }}/index.html.prev' '${{ env.REMOTE_BASE }}/index.html' || true"
-          echo "::error::Deploy failed health check — rolled back."
+          echo "::error::Deploy failed health check — rolled back index.html where a previous version existed."
 
       - name: Clean up SSH key
         if: always()
