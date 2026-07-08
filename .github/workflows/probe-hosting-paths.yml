@@ -1,0 +1,37 @@
+name: Probe hosting paths (diagnostic, read-only)
+
+# One-off diagnostic: lists the actual domains/ directory layout on the
+# Hostinger account so we can fix deploy-sites.yml's document-root guesses
+# for tech/fresh instead of guessing again. Read-only, no writes.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 5
+          done
+
+      - name: List domains directory layout
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          echo "--- ~/domains ---"
+          $SSH "ls -la ~/domains" || true
+          echo "--- ~/domains/vita-agro.com/public_html ---"
+          $SSH "ls -la ~/domains/vita-agro.com/public_html" || true
+          echo "--- ~/domains/tech.vita-agro.com (if exists) ---"
+          $SSH "ls -la ~/domains/tech.vita-agro.com 2>&1 && ls -la ~/domains/tech.vita-agro.com/public_html 2>&1" || true
+          echo "--- ~/domains/fresh.vita-agro.com (if exists) ---"
+          $SSH "ls -la ~/domains/fresh.vita-agro.com 2>&1 && ls -la ~/domains/fresh.vita-agro.com/public_html 2>&1" || true
+
+      - name: Clean up SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
