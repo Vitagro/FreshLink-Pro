@@ -382,6 +382,7 @@ const T={
 const DEFAULT={
  lang:"en",
  investorPass:"invest2026",
+ erpUrl:"https://erp.vita-agro.com/api/ext/public-stats",
  fresh:[
   {id:"daily",num:"2 T",lab_en:"Delivered daily",lab_fr:"Livrées chaque jour",sub_en:"since March 2026",sub_fr:"depuis mars 2026",vis:true},
   {id:"monthly",num:"52 t",lab_en:"Monthly volume",lab_fr:"Volume mensuel",sub_en:"field data · FreshLink",sub_fr:"données terrain · FreshLink",vis:true},
@@ -592,6 +593,7 @@ function buildAdmin(){
  // contact
  h+=`<div class="adm-grp"><h3>Contact</h3>
   <div class="adm-full"><label>Primary email</label><input type="text" data-p="contact.email" value="${esc(S.contact.email)}"></div>
+  <div class="adm-full"><label>Secondary email (footer)</label><input type="text" data-p="contact.email2" value="${esc(S.contact.email2)}"></div>
   <div class="adm-full"><label>Phone</label><input type="text" data-p="contact.phone" value="${esc(S.contact.phone)}"></div>
   <div class="adm-row"><label>Show email button</label><label class="sw"><input type="checkbox" data-p="contact.vis_email" ${S.contact.vis_email?'checked':''}><span></span></label></div>
   <div class="adm-row"><label>Show phone button</label><label class="sw"><input type="checkbox" data-p="contact.vis_phone" ${S.contact.vis_phone?'checked':''}><span></span></label></div></div>`;
