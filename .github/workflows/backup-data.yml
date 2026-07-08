@@ -1,0 +1,69 @@
+name: Backup ERP data (Supabase → private Hostinger dir)
+
+# Daily snapshot of every ERP table into a single archive, shipped over SSH to
+# a PRIVATE directory on the same Hostinger account (NOT under any
+# domains/*/public_html — never web-accessible). This repo is PUBLIC, so the
+# archive must never touch GitHub's own storage (Actions artifacts on public
+# repos are downloadable by anyone) — it only exists transiently on the
+# runner's disk, then lives solely on the private server directory.
+#
+# This exists because the Supabase project is on the free tier: no automatic
+# backups, no PITR. Until that's upgraded, this is the only safety net.
+on:
+  schedule:
+    - cron: "0 3 * * *"   # daily, 03:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: backup-data
+  cancel-in-progress: false
+
+env:
+  REMOTE_BACKUP_DIR: /home/u387018932/backups/freshlink
+  KEEP_DAYS: 90
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dump tables
+        env:
+          SB_URL: ${{ secrets.SUPABASE_URL }}
+          SB_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/backup-tables.mjs
+
+      - name: Package archive
+        id: pkg
+        run: |
+          STAMP=$(date -u +%Y-%m-%d)
+          tar -czf "backup-${STAMP}.tar.gz" -C backup-output .
+          echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          for i in 1 2 3 4 5; do
+            ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null && break
+            sleep 5
+          done
+
+      - name: Upload archive to private directory
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
+          $SSH "mkdir -p '${{ env.REMOTE_BACKUP_DIR }}'"
+          $SCP "backup-${{ steps.pkg.outputs.stamp }}.tar.gz" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_BACKUP_DIR }}/backup-${{ steps.pkg.outputs.stamp }}.tar.gz"
+
+      - name: Prune backups older than retention window
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          $SSH "find '${{ env.REMOTE_BACKUP_DIR }}' -name 'backup-*.tar.gz' -mtime +${{ env.KEEP_DAYS }} -delete" || true
+
+      - name: Clean up SSH key and local dump
+        if: always()
+        run: rm -f ~/.ssh/deploy_key; rm -rf backup-output backup-*.tar.gz
