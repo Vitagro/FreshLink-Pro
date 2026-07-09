@@ -113,11 +113,11 @@ function generatePassword(len = 10): string {
 }
 
 const FEATURES = [
-  { icon: "M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .03 2.694-1.338 2.694H4.136c-1.368 0-2.337-1.694-1.338-2.694L4 15.3", label: "11 Agents IA experts metier 24/7" },
-  { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2", label: "Commandes & BL temps reel" },
-  { icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4", label: "Trips & tournees automatiques" },
-  { icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2", label: "Finance, credit & caisse" },
-  { icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", label: "Dashboard & KPIs avances" },
+  { icon: "M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .03 2.694-1.338 2.694H4.136c-1.368 0-2.337-1.694-1.338-2.694L4 15.3", label: "11 Agents IA experts metier 24/7", color: "#4ADE80" },
+  { icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2", label: "Commandes & BL temps reel", color: "#3b82f6" },
+  { icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4", label: "Trips & tournees automatiques", color: "#0ea5e9" },
+  { icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2", label: "Finance, credit & caisse", color: "#8b5cf6" },
+  { icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", label: "Dashboard & KPIs avances", color: "#f59e0b" },
 ]
 
 const IA_AGENTS = [
@@ -199,6 +199,12 @@ export default function LoginPage({ onLogin }: Props) {
   const [panelIn, setPanelIn] = useState(false)
   const [typedText, setTypedText] = useState("")
   const TYPED_TARGET = "de bout en bout"
+  const [heroTilt, setHeroTilt] = useState({ x: 0, y: 0 })
+  function onHeroMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    const r = e.currentTarget.getBoundingClientRect()
+    setHeroTilt({ x: (e.clientX - r.left) / r.width - 0.5, y: (e.clientY - r.top) / r.height - 0.5 })
+  }
+  function onHeroMouseLeave() { setHeroTilt({ x: 0, y: 0 }) }
 
   useEffect(() => {
     const t = setTimeout(() => setPanelIn(true), 80)
@@ -584,21 +590,24 @@ export default function LoginPage({ onLogin }: Props) {
             </p>
           </div>
 
-          {/* Feature list — staggered */}
-          <div className="flex flex-col gap-1.5">
+          {/* Feature bento grid — staggered, per-feature accent color */}
+          <div className="grid grid-cols-2 gap-2">
             {FEATURES.map((feat, i) => (
-              <div key={feat.label} className="flex items-center gap-2.5" style={{
-                opacity: panelIn ? 1 : 0,
-                transform: panelIn ? "translateX(0)" : "translateX(-12px)",
-                transition: `opacity 0.4s ease ${0.3 + i * 0.07}s, transform 0.4s ease ${0.3 + i * 0.07}s`,
-              }}>
-                <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0"
-                  style={{ background: "rgba(74,222,128,0.12)", border: "1px solid rgba(74,222,128,0.2)" }}>
-                  <svg className="w-3 h-3" fill="none" stroke="#4ADE80" viewBox="0 0 24 24">
+              <div key={feat.label} className="rounded-xl p-2.5 flex flex-col gap-1.5 transition-transform hover:-translate-y-0.5"
+                style={{
+                  background: `${feat.color}12`,
+                  border: `1px solid ${feat.color}28`,
+                  opacity: panelIn ? 1 : 0,
+                  transform: panelIn ? "translateY(0) scale(1)" : "translateY(10px) scale(0.94)",
+                  transition: `opacity 0.4s ease ${0.3 + i * 0.07}s, transform 0.4s ease ${0.3 + i * 0.07}s`,
+                }}>
+                <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                  style={{ background: `${feat.color}20`, border: `1px solid ${feat.color}38` }}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke={feat.color} viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={feat.icon} />
                   </svg>
                 </div>
-                <span className="text-xs" style={{ color: "#8ab89e" }}>{feat.label}</span>
+                <span className="text-[10.5px] leading-snug font-medium" style={{ color: "#a8d4b8" }}>{feat.label}</span>
               </div>
             ))}
           </div>
@@ -692,7 +701,15 @@ export default function LoginPage({ onLogin }: Props) {
             }
           `}</style>
 
-          <div className="relative overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4">
+          <div
+            onMouseMove={onHeroMouseMove}
+            onMouseLeave={onHeroMouseLeave}
+            className="relative overflow-hidden rounded-2xl border border-green-200 bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50 p-4"
+            style={{
+              transform: `perspective(700px) rotateX(${heroTilt.y * -6}deg) rotateY(${heroTilt.x * 6}deg)`,
+              transition: "transform 0.2s ease-out",
+              boxShadow: heroTilt.x !== 0 || heroTilt.y !== 0 ? "0 16px 40px rgba(16,185,129,0.18)" : "0 4px 14px rgba(16,185,129,0.08)",
+            }}>
             {/* Top — logo + brand */}
             <div className="flex items-center justify-center gap-3 mb-3">
               <div style={{ animation: "fresh-pulse 2s ease-in-out infinite" }} className="rounded-xl">
