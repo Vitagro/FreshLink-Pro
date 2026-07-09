@@ -72,6 +72,29 @@ router.get("/", async (_req: Request, res: Response) => {
 
     const otif = closedCount > 0 ? Math.round((livreCount / closedCount) * 100) : null;
 
+    // ── DEBUG TEMPORAIRE — a retirer une fois le "0 t" diagnostique ──
+    // Aggregats uniquement (comptages), aucune PII, aucun prix.
+    const statutCounts: Record<string, number> = {};
+    const uniteCountsThisMonth: Record<string, number> = {};
+    let totalCommandes = 0;
+    let livreThisMonth = 0;
+    for (const row of commandes) {
+      const p = row.payload ?? {};
+      totalCommandes++;
+      const statut = String(p.statut ?? "(vide)");
+      statutCounts[statut] = (statutCounts[statut] ?? 0) + 1;
+      const date = String(p.date ?? "").slice(0, 10);
+      if (statut === "livre" && date.slice(0, 7) === month) {
+        livreThisMonth++;
+        const lignes = Array.isArray(p.lignes) ? p.lignes : [];
+        for (const l of lignes) {
+          const u = String(l.unite ?? "(vide)").toLowerCase();
+          uniteCountsThisMonth[u] = (uniteCountsThisMonth[u] ?? 0) + 1;
+        }
+      }
+    }
+    const debug = { totalCommandes, statutCounts, livreThisMonth, uniteCountsThisMonth, month };
+
     res.json({
       ok: true,
       fresh: {
@@ -80,6 +103,7 @@ router.get("/", async (_req: Request, res: Response) => {
         clients: String(activeClients),
         otif: otif != null ? `${otif}%` : "—",
       },
+      debug,
       generatedAt: new Date().toISOString(),
     });
   } catch (e) {
