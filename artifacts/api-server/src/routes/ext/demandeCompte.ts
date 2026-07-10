@@ -153,6 +153,10 @@ router.post("/", async (req: Request, res: Response) => {
     res.status(400).json({ error: "Nom et téléphone sont requis." });
     return;
   }
+  if (type === "chr" && !email?.trim()) {
+    res.status(400).json({ error: "L'email est obligatoire pour les comptes CHR (Restaurant / Hôtel / Café)." });
+    return;
+  }
 
   const telNorm   = normPhone(telephone.trim());
   const nomTrimmed = nom.trim();

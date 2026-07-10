@@ -2797,7 +2797,7 @@ GET  /api/ext/commandes/:id → suivi commande</div>
               <div class="phone-input-wrap"><span class="phone-flag">🇲🇦</span><input type="tel" id="signupPhone" placeholder="06 XX XX XX XX" autocomplete="tel" required/></div>
             </div>
             <div class="form-group signup-full">
-              <label>Email (optionnel)</label>
+              <label id="signupEmailLabel">Email (optionnel)</label>
               <input type="email" id="signupEmail" placeholder="email@exemple.ma" autocomplete="email"/>
             </div>
           </div>
@@ -4281,6 +4281,11 @@ function updateSignupFields(){
   var show=function(el){if(el)el.style.display="";};
   // reset
   hide(pro); hide(part); hide(com); hide(four); hide(sousWrap); hide(iceWrap);
+  var emailInp=document.getElementById("signupEmail"), emailLabel=document.getElementById("signupEmailLabel");
+  if(emailInp && emailLabel){
+    if(type==="chr"){ emailLabel.innerHTML='Email <span style="color:#dc2626">*</span>'; emailInp.required=true; }
+    else { emailLabel.textContent="Email (optionnel)"; emailInp.required=false; }
+  }
   if(!type) return;
   if(type==="client"){
     show(part);
@@ -4394,6 +4399,9 @@ async function doSignup(e){
   if(!ville){ errEl.textContent="La ville est obligatoire.";errEl.classList.add("show");return; }
   if((type==="chr"||type==="marchand"||type==="fournisseur") && !societe){
     errEl.textContent="Le nom de l'établissement / société est requis pour les comptes Pro.";errEl.classList.add("show");return;
+  }
+  if(type==="chr" && !email){
+    errEl.textContent="L'email est obligatoire pour les comptes CHR (Restaurant / Hôtel / Café).";errEl.classList.add("show");return;
   }
   if(!origine){ errEl.textContent="Indiquez comment vous avez connu Vita Fresh.";errEl.classList.add("show");return; }
   if(origine==="commercial" && !origineDetail){
@@ -4727,11 +4735,13 @@ function clearSession(){ localStorage.removeItem("fl_session"); }
 async function submitProForm(e){
   e.preventDefault();
   var nom=document.getElementById("fNom").value.trim(), tel=document.getElementById("fTel").value.trim(), type=document.getElementById("fType").value;
+  var email=document.getElementById("fEmail").value.trim();
   var msg=document.getElementById("formMsg"), btn=document.getElementById("btnSubmit");
   msg.className="form-msg";
   if(!nom||!tel||!type){msg.textContent=t("form_err");msg.classList.add("error");return;}
+  if(type==="chr" && !email){msg.textContent="L'email est obligatoire pour les comptes CHR (Restaurant / Hôtel / Café).";msg.classList.add("error");return;}
   btn.disabled=true; btn.textContent="⏳";
-  var payload={nom,telephone:tel,type,societe:document.getElementById("fSociete").value.trim(),email:document.getElementById("fEmail").value.trim(),ville:document.getElementById("fVille").value.trim(),volume:document.getElementById("fVolume").value,message:document.getElementById("fMsg").value.trim(),source:"site-web",lang:currentLang};
+  var payload={nom,telephone:tel,type,societe:document.getElementById("fSociete").value.trim(),email:email,ville:document.getElementById("fVille").value.trim(),volume:document.getElementById("fVolume").value,message:document.getElementById("fMsg").value.trim(),source:"site-web",lang:currentLang};
   var ok=false;
   try{var r=await fetch(CONFIG.API_URL+"/api/ext/demande-acces",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});ok=r.ok;}catch{ok=false;}
   if(!ok){var wa=encodeURIComponent("📋 *Demande Accès Pro — Vita Fresh*\n\n👤 "+payload.nom+"\n📱 "+payload.telephone+"\n🏷️ "+payload.type+"\n📍 "+payload.ville+"\n💬 "+payload.message);window.open("https://wa.me/"+CFG.wa+"?text="+wa,"_blank");}
