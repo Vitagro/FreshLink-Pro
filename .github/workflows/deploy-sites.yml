@@ -101,7 +101,7 @@ jobs:
           sleep 5
           fail=0
           check() {
-            body=$(curl -sS --max-time 20 "$1")
+            body=$(curl -sSL --max-time 20 "$1")
             if ! echo "$body" | grep -q "$2"; then
               echo "::error::$1 does not contain expected marker '$2' — got: $(echo "$body" | head -c 200)"
               fail=1
