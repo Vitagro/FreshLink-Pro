@@ -58,6 +58,11 @@ section{padding:90px 0}
 .app p{margin-top:12px;font-size:14.5px;color:rgba(11,28,51,.72);flex:1 0 auto}
 .app .app-link{margin-top:16px;padding-top:13px;border-top:1px solid var(--line);font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--blue);font-weight:500}
 .app .app-link:hover{color:var(--sky)}
+.app .mobile{margin-top:14px;display:flex;gap:8px;flex-wrap:wrap}
+.mobile-badge{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500;padding:6px 10px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:5px;letter-spacing:.02em;border:1px solid transparent}
+.mobile-badge.android{background:#E7F6EC;color:#1B7A3D;border-color:rgba(27,122,61,.25)}
+.mobile-badge.android:hover{background:#d7f0e0}
+.mobile-badge.ios-soon{background:var(--paper-2);color:rgba(11,28,51,.55);border-color:var(--line)}
 .model-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
 .mcard{border:1px solid rgba(234,242,252,.16);border-radius:16px;padding:26px;background:rgba(255,255,255,.03)}
 .mcard .mk{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--cyan);letter-spacing:.14em}
@@ -229,17 +234,21 @@ const DEFAULT={
  lang:"en",
  apps:[
   {id:"freshlink",name:"FreshLink Pro",cat_en:"Supply-chain ERP",cat_fr:"ERP supply chain",status:"live",url:"",vis:true,
+   androidUrl:"https://github.com/JawadVita/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk",iosSoon:true,
    desc_en:"Our proprietary AI-powered ERP for fresh-produce operations: orders, quality control, routing, traceability and self-service portals — now with a redesigned interactive login experience.",
    desc_fr:"Notre ERP propriétaire à IA pour les opérations de produits frais : commandes, contrôle qualité, tournées, traçabilité et portails self-service — avec un nouvel écran de connexion interactif repensé."},
   {id:"logilynx",name:"LOGI-LYNX GLOBAL",cat_en:"AI supply-chain platform",cat_fr:"Plateforme supply chain IA",status:"beta",url:"https://logi-ia-supply-vita-green-capital.vercel.app",vis:true,
+   androidUrl:"https://github.com/JawadVita/Logi-IA-Supply/releases/latest/download/LogiLynxGlobal.apk",iosSoon:true,
    desc_en:"AI-powered logistics platform for Morocco & Africa: OTD audits, freight marketplace, live fleet tracking and carrier network — extracted from real operations.",
    desc_fr:"Plateforme logistique propulsée par l'IA pour le Maroc et l'Afrique : audits OTD, marché du fret, suivi de flotte en direct et réseau de transporteurs — issue d'opérations réelles."},
   {id:"santeconnect",name:"SantéConnect",cat_en:"Healthcare coordination platform",cat_fr:"Plateforme de coordination santé",status:"beta",url:"https://sante-connect-xi.vercel.app",vis:true,
+   androidUrl:"https://github.com/JawadVita/Sant-connect/releases/latest/download/SanteConnect.apk",iosSoon:true,
    desc_en:"Digital prescription platform connecting doctors, pharmacies and labs in real time — WhatsApp notifications, insurance verification and secure payments, now with a redesigned interactive role-selection interface.",
    desc_fr:"Plateforme d'ordonnances numériques reliant médecins, pharmacies et laboratoires en temps réel — notifications WhatsApp, vérification d'assurance et paiements sécurisés, avec une nouvelle interface interactive de sélection de rôle."},
   {id:"cargoexpress",name:"CargoExpress",cat_en:"Cargo delivery marketplace",cat_fr:"Marketplace de livraison de marchandises",status:"beta",url:"https://hybrid-app-creation.vercel.app",vis:true,
-   desc_en:"On-demand cargo delivery platform for Morocco connecting shippers with independent triporteur & van drivers — automatic pricing, cash or card payment, real-time tracking, hybrid Android/iOS app.",
-   desc_fr:"Plateforme de livraison de marchandises à la demande pour le Maroc, mettant en relation expéditeurs et livreurs indépendants (triporteur, Honda) — tarification automatique, paiement espèces ou carte, suivi en temps réel, application hybride Android/iOS."},
+   androidUrl:"https://github.com/JawadVita/Transporteur/releases/latest/download/CargoExpress.apk",iosSoon:true,
+   desc_en:"On-demand cargo delivery platform for Morocco connecting shippers with independent triporteur & van drivers — automatic pricing, cash or card payment, real-time tracking.",
+   desc_fr:"Plateforme de livraison de marchandises à la demande pour le Maroc, mettant en relation expéditeurs et livreurs indépendants (triporteur, Honda) — tarification automatique, paiement espèces ou carte, suivi en temps réel."},
   {id:"nour",name:"Nour",cat_en:"AI assistant",cat_fr:"Assistant IA",status:"beta",url:"",vis:false,
    desc_en:"Multilingual AI assistant for customer interactions — French, Darija and English.",
    desc_fr:"Assistant IA multilingue pour les interactions clients — français, darija et anglais."},
@@ -271,7 +280,8 @@ function renderApps(){
   const st=a.status==='live'?['live',t.st_live]:a.status==='beta'?['beta',t.st_beta]:['soon',t.st_soon];
   const link=a.url?`<a class="app-link" href="${esc(a.url)}" target="_blank" rel="noopener">${S.lang==='fr'?'Découvrir':'Learn more'} →</a>`:'';
   const initial=esc((a.name||'?').charAt(0).toUpperCase());
-  return `<article class="app"><div class="app-top"><div class="app-ic">${initial}</div><span class="badge ${st[0]}">${esc(st[1])}</span></div><h3>${esc(a.name)}</h3><div class="cat">${esc(a['cat_'+S.lang]||a.cat_en||'')}</div><p>${esc(a['desc_'+S.lang]||a.desc_en||'')}</p>${link}</article>`;
+  const mobile=(a.androidUrl||a.iosSoon)?`<div class="mobile">${a.androidUrl?`<a class="mobile-badge android" href="${esc(a.androidUrl)}" target="_blank" rel="noopener">🤖 Android</a>`:''}${a.iosSoon?`<span class="mobile-badge ios-soon">🍎 iOS — ${S.lang==='fr'?'Bientôt':'Coming soon'}</span>`:''}</div>`:'';
+  return `<article class="app"><div class="app-top"><div class="app-ic">${initial}</div><span class="badge ${st[0]}">${esc(st[1])}</span></div><h3>${esc(a.name)}</h3><div class="cat">${esc(a['cat_'+S.lang]||a.cat_en||'')}</div><p>${esc(a['desc_'+S.lang]||a.desc_en||'')}</p>${mobile}${link}</article>`;
  }).join('')||`<article class="app"><p>${S.lang==='fr'?'Catalogue en cours de publication.':'Catalogue being published.'}</p></article>`;
 }
 function renderContact(){
