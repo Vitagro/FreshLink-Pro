@@ -947,23 +947,25 @@ export default function LoginPage({ onLogin }: Props) {
               </div>
             )}
 
-            {/* Submit */}
+            {/* Submit — arrow-box style: colored label + black arrow square */}
             <button type="submit" disabled={loading}
-              className="w-full py-3 rounded-xl text-sm font-bold text-white transition-all disabled:opacity-60 flex items-center justify-center gap-2 active:scale-[0.98]"
-              style={{ background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)", boxShadow: "0 4px 14px rgba(22,163,74,0.35)" }}>
-              {loading ? (
-                <>
-                  <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  Connexion...
-                </>
-              ) : (
-                <>
-                  <svg width="16" height="16" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                  </svg>
-                  Se connecter
-                </>
-              )}
+              className="w-full flex items-stretch rounded-xl overflow-hidden text-sm font-bold transition-all disabled:opacity-60 active:scale-[0.98]">
+              <span className="flex-1 flex items-center justify-center gap-2 py-3 text-white"
+                style={{ background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)" }}>
+                {loading ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                    Connexion...
+                  </>
+                ) : (
+                  "Se connecter"
+                )}
+              </span>
+              <span className="w-12 flex items-center justify-center text-white shrink-0" style={{ background: "#0f172a" }}>
+                <svg width="16" height="16" className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 7L7 17M17 7H7M17 7v10" />
+                </svg>
+              </span>
             </button>
           </form>
 
