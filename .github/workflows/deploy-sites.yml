@@ -80,6 +80,18 @@ jobs:
           $SCP sites/vita-agro/index.html "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_ROOT_BASE }}/index.html.new"
           $SSH "mv '${{ env.REMOTE_ROOT_BASE }}/index.html.new' '${{ env.REMOTE_ROOT_BASE }}/index.html'"
 
+      # ── vita-agro.com/confidentialite — privacy policy page (4 mobile apps),
+      # required by Google Play submission. Own subfolder, only ever contains
+      # this one file, safe to fully manage here. ──
+      - name: Deploy privacy policy page (vita-agro.com/confidentialite)
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
+          $SSH "mkdir -p '${{ env.REMOTE_ROOT_BASE }}/confidentialite'"
+          $SSH "[ -f '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html' ] && cp '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html' '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html.prev' || true"
+          $SCP sites/vita-agro/confidentialite/index.html "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html.new"
+          $SSH "mv '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html.new' '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html'"
+
       # ── Content-aware health check — a wrong path can still return HTTP 200
       # (Hostinger's default.php placeholder does), so check for a string
       # unique to each real page, not just the status code. ──
@@ -100,6 +112,7 @@ jobs:
           check https://vita-agro.com "Vita Agro Capital"
           check https://tech.vita-agro.com "Vita Tech"
           check https://fresh.vita-agro.com "Vita Fresh"
+          check https://vita-agro.com/confidentialite "Politique de confidentialité"
           if [ "$fail" = "1" ]; then
             echo "unhealthy=true" >> "$GITHUB_OUTPUT"
             exit 1
@@ -109,7 +122,7 @@ jobs:
         if: failure() && steps.health.outputs.unhealthy == 'true'
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          for base in "${{ env.REMOTE_TECH_BASE }}" "${{ env.REMOTE_FRESH_BASE }}" "${{ env.REMOTE_ROOT_BASE }}"; do
+          for base in "${{ env.REMOTE_TECH_BASE }}" "${{ env.REMOTE_FRESH_BASE }}" "${{ env.REMOTE_ROOT_BASE }}" "${{ env.REMOTE_ROOT_BASE }}/confidentialite"; do
             $SSH "[ -f '$base/index.html.prev' ] && mv '$base/index.html.prev' '$base/index.html' || true"
           done
           echo "::error::Deploy failed health check — rolled back index.html where a previous version existed."
