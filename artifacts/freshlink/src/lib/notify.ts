@@ -1,10 +1,14 @@
 "use client"
 // ════════════════════════════════════════════════════════════════════════════
-//  notify — sons + notifications navigateur (appels, messages, alertes).
-//  Fonctionne quand un onglet ERP est OUVERT (1er plan ou arrière-plan). Le push
-//  hors-app (téléphone verrouillé) nécessiterait un service worker + Web Push.
+//  notify — sons + notifications navigateur (appels, messages, alertes), plus
+//  notifications push natives (registerPush) quand l'app tourne dans le wrapper
+//  mobile Capacitor — celles-ci arrivent même app fermée/téléphone verrouillé,
+//  contrairement au reste de ce module qui exige un onglet ouvert.
 //  L'AudioContext doit être "débloqué" par un geste utilisateur → unlockAudio().
 // ════════════════════════════════════════════════════════════════════════════
+
+import { Capacitor } from "@capacitor/core"
+import { PushNotifications, type Token, type PushNotificationSchema, type ActionPerformed } from "@capacitor/push-notifications"
 
 let audioCtx: AudioContext | null = null
 function ctx(): AudioContext | null {
@@ -75,4 +79,45 @@ export function notify(title: string, body?: string, tag?: string): void {
 
 export function isHidden(): boolean {
   return typeof document !== "undefined" && document.hidden
+}
+
+// ── Push natif (app mobile Capacitor uniquement) ──────────────────────────────
+// Enregistre l'appareil pour les notifications push FCM et envoie le token au
+// serveur pour cet utilisateur. Sans effet dans un navigateur classique (web).
+let pushRegistered = false
+
+export async function registerPush(userId: string): Promise<void> {
+  if (!Capacitor.isNativePlatform() || pushRegistered || !userId) return
+  pushRegistered = true
+
+  try {
+    let perm = await PushNotifications.checkPermissions()
+    if (perm.receive === "prompt") perm = await PushNotifications.requestPermissions()
+    if (perm.receive !== "granted") { pushRegistered = false; return }
+
+    await PushNotifications.register()
+
+    PushNotifications.addListener("registration", (token: Token) => {
+      fetch("/api/ext/push/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, token: token.value, platform: Capacitor.getPlatform() }),
+      }).catch(() => { /* best-effort — will retry next app launch */ })
+    })
+
+    PushNotifications.addListener("registrationError", () => { pushRegistered = false })
+
+    // Foreground push: also mirror it through the existing in-app notify() so
+    // behavior is consistent whether the app was open or closed on arrival.
+    PushNotifications.addListener("pushNotificationReceived", (n: PushNotificationSchema) => {
+      notify(n.title || "FreshLink Pro", n.body, n.data?.tag)
+    })
+
+    PushNotifications.addListener("pushNotificationActionPerformed", (action: ActionPerformed) => {
+      const url = action.notification.data?.url
+      if (url && typeof window !== "undefined") window.location.href = url
+    })
+  } catch {
+    pushRegistered = false
+  }
 }
