@@ -95,8 +95,12 @@ export async function registerPush(userId: string): Promise<void> {
     if (perm.receive === "prompt") perm = await PushNotifications.requestPermissions()
     if (perm.receive !== "granted") { pushRegistered = false; return }
 
-    await PushNotifications.register()
-
+    // Les écouteurs DOIVENT être posés AVANT register() : l'évènement
+    // "registration" peut arriver quasi immédiatement (token déjà connu côté
+    // natif, ex. déjà enregistré lors d'un lancement précédent) — l'ajouter
+    // après l'await de register() risque de manquer complètement l'évènement,
+    // auquel cas le token n'est jamais envoyé au serveur et aucune notification
+    // ne peut jamais arriver, silencieusement, sans aucune erreur visible.
     PushNotifications.addListener("registration", (token: Token) => {
       fetch("/api/ext/push/register", {
         method: "POST",
@@ -117,6 +121,8 @@ export async function registerPush(userId: string): Promise<void> {
       const url = action.notification.data?.url
       if (url && typeof window !== "undefined") window.location.href = url
     })
+
+    await PushNotifications.register()
   } catch {
     pushRegistered = false
   }
