@@ -63,6 +63,17 @@ export default function BOReception({ user }: { user: { id: string; name: string
 
   useEffect(() => { refresh() }, [])
 
+  // Se remet à jour si une commande supprimée ailleurs fait réduire/annuler
+  // un PO "ouvert"/"envoyé" listé ici (cf. cascadePOAfterCommandeDelete).
+  useEffect(() => {
+    const WATCHED = new Set(["fl_purchase_orders", "fl_commandes", "fl_bons_achat"])
+    const handler = (e: Event) => {
+      if (WATCHED.has((e as CustomEvent).detail as string)) refresh()
+    }
+    window.addEventListener("fl_store_updated", handler)
+    return () => window.removeEventListener("fl_store_updated", handler)
+  }, [])
+
   const refresh = () => {
     setBonsValidés(store.getBonsAchat().filter(b => b.statut === "validé"))
     setPos(store.getPurchaseOrders().filter(p => p.statut === "envoyé" || p.statut === "ouvert"))

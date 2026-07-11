@@ -447,6 +447,18 @@ export default function MobileAchat({ user }: Props) {
 
   const refreshPOs = () => setPendingPOs(store.getPendingPOsForAcheteur())
 
+  // Se remet à jour si une commande est supprimée ailleurs (back-office,
+  // autre appareil) pendant que cet écran est déjà ouvert — sans ça, la file
+  // de PO restait figée sur les anciennes quantités (cf. cascadePOAfterCommandeDelete).
+  useEffect(() => {
+    const WATCHED = new Set(["fl_purchase_orders", "fl_commandes"])
+    const handler = (e: Event) => {
+      if (WATCHED.has((e as CustomEvent).detail as string)) refreshPOs()
+    }
+    window.addEventListener("fl_store_updated", handler)
+    return () => window.removeEventListener("fl_store_updated", handler)
+  }, [])
+
   // ── Refus PO par l'acheteur ────────────────────────────────────────────────
   // Si tous les acheteurs ont refusé, une DA est générée automatiquement
   const [poRefusMotif, setPoRefusMotif] = useState<Record<string, string>>({})

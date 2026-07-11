@@ -199,6 +199,19 @@ export default function BoPurchaseOrders() {
     refresh()
   }, [])
 
+  // Se remet à jour dès qu'une commande supprimée ailleurs (mobile, autre
+  // onglet back-office) fait réduire/annuler un PO via cascadePOAfterCommandeDelete
+  // — sans ça, cet écran restait figé sur les anciennes quantités tant qu'on
+  // ne le rechargeait pas manuellement (chargé une seule fois au montage).
+  useEffect(() => {
+    const WATCHED = new Set(["fl_purchase_orders", "fl_commandes", "fl_demandes_achat"])
+    const handler = (e: Event) => {
+      if (WATCHED.has((e as CustomEvent).detail as string)) refresh()
+    }
+    window.addEventListener("fl_store_updated", handler)
+    return () => window.removeEventListener("fl_store_updated", handler)
+  }, [])
+
   const refresh = () => {
     setOrders(store.getPurchaseOrders())
     setArticles(store.getArticles())

@@ -169,6 +169,17 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
 
   useEffect(() => { load() }, [load])
 
+  // Se remet à jour si une commande supprimée ailleurs fait réduire/annuler
+  // un PO de ce fournisseur (cf. cascadePOAfterCommandeDelete).
+  useEffect(() => {
+    const WATCHED = new Set(["fl_purchase_orders", "fl_commandes"])
+    const handler = (e: Event) => {
+      if (WATCHED.has((e as CustomEvent).detail as string)) load()
+    }
+    window.addEventListener("fl_store_updated", handler)
+    return () => window.removeEventListener("fl_store_updated", handler)
+  }, [load])
+
   // Enregistrer un règlement fournisseur → fl_paiements (service-role {id, payload})
   const submitPayment = async () => {
     const montant = parseFloat(payAmount) || 0
