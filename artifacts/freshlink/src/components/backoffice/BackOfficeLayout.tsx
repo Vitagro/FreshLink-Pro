@@ -585,12 +585,16 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
     }
     window.addEventListener("fl_supabase_status", onStatus)
 
-    // Ping actif au démarrage et toutes les 60s
+    // Ping actif au démarrage et toutes les 60s. Cible fl_notices (accès anon
+    // explicitement accordé, cf. migration 0001) et NON fl_clients : depuis le
+    // durcissement RLS, anon/authenticated n'ont plus aucun accès à fl_clients,
+    // donc ce ping échouait systématiquement — "DB offline" s'affichait en
+    // permanence même quand Supabase était parfaitement joignable.
     async function ping() {
       try {
         const { createClient } = await import("@/lib/supabase/client")
         const sb = createClient()
-        const { error } = await sb.from("fl_clients").select("id").limit(1)
+        const { error } = await sb.from("fl_notices").select("id").limit(1)
         if (!cancelled) setSbStatus(error ? "error" : "connected")
       } catch {
         if (!cancelled) setSbStatus("error")

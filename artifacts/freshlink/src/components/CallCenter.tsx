@@ -116,6 +116,14 @@ export default function CallCenter({ user }: { user: User }) {
   // ait fini côté local — addIceCandidate() échoue alors silencieusement et le
   // candidat est perdu pour de bon. On les met en attente et on les rejoue dès que
   // la remoteDescription est posée (offer côté receveur, answer côté appelant).
+  // Amorce l'élément <audio> DANS le geste utilisateur (clic "Appeler"/
+  // "Accepter") : pc.ontrack ne pose srcObject qu'après négociation WebRTC,
+  // bien après la fin du geste — sans amorçage préalable, certains navigateurs/
+  // WebView bloquent silencieusement l'autoplay du flux distant une fois
+  // srcObject posé plus tard (l'appel se connecte mais reste muet, sans erreur
+  // visible puisque le .catch() de ontrack avale le rejet).
+  const primeAudio = () => { try { void audioRef.current?.play().catch(() => {}) } catch { /* noop */ } }
+
   const flushIce = async (pc: RTCPeerConnection) => {
     const list = pendingIce.current
     pendingIce.current = []
@@ -156,6 +164,7 @@ export default function CallCenter({ user }: { user: User }) {
 
   const startCall = async (target: { id: string; name: string }) => {
     if (phaseRef.current !== "idle" || target.id === user.id) return
+    primeAudio()
     setNote(null)
     if (disabledRef.current) { flash("Vos appels ont été désactivés par l'administrateur."); return }
     // La présence temps réel n'est plus utilisée pour prévenir/bloquer l'appel :
@@ -218,6 +227,7 @@ export default function CallCenter({ user }: { user: User }) {
   const accept = async () => {
     const p = peerRef.current
     if (!p || !pendingOffer.current) return
+    primeAudio()
     try {
       // Même raison que côté appelant : micro avant tout await réseau, sinon
       // le geste de tap sur "Accepter" peut ne plus être considéré "frais" par
