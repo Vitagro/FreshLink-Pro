@@ -168,6 +168,25 @@ export default function CallCenter({ user }: { user: User }) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       send({ kind: "offer", to: target.id, from: { id: user.id, name: user.name }, data: offer })
+      // Notification push best-effort en plus du signal temps réel — celui-ci
+      // n'arrive que si la WebView est active ; le push peut réveiller le
+      // téléphone (son + bannière) même app réduite, le temps que la personne
+      // rouvre l'app et décroche avant la fin des 35 s de sonnerie. Réutilise
+      // l'infra notifications existante (déclenche déjà sendPushToUser côté
+      // serveur) plutôt qu'un nouvel endpoint dédié.
+      fetch("/api/ext/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service: "all",
+          destinataireId: target.id,
+          type: "call",
+          titre: "📞 Appel entrant",
+          corps: `${user.name} vous appelle`,
+          priorite: "haute",
+          payload: { kind: "call", from: user.id },
+        }),
+      }).catch(() => { /* best-effort */ })
       // Sonnerie : 35 s sans réponse → on abandonne proprement (pas de "Appel en cours…" infini).
       clearRing()
       ringTimer.current = setTimeout(() => {
