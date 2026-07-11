@@ -148,8 +148,8 @@ export default function MobileLayout({ user: initialUser, onLogout }: Props) {
       <MobileAutoTranslate rootId="mobile-root" />
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
-      <header className="px-4 pt-safe-top pb-3 flex items-center justify-between sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
-        <div className="flex items-center gap-2.5">
+      <header className="px-4 pt-safe-top pb-3 flex items-center justify-between gap-2 flex-wrap sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-sm" style={{ background: "#1B4332" }}>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
               <path d="M12 3 C12 3 19 7 19 13 C19 17.4 16 20 12 20 C8 20 5 17.4 5 13 C5 7 12 3 12 3Z" fill="#4ADE80" opacity="0.9" />
@@ -158,35 +158,33 @@ export default function MobileLayout({ user: initialUser, onLogout }: Props) {
               <path d="M12 17.5 L9 15" stroke="#1B4332" strokeWidth="1.1" strokeLinecap="round" />
             </svg>
           </div>
-          <div className="leading-none">
+          <div className="leading-none min-w-0">
             <p className="text-sm font-black leading-tight">
               <span className="text-slate-800">FRESH</span><span className="text-green-600">LINK</span>
               <span className="text-[9px] font-black tracking-widest text-green-700 ml-0.5">PRO</span>
             </p>
-            <p className="text-[10px] font-medium text-slate-500 mt-0.5">{user.name}</p>
+            <p className="text-[10px] font-medium text-slate-500 mt-0.5 truncate max-w-[140px]">{user.name}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5" data-no-translate>
-          <LangSwitcher compact />
-          <ThemeToggle compact />
-
-          {/* Online indicator */}
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold border ${isOnline ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-red-50 border-red-200 text-red-700"}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`} />
-            <span className="hidden sm:inline">{isOnline ? "En ligne" : "Hors ligne"}</span>
-          </div>
-
-          {/* Role badge — shows active role */}
+        <div className="flex items-center gap-1 flex-wrap justify-end" data-no-translate>
+          {/* Role badge — l'info la plus utile, toujours visible en premier */}
           <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-blue-50 border border-blue-200 text-blue-700">
             {ROLE_LABELS[activeRole]}
           </span>
+
+          {/* Online indicator — juste le point sur mobile, le libellé ne tient pas à côté de tout le reste */}
+          <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? "bg-emerald-500 animate-pulse" : "bg-red-500"}`}
+            title={isOnline ? "En ligne" : "Hors ligne"} />
 
           {isDemo && (
             <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-amber-50 border border-amber-200 text-amber-700 hidden sm:inline">
               Demo
             </span>
           )}
+
+          <LangSwitcher compact />
+          <ThemeToggle compact />
 
           <button onClick={onLogout}
             className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
