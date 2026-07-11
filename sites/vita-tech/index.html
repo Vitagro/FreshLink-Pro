@@ -280,7 +280,7 @@ function renderApps(){
   const st=a.status==='live'?['live',t.st_live]:a.status==='beta'?['beta',t.st_beta]:['soon',t.st_soon];
   const link=a.url?`<a class="app-link" href="${esc(a.url)}" target="_blank" rel="noopener">${S.lang==='fr'?'Découvrir':'Learn more'} →</a>`:'';
   const initial=esc((a.name||'?').charAt(0).toUpperCase());
-  const mobile=(a.androidUrl||a.iosSoon)?`<div class="mobile">${a.androidUrl?`<a class="mobile-badge android" href="${esc(a.androidUrl)}" target="_blank" rel="noopener">🤖 Android</a>`:''}${a.iosSoon?`<span class="mobile-badge ios-soon">🍎 iOS — ${S.lang==='fr'?'Bientôt':'Coming soon'}</span>`:''}</div>`:'';
+  const mobile=(a.androidUrl||a.iosSoon)?`<div class="mobile">${a.androidUrl?`<a class="mobile-badge android" href="#" data-apk="${esc(a.androidUrl)}">🤖 Android</a>`:''}${a.iosSoon?`<span class="mobile-badge ios-soon">🍎 iOS — ${S.lang==='fr'?'Bientôt':'Coming soon'}</span>`:''}</div>`:'';
   return `<article class="app"><div class="app-top"><div class="app-ic">${initial}</div><span class="badge ${st[0]}">${esc(st[1])}</span></div><h3>${esc(a.name)}</h3><div class="cat">${esc(a['cat_'+S.lang]||a.cat_en||'')}</div><p>${esc(a['desc_'+S.lang]||a.desc_en||'')}</p>${mobile}${link}</article>`;
  }).join('')||`<article class="app"><p>${S.lang==='fr'?'Catalogue en cours de publication.':'Catalogue being published.'}</p></article>`;
 }
@@ -305,6 +305,20 @@ document.getElementById('admFab').addEventListener('click',()=>{
  buildAdmin();overlay.classList.add('open');
 });
 overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.classList.remove('open');});
+
+/* ===== APK download gate — password required before opening the file =====
+   Shared password communicated by the team case-by-case; change APK_PASS
+   below to rotate it (client-side gate — deterrence, not vault-grade). */
+const APK_PASS="vita@2026";
+document.addEventListener('click',e=>{
+ const a=e.target.closest('.mobile-badge.android[data-apk]');
+ if(!a)return;
+ e.preventDefault();
+ const p=prompt(S.lang==='fr'?"Mot de passe requis pour télécharger l'APK :":"Password required to download the APK:");
+ if(p===null)return;
+ if(p!==APK_PASS){alert(S.lang==='fr'?"Mot de passe incorrect.":"Incorrect password.");return;}
+ window.open(a.dataset.apk,'_blank','noopener');
+});
 function buildAdmin(){
  let h=`<button class="adm-close" id="admClose">×</button><h2>Vita Tech — Admin</h2><div class="adm-sub">Manage your application catalogue: add, edit, publish or hide. Sync from your app database endpoint.</div>`;
  h+=`<div class="adm-grp"><h3>Default language</h3><div class="adm-actions"><button class="adm-btn ${S.lang==='en'?'primary':''}" data-setlang="en">English</button><button class="adm-btn ${S.lang==='fr'?'primary':''}" data-setlang="fr">Français</button></div></div>`;
