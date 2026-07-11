@@ -3017,7 +3017,39 @@ export const store = {
     const idx = cmds.findIndex(c => c.id === id)
     if (idx >= 0) { cmds[idx] = { ...cmds[idx], ...updates }; store.saveCommandes(cmds) }
   },
+  // Répercute la suppression d'une commande sur les PO Achat encore ouverts :
+  // la quantité de cette commande avait été comptée dans le besoin qui a
+  // généré ces PO (computeBesoinNet ne considère que les commandes du jour,
+  // en_attente/valide) — sans ça, le PO restait surdimensionné après coup,
+  // l'acheteur commandant plus que nécessaire au fournisseur. Ne touche
+  // jamais un PO déjà envoyé/réceptionné (engagement déjà pris auprès du
+  // fournisseur). Exportée séparément : le back-office a son propre chemin
+  // de suppression (BOCommandesUnifiees.tsx) qui n'appelle pas deleteCommande.
+  cascadePOAfterCommandeDelete: (cmd: Commande) => {
+    if (!(cmd.date === store.today() && (cmd.statut === "en_attente" || cmd.statut === "valide"))) return
+    const orders = store.getPurchaseOrders()
+    let changed = false
+    cmd.lignes.forEach(ligne => {
+      let remaining = ligne.quantite
+      if (!remaining) return
+      for (const po of orders) {
+        if (remaining <= 0) break
+        if (po.statut !== "ouvert" || po.articleId !== ligne.articleId) continue
+        const deduct = Math.min(remaining, po.quantite)
+        if (deduct <= 0) continue
+        po.quantite -= deduct
+        po.total = po.quantite * po.prixUnitaire
+        if (po.commandeQty != null) po.commandeQty = Math.max(0, po.commandeQty - deduct)
+        if (po.quantite <= 0) po.statut = "annulé" // besoin entièrement absorbé
+        remaining -= deduct
+        changed = true
+      }
+    })
+    if (changed) store.savePurchaseOrders(orders)
+  },
   deleteCommande: (id: string) => {
+    const cmd = store.getCommandes().find(c => c.id === id)
+    if (cmd) store.cascadePOAfterCommandeDelete(cmd)
     store.saveCommandes(store.getCommandes().filter(c => c.id !== id))
     deleteSynced("fl_commandes", [id])   // sinon la commande « revient » au prochain fetch
   },

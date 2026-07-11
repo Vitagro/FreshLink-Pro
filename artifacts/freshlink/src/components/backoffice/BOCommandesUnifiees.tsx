@@ -316,6 +316,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
     try {
       // Commande ERP locale → retirer aussi du store localStorage
       if (cmd.source === "erp") {
+        // Répercute sur les PO Achat ouverts AVANT de retirer la commande —
+        // CmdUnifiee.lignes n'a pas d'articleId (utilisé pour le rapprochement
+        // PO), on relit donc l'objet Commande complet depuis le store local.
+        const realCmd = store.getCommandes().find(c => c.id === cmd.id)
+        if (realCmd) store.cascadePOAfterCommandeDelete(realCmd)
         store.saveCommandes(store.getCommandes().filter(c => c.id !== cmd.id))
       }
       // Suppression Supabase via l'API service_role — DANS LA BONNE TABLE.
@@ -387,7 +392,14 @@ export default function BOCommandesUnifiees({ user }: Props) {
       const byTable = new Map<string, CmdUnifiee[]>()
       selectedCmds.forEach(c => byTable.set(c.table, [...(byTable.get(c.table) ?? []), c]))
       const erpIds = selectedCmds.filter(c => c.source === "erp").map(c => c.id)
-      if (erpIds.length) store.saveCommandes(store.getCommandes().filter(c => !erpIds.includes(c.id)))
+      if (erpIds.length) {
+        const localCommandes = store.getCommandes()
+        erpIds.forEach(id => {
+          const realCmd = localCommandes.find(c => c.id === id)
+          if (realCmd) store.cascadePOAfterCommandeDelete(realCmd)
+        })
+        store.saveCommandes(store.getCommandes().filter(c => !erpIds.includes(c.id)))
+      }
       for (const [table, cmdsInTable] of byTable) {
         const res = await fetch("/api/sync-write", {
           method: "POST", headers: { "Content-Type": "application/json" },
