@@ -106,6 +106,15 @@ export default function CallCenter({ user }: { user: User }) {
     const pc = new RTCPeerConnection({ iceServers: servers })
     pc.onicecandidate = e => { if (e.candidate) send({ kind: "ice", to: peerId, from: { id: user.id, name: user.name }, data: e.candidate.toJSON() }) }
     pc.ontrack = e => { if (audioRef.current) { audioRef.current.srcObject = e.streams[0]; void audioRef.current.play().catch(() => {}) } }
+    // Connexion réellement rompue (pas juste un flottement réseau passager, cf.
+    // "disconnected" qui se rétablit souvent seul) → on informe et on raccroche
+    // proprement plutôt que de laisser l'appel muet indéfiniment.
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === "failed" && phaseRef.current === "connected" && peerRef.current) {
+        flash("Connexion perdue — réseau instable.")
+        hangup()
+      }
+    }
     pcRef.current = pc
     return pc
   }
@@ -132,8 +141,11 @@ export default function CallCenter({ user }: { user: User }) {
     }
     try {
       setPeerR(target); setPhaseR("calling")
-      const pc = await newPC(target.id)
+      // Micro d'abord, réseau ensuite : sur Android WebView, le geste utilisateur
+      // qui autorise l'invite de permission micro peut expirer après un await
+      // réseau (fetch ICE servers) — le demander en premier évite un refus muet.
       const mic = await getMic()
+      const pc = await newPC(target.id)
       mic.getTracks().forEach(t => pc.addTrack(t, mic))
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
@@ -155,8 +167,11 @@ export default function CallCenter({ user }: { user: User }) {
     const p = peerRef.current
     if (!p || !pendingOffer.current) return
     try {
-      const pc = await newPC(p.id)
+      // Même raison que côté appelant : micro avant tout await réseau, sinon
+      // le geste de tap sur "Accepter" peut ne plus être considéré "frais" par
+      // la WebView Android au moment de la demande getUserMedia().
       const mic = await getMic()
+      const pc = await newPC(p.id)
       mic.getTracks().forEach(t => pc.addTrack(t, mic))
       await pc.setRemoteDescription(pendingOffer.current)
       const answer = await pc.createAnswer()
