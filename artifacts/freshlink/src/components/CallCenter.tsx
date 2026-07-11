@@ -158,14 +158,12 @@ export default function CallCenter({ user }: { user: User }) {
     if (phaseRef.current !== "idle" || target.id === user.id) return
     setNote(null)
     if (disabledRef.current) { flash("Vos appels ont été désactivés par l'administrateur."); return }
-    // Présence : indicatif seulement, PAS bloquant. Sur mobile, la présence
-    // temps réel tombe dès que l'app passe en arrière-plan (WebSocket suspendu
-    // par l'OS) alors que l'app est toujours ouverte et peut revenir au premier
-    // plan pendant la sonnerie (35 s) — bloquer ici provoquait des appels
-    // refusés à tort ("hors ligne") pour des destinataires bien joignables.
-    if (onlineRef.current.size > 0 && !onlineRef.current.has(target.id)) {
-      flash(`${target.name} semble hors ligne — tentative d'appel quand même…`)
-    }
+    // La présence temps réel n'est plus utilisée pour prévenir/bloquer l'appel :
+    // elle tombe dès que l'app du destinataire passe en arrière-plan (WebSocket
+    // suspendu par l'OS) sans que la personne soit réellement injoignable — le
+    // message "hors ligne" n'était donc qu'une fausse alerte, l'appel aboutissant
+    // quand même dans la plupart des cas grâce à la notification push et à la
+    // récupération de l'appel manqué au retour au premier plan (cf. plus bas).
     try {
       setPeerR(target); setPhaseR("calling")
       // Micro d'abord, réseau ensuite : sur Android WebView, le geste utilisateur
