@@ -6,6 +6,7 @@ import LangSwitcher from "@/components/ui/LangSwitcher"
 import ThemeToggle from "@/components/ui/ThemeToggle"
 import BONotifications from "./BONotifications"
 import DismissibleBanner from "@/components/ui/DismissibleBanner"
+import AppDownloadQR from "@/components/ui/AppDownloadQR"
 import type { User } from "@/lib/store"
 import { store, ROLE_LABELS, ROLE_COLORS, isDemoUser, isSuperSuperAdmin, JAWAD_ID } from "@/lib/store"
 import { useLang, T } from "@/lib/i18n"
@@ -1358,6 +1359,8 @@ function ProfilModal({ user, profilPhoto, setProfilPhoto, onClose, canUseCamera 
               {isJawad && <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 font-bold border border-yellow-300">👑 Super Admin</span>}
             </div>
           </div>
+
+          <AppDownloadQR />
 
           {/* ── Edit mode form ── */}
           {editMode ? (
