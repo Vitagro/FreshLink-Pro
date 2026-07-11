@@ -75,3 +75,237 @@ body, * {
 .font-arabic {
   font-family: "Noto Sans Arabic", "Amiri", "Cairo", Arial, sans-serif;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   Le bloc ci-dessous vivait dans globals.css, JAMAIS importé nulle part depuis
+   la migration Next.js → Vite (main.tsx n'importe que ce fichier-ci) — donc
+   jamais appliqué en production, malgré des correctifs écrits en pensant le
+   contraire (mode sombre, zones sûres mobile, anti-débordement...). Fusionné
+   ici, dans le VRAI point d'entrée CSS.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* Tout texte explicitement en arabe ou RTL : Noto Sans Arabic en priorité,
+   reset letter-spacing (Tailwind tracking-tight peut casser le chaînage),
+   et activation des ligatures arabes via font-feature-settings. */
+:lang(ar),
+[lang="ar"],
+[dir="rtl"] {
+  font-family: var(--font-arabic, "Noto Sans Arabic"), "Noto Sans Arabic", "Amiri", "Cairo", "Tajawal", system-ui, sans-serif !important;
+  letter-spacing: 0 !important;
+  word-spacing: normal !important;
+  font-feature-settings: "calt" 1, "liga" 1 !important;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Mobile touch optimizations ─────────────────────────────────────────────── */
+button, a, [role="button"], [tabindex] {
+  -webkit-tap-highlight-color: transparent;
+}
+button, [role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Sans ça, le réglage OS "Zoom d'écran / taille de police" (très répandu sur
+     Samsung One UI) fait grossir tout le texte — et donc toute la mise en page
+     basée sur rem/em — indépendamment de notre CSS. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── Anti-débordement horizontal ──────────────────────────────────────────────
+   Aucun élément ne doit pousser la page au-delà de la fenêtre. */
+html, body { max-width: 100%; overflow-x: hidden; }
+table { max-width: 100%; }
+.overflow-x-auto, .table-scroll { -webkit-overflow-scrolling: touch; }
+img, video, iframe, canvas { max-width: 100%; }
+
+/* ── Densité back-office (corrige le besoin de zoomer à 90 %) ──────────────────
+   Sur écran ≥1024px, on réduit la base rem → TOUT le contenu Tailwind
+   (texte, espacements, tableaux) se met à l'échelle ~90%. Le mobile (<1024px)
+   garde 16px pour rester lisible. */
+@media (min-width: 1024px) {
+  html { font-size: 14.5px; }
+}
+@media (min-width: 1600px) {
+  html { font-size: 15.5px; }
+}
+
+/* Safe area padding utilities for iPhone notch / Dynamic Island */
+.pb-safe  { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe  { padding-top:    env(safe-area-inset-top); }
+.pl-safe  { padding-left:   env(safe-area-inset-left); }
+.pr-safe  { padding-right:  env(safe-area-inset-right); }
+
+/* Header : descend sous l'encoche / Dynamic Island. */
+.pt-safe-top { padding-top: calc(env(safe-area-inset-top) + 0.75rem); }
+
+/* Barre de navigation basse : laisse la place à la barre gestuelle / home
+   indicator. max(...,10px) : filet de sécurité si env(safe-area-inset-bottom)
+   renvoie 0 par manque de fiabilité de la WebView/OEM (ex. Samsung) plutôt que
+   par absence réelle de zone système. */
+.mobile-nav-safe { padding-bottom: max(env(safe-area-inset-bottom), 10px); }
+
+/* ── Scrollbar utilities ─────────────────────────────────────────────────────── */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 99px;
+}
+.thin-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.7);
+}
+
+/* ── Animations ──────────────────────────────────────────────────────────────── */
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.93) translateY(8px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);   }
+}
+.animate-scale-in {
+  animation: scale-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.3s ease both;
+}
+
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-down {
+  animation: slide-down 0.2s ease both;
+}
+
+/* ── Focus ring ──────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #4ADE80;
+  outline-offset: 2px;
+}
+
+/* ── Print styles for invoice modal ─────────────────────────────────────────── */
+@media print {
+  body * { visibility: hidden; }
+  .invoice-sheet, .invoice-sheet * { visibility: visible; }
+  .invoice-sheet { position: absolute; left: 0; top: 0; width: 100%; }
+  .print\:hidden { display: none !important; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   DARK MODE LEGIBILITY SHIM
+   L'ERP a été codé en clair (bg-white / text-slate figés, sans variante dark:).
+   Plutôt que d'éditer chaque fichier, on remappe ici les classes Tailwind figées
+   pour qu'elles s'adaptent en mode sombre. Le print n'est pas affecté (au-dessus).
+   ═══════════════════════════════════════════════════════════════════════════════ */
+.dark .bg-white            { background-color: #1e1e1e !important; }
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-neutral-50,
+.dark .bg-neutral-100      { background-color: #262626 !important; }
+.dark .bg-slate-200,
+.dark .bg-gray-200         { background-color: #2f2f2f !important; }
+
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark .text-neutral-900,
+.dark .text-neutral-800,
+.dark .text-black          { color: #ededed !important; }
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-neutral-600,
+.dark .text-neutral-500    { color: #cfcfcf !important; }
+.dark .text-slate-400,
+.dark .text-gray-400,
+.dark .text-neutral-400    { color: #ababab !important; }
+.dark .text-slate-300,
+.dark .text-gray-300       { color: #c4c4c4 !important; }
+
+.dark .border-slate-200,
+.dark .border-slate-300,
+.dark .border-slate-100,
+.dark .border-gray-200,
+.dark .border-gray-300,
+.dark .border-gray-100,
+.dark .border-neutral-200,
+.dark .border               { border-color: #404040 !important; }
+
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200  > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-100  > :not([hidden]) ~ :not([hidden]) { border-color: #383838 !important; }
+
+.dark table { color: #e6e6e6; }
+.dark thead th { color: #f5f5f5 !important; }
+.dark tbody tr:hover { background-color: #242424 !important; }
+
+.dark .bg-white\/80,
+.dark .bg-white\/90,
+.dark .bg-white\/95        { background-color: rgba(30,30,30,.92) !important; }
+
+.dark .bg-green-50,  .dark .bg-emerald-50,
+.dark .bg-green-100, .dark .bg-emerald-100  { background-color: rgba(34,197,94,.15)  !important; }
+.dark .bg-blue-50,   .dark .bg-sky-50,
+.dark .bg-blue-100,  .dark .bg-sky-100      { background-color: rgba(59,130,246,.15) !important; }
+.dark .bg-amber-50,  .dark .bg-yellow-50,
+.dark .bg-amber-100, .dark .bg-yellow-100   { background-color: rgba(245,158,11,.15) !important; }
+.dark .bg-red-50,    .dark .bg-rose-50,
+.dark .bg-red-100,   .dark .bg-rose-100     { background-color: rgba(239,68,68,.15)  !important; }
+.dark .bg-orange-50, .dark .bg-orange-100   { background-color: rgba(249,115,22,.15) !important; }
+.dark .bg-purple-50, .dark .bg-violet-50,
+.dark .bg-purple-100,.dark .bg-violet-100   { background-color: rgba(139,92,246,.15) !important; }
+.dark .text-green-800,  .dark .text-emerald-800,
+.dark .text-green-700,  .dark .text-emerald-700 { color: #86efac !important; }
+.dark .text-blue-800,   .dark .text-sky-800,
+.dark .text-blue-700,   .dark .text-sky-700     { color: #93c5fd !important; }
+.dark .text-amber-800,  .dark .text-yellow-800,
+.dark .text-amber-700,  .dark .text-yellow-700  { color: #fcd34d !important; }
+.dark .text-red-800,    .dark .text-rose-800,
+.dark .text-red-700,    .dark .text-rose-700    { color: #fca5a5 !important; }
+.dark .text-orange-800, .dark .text-orange-700  { color: #fdba74 !important; }
+.dark .text-purple-800, .dark .text-violet-800,
+.dark .text-purple-700, .dark .text-violet-700  { color: #c4b5fd !important; }
+
+.dark input:not([type=checkbox]):not([type=radio]),
+.dark textarea,
+.dark select {
+  background-color: #1e1e1e !important;
+  color: #ededed !important;
+  border-color: #3a3a3a !important;
+}
+.dark input::placeholder, .dark textarea::placeholder { color: #777 !important; }
+
+.dark .shadow-sm, .dark .shadow, .dark .shadow-md, .dark .shadow-lg {
+  --tw-shadow-color: rgba(0,0,0,.6);
+}

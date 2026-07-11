@@ -11,6 +11,7 @@ const PortailClient      = lazy(() => import("@/components/portail/PortailClient
 const PortailFournisseur = lazy(() => import("@/components/portail/PortailFournisseur"))
 const SecurityGuard      = lazy(() => import("@/components/SecurityGuard"))
 const CutoffNotifier     = lazy(() => import("@/components/CutoffNotifier"))
+const UpdateBanner       = lazy(() => import("@/components/ui/UpdateBanner"))
 const DeviceBlockedPage  = lazy(() => import("@/pages/DeviceBlockedPage"))
 const AdminUsersPage     = lazy(() => import("@/pages/admin/UsersPage"))
 
@@ -266,6 +267,7 @@ function MainApp() {
         {bothSwitcher}
         <Suspense fallback={null}>
           <CutoffNotifier user={user} />
+          <UpdateBanner />
         </Suspense>
       </>
     )
@@ -279,6 +281,7 @@ function MainApp() {
       {bothSwitcher}
       <Suspense fallback={null}>
         <CutoffNotifier user={user} />
+        <UpdateBanner />
       </Suspense>
     </>
   )
