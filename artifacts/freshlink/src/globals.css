@@ -107,6 +107,12 @@ button, [role="button"] {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+  /* Sans ça, le réglage OS "Zoom d'écran / taille de police" (très répandu sur
+     Samsung One UI) fait grossir tout le texte — et donc toute la mise en page
+     basée sur rem/em — indépendamment de notre CSS. Symptôme : l'interface
+     "déborde" de l'écran alors qu'aucun élément n'est en cause individuellement. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* ── Anti-débordement horizontal ──────────────────────────────────────────────

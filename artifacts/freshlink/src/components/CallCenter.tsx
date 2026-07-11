@@ -49,6 +49,7 @@ export default function CallCenter({ user }: { user: User }) {
   const [peer, setPeer] = useState<{ id: string; name: string } | null>(null)
   const [muted, setMuted] = useState(false)
   const [secs, setSecs] = useState(0)
+  const [iceState, setIceState] = useState<string>("")   // diagnostic visible (ex: "checking", "failed")
 
   const phaseRef = useRef<Phase>("idle")
   const setPhaseR = (p: Phase) => { phaseRef.current = p; setPhase(p) }
@@ -99,7 +100,7 @@ export default function CallCenter({ user }: { user: User }) {
     localRef.current?.getTracks().forEach(t => t.stop()); localRef.current = null
     pendingOffer.current = null
     pendingIce.current = []
-    setPhaseR("idle"); setPeerR(null); setMuted(false); setSecs(0)
+    setPhaseR("idle"); setPeerR(null); setMuted(false); setSecs(0); setIceState("")
   }
 
   // Un candidat ICE peut arriver (canal broadcast) avant que setRemoteDescription()
@@ -124,6 +125,7 @@ export default function CallCenter({ user }: { user: User }) {
     // "disconnected" qui se rétablit souvent seul) → on informe et on raccroche
     // proprement plutôt que de laisser l'appel muet indéfiniment.
     pc.oniceconnectionstatechange = () => {
+      setIceState(pc.iceConnectionState)
       if (pc.iceConnectionState === "failed" && phaseRef.current === "connected" && peerRef.current) {
         flash("Connexion perdue — réseau instable.")
         hangup()
@@ -147,11 +149,13 @@ export default function CallCenter({ user }: { user: User }) {
     if (phaseRef.current !== "idle" || target.id === user.id) return
     setNote(null)
     if (disabledRef.current) { flash("Vos appels ont été désactivés par l'administrateur."); return }
-    // Présence : si on a la liste des connectés et que la cible n'y est pas,
-    // inutile d'appeler (elle ne sonnera pas tant que l'ERP n'est pas ouvert).
+    // Présence : indicatif seulement, PAS bloquant. Sur mobile, la présence
+    // temps réel tombe dès que l'app passe en arrière-plan (WebSocket suspendu
+    // par l'OS) alors que l'app est toujours ouverte et peut revenir au premier
+    // plan pendant la sonnerie (35 s) — bloquer ici provoquait des appels
+    // refusés à tort ("hors ligne") pour des destinataires bien joignables.
     if (onlineRef.current.size > 0 && !onlineRef.current.has(target.id)) {
-      flash(`${target.name} est hors ligne — il doit ouvrir l'ERP pour recevoir l'appel.`)
-      return
+      flash(`${target.name} semble hors ligne — tentative d'appel quand même…`)
     }
     try {
       setPeerR(target); setPhaseR("calling")
@@ -302,6 +306,7 @@ export default function CallCenter({ user }: { user: User }) {
                 <p className="font-bold truncate">{peer?.name ?? "Appel"}</p>
                 <p className="text-xs text-slate-300">
                   {phase === "calling" ? "Appel en cours…" : phase === "incoming" ? "Appel entrant…" : `En communication · ${mmss}`}
+                  {iceState && phase !== "incoming" && <span className="text-slate-500"> · {iceState}</span>}
                 </p>
               </div>
               <div className="flex items-center gap-2">
