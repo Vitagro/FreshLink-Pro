@@ -84,21 +84,19 @@ export function isHidden(): boolean {
 // ── Push natif (app mobile Capacitor uniquement) ──────────────────────────────
 // Enregistre l'appareil pour les notifications push FCM et envoie le token au
 // serveur pour cet utilisateur. Sans effet dans un navigateur classique (web).
-let pushRegistered = false
 
-export async function registerPush(userId: string): Promise<void> {
-  if (!Capacitor.isNativePlatform() || pushRegistered || !userId) return
-  pushRegistered = true
-
+// Canal Android à importance MAX, créé INDÉPENDAMMENT du flux permission/
+// enregistrement (aucune permission requise pour définir un canal — seule
+// l'ENVOI d'une notif dessus l'exige). Android ignore silencieusement toute
+// notif visant un canal qui n'existe pas encore sur l'appareil : le créer
+// APRÈS le check de permission (comme avant) laissait une fenêtre où un push
+// arrivant tôt (ou un aléa dans le flux permission) le rendait invisible —
+// sans ça, importance par défaut (3) = pas de bannière ni son non plus.
+let channelReady = false
+async function ensureAlertChannel(): Promise<void> {
+  if (channelReady || !Capacitor.isNativePlatform()) return
+  channelReady = true
   try {
-    let perm = await PushNotifications.checkPermissions()
-    if (perm.receive === "prompt") perm = await PushNotifications.requestPermissions()
-    if (perm.receive !== "granted") { pushRegistered = false; return }
-
-    // Canal Android à importance MAX : sans ça (importance par défaut = 3),
-    // Android place la notif dans le tiroir SANS bannière ni son — le "ça
-    // sonne mais rien à l'écran" constaté app réduite. Doit exister AVANT
-    // qu'un push n'arrive (créé une seule fois, sans effet si déjà créée).
     await PushNotifications.createChannel({
       id: "fl_alerts",
       name: "Alertes FreshLink Pro",
@@ -106,7 +104,23 @@ export async function registerPush(userId: string): Promise<void> {
       importance: 5,
       visibility: 1,
       vibration: true,
-    }).catch(() => { /* no-op sur iOS / web */ })
+    })
+  } catch {
+    channelReady = false // permet de retenter au prochain appel
+  }
+}
+
+let pushRegistered = false
+
+export async function registerPush(userId: string): Promise<void> {
+  if (!Capacitor.isNativePlatform() || pushRegistered || !userId) return
+  pushRegistered = true
+  await ensureAlertChannel()
+
+  try {
+    let perm = await PushNotifications.checkPermissions()
+    if (perm.receive === "prompt") perm = await PushNotifications.requestPermissions()
+    if (perm.receive !== "granted") { pushRegistered = false; return }
 
     // Les écouteurs DOIVENT être posés AVANT register() : l'évènement
     // "registration" peut arriver quasi immédiatement (token déjà connu côté
