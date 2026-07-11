@@ -64,6 +64,7 @@ export default function CallCenter({ user }: { user: User }) {
   const onlineRef = useRef<Set<string>>(new Set())         // utilisateurs en ligne (présence)
   const ringTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const disabledRef = useRef(false)                        // appels désactivés pour CET utilisateur ?
+  const pendingIce = useRef<RTCIceCandidateInit[]>([])      // candidats ICE reçus avant la remoteDescription
 
   // Récupère l'état "appels désactivés" pour cet utilisateur (admin peut le couper).
   useEffect(() => {
@@ -97,7 +98,20 @@ export default function CallCenter({ user }: { user: User }) {
     pcRef.current = null
     localRef.current?.getTracks().forEach(t => t.stop()); localRef.current = null
     pendingOffer.current = null
+    pendingIce.current = []
     setPhaseR("idle"); setPeerR(null); setMuted(false); setSecs(0)
+  }
+
+  // Un candidat ICE peut arriver (canal broadcast) avant que setRemoteDescription()
+  // ait fini côté local — addIceCandidate() échoue alors silencieusement et le
+  // candidat est perdu pour de bon. On les met en attente et on les rejoue dès que
+  // la remoteDescription est posée (offer côté receveur, answer côté appelant).
+  const flushIce = async (pc: RTCPeerConnection) => {
+    const list = pendingIce.current
+    pendingIce.current = []
+    for (const c of list) {
+      try { await pc.addIceCandidate(c) } catch { /* noop */ }
+    }
   }
 
   const newPC = async (peerId: string) => {
@@ -174,6 +188,7 @@ export default function CallCenter({ user }: { user: User }) {
       const pc = await newPC(p.id)
       mic.getTracks().forEach(t => pc.addTrack(t, mic))
       await pc.setRemoteDescription(pendingOffer.current)
+      await flushIce(pc)
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       send({ kind: "answer", to: p.id, from: { id: user.id, name: user.name }, data: answer })
@@ -200,10 +215,20 @@ export default function CallCenter({ user }: { user: User }) {
       setPeerR(s.from); setPhaseR("incoming")
     } else if (s.kind === "answer") {
       clearRing()
-      try { await pcRef.current?.setRemoteDescription(s.data as RTCSessionDescriptionInit) } catch { /* noop */ }
+      const pc = pcRef.current
+      try {
+        await pc?.setRemoteDescription(s.data as RTCSessionDescriptionInit)
+        if (pc) await flushIce(pc)
+      } catch { /* noop */ }
       setPhaseR("connected")
     } else if (s.kind === "ice") {
-      try { await pcRef.current?.addIceCandidate(s.data as RTCIceCandidateInit) } catch { /* noop */ }
+      const pc = pcRef.current
+      const data = s.data as RTCIceCandidateInit
+      if (pc && pc.remoteDescription) {
+        try { await pc.addIceCandidate(data) } catch { /* noop */ }
+      } else {
+        pendingIce.current.push(data)
+      }
     } else if (s.kind === "hangup") {
       cleanup()
     }
