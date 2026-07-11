@@ -95,6 +95,19 @@ export async function registerPush(userId: string): Promise<void> {
     if (perm.receive === "prompt") perm = await PushNotifications.requestPermissions()
     if (perm.receive !== "granted") { pushRegistered = false; return }
 
+    // Canal Android à importance MAX : sans ça (importance par défaut = 3),
+    // Android place la notif dans le tiroir SANS bannière ni son — le "ça
+    // sonne mais rien à l'écran" constaté app réduite. Doit exister AVANT
+    // qu'un push n'arrive (créé une seule fois, sans effet si déjà créée).
+    await PushNotifications.createChannel({
+      id: "fl_alerts",
+      name: "Alertes FreshLink Pro",
+      description: "Appels, messages et notifications importantes",
+      importance: 5,
+      visibility: 1,
+      vibration: true,
+    }).catch(() => { /* no-op sur iOS / web */ })
+
     // Les écouteurs DOIVENT être posés AVANT register() : l'évènement
     // "registration" peut arriver quasi immédiatement (token déjà connu côté
     // natif, ex. déjà enregistré lors d'un lancement précédent) — l'ajouter

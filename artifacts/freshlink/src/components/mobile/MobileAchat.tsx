@@ -193,6 +193,10 @@ export default function MobileAchat({ user }: Props) {
   // PO push mode: "auto" = redirect to po_push tab automatically, "click" = badge only
   const [poPushMode, setPoPushMode] = useState<"auto" | "click">("auto")
   const [pendingPOs, setPendingPOs] = useState(store.getPendingPOsForAcheteur())
+  // Recherche/filtre/tri des PO en attente — même interface que le sélecteur
+  // d'articles de "Bon d'Achat" (recherche, A→Z, filtre par famille).
+  const [poSearch, setPoSearch] = useState("")
+  const [poFamilyFilter, setPoFamilyFilter] = useState("")
 
   // ── Depot selector ─────────────────────────────────────────────────────────
   const [depots, setDepots] = useState<import("@/lib/store").Depot[]>([])
@@ -234,6 +238,32 @@ export default function MobileAchat({ user }: Props) {
     else list.sort((a, b) => a.nom.localeCompare(b.nom))
     return list
   }, [articles, artSearch, artSort, globalRotation, specialites, showAllFamilies])
+
+  // Familles présentes parmi les PO en attente (pour les puces de filtre).
+  const poFamilies = useMemo(() => {
+    const set = new Set<string>()
+    pendingPOs.forEach(po => {
+      const fam = articles.find(a => a.id === po.articleId)?.famille
+      if (fam) set.add(fam)
+    })
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [pendingPOs, articles])
+
+  const filteredPOs = useMemo(() => {
+    let list = [...pendingPOs]
+    if (poFamilyFilter) {
+      list = list.filter(po => articles.find(a => a.id === po.articleId)?.famille === poFamilyFilter)
+    }
+    if (poSearch.trim()) {
+      const q = poSearch.trim().toLowerCase()
+      list = list.filter(po => {
+        const fam = articles.find(a => a.id === po.articleId)?.famille ?? ""
+        return po.articleNom.toLowerCase().includes(q) || fam.toLowerCase().includes(q) || po.fournisseurNom.toLowerCase().includes(q)
+      })
+    }
+    list.sort((a, b) => a.articleNom.localeCompare(b.articleNom))
+    return list
+  }, [pendingPOs, poSearch, poFamilyFilter, articles])
 
   // ── PO Detail Modal — opened when acheteur clicks "Prendre en charge" ────────
   const [poModalId, setPoModalId] = useState<string | null>(null)
@@ -719,8 +749,48 @@ export default function MobileAchat({ user }: Props) {
               <p className="text-xs" style={{ color: "oklch(0.50 0.008 145)" }}>Tous les bons d&apos;achat automatiques ont ete traites.</p>
             </div>
           ) : (
+            <>
+              {/* Recherche + tri A→Z + filtre par famille — même interface que "Bon d'Achat" */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl" style={{ background: "oklch(0.12 0.010 145)", border: "1px solid oklch(0.20 0.012 145)" }}>
+                  <svg className="w-4 h-4 shrink-0" style={{ color: "oklch(0.52 0.010 145)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input type="text" value={poSearch} onChange={e => setPoSearch(e.target.value)}
+                    placeholder="Rechercher par article, famille ou fournisseur..."
+                    className="flex-1 bg-transparent text-sm focus:outline-none" style={{ color: "oklch(0.88 0.006 100)" }} />
+                  {poSearch && (
+                    <button onClick={() => setPoSearch("")} style={{ color: "oklch(0.52 0.010 145)" }}>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+                {poFamilies.length > 0 && (
+                  <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                    <button onClick={() => setPoFamilyFilter("")}
+                      className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                      style={!poFamilyFilter ? { background: "oklch(0.58 0.18 148)", color: "#fff" } : { background: "oklch(0.18 0.012 145)", color: "oklch(0.60 0.008 145)", border: "1px solid oklch(0.24 0.012 145)" }}>
+                      Toutes ({pendingPOs.length})
+                    </button>
+                    {poFamilies.map(fam => (
+                      <button key={fam} onClick={() => setPoFamilyFilter(fam)}
+                        className="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+                        style={poFamilyFilter === fam ? { background: "oklch(0.58 0.18 148)", color: "#fff" } : { background: "oklch(0.18 0.012 145)", color: "oklch(0.60 0.008 145)", border: "1px solid oklch(0.24 0.012 145)" }}>
+                        {fam}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {filteredPOs.length === 0 ? (
+                <div className="rounded-2xl border p-8 flex flex-col items-center gap-1 text-center" style={{ background: "oklch(0.12 0.010 145)", border: "1px solid oklch(0.20 0.012 145)" }}>
+                  <p className="text-sm font-semibold" style={{ color: "oklch(0.65 0.008 145)" }}>Aucun résultat</p>
+                  <p className="text-xs" style={{ color: "oklch(0.50 0.008 145)" }}>Essayez un autre terme ou une autre famille.</p>
+                </div>
+              ) : (
             <div className="flex flex-col gap-2">
-              {pendingPOs.map(po => (
+              {filteredPOs.map(po => (
                 <div key={po.id} className="rounded-2xl p-4 flex flex-col gap-3"
                   style={{ background: "oklch(0.12 0.010 145)", border: "1px solid oklch(0.28 0.10 72)" }}>
                   <div className="flex items-start justify-between gap-2">
@@ -769,6 +839,8 @@ export default function MobileAchat({ user }: Props) {
                 </div>
               ))}
             </div>
+              )}
+            </>
           )}
         </div>
       )}

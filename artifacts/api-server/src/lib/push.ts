@@ -80,7 +80,11 @@ export async function sendPushToUser(userId: string, payload: PushPayload): Prom
       tokens,
       notification: { title: payload.title, body: payload.body },
       data: { tag: payload.tag ?? "", url: payload.url ?? "" },
-      android: { priority: "high" },
+      // channelId doit correspondre au canal créé côté client (notify.ts,
+      // registerPush) — sans lui, Android utilise le canal par défaut
+      // (importance normale) qui n'affiche PAS de bannière app fermée/réduite,
+      // même avec priority:"high" au niveau du message.
+      android: { priority: "high", notification: { channelId: "fl_alerts" } },
     });
 
     const dead: string[] = [];
