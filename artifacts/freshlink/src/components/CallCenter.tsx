@@ -82,6 +82,15 @@ export default function CallCenter({ user }: { user: User }) {
 
   const setPeerR = (p: { id: string; name: string } | null) => { peerRef.current = p; setPeer(p) }
   const send = (s: Signal) => { void chanRef.current?.send({ type: "broadcast", event: "signal", payload: s }) }
+  // Best-effort : supprime l'appel persisté (voir startCall) une fois résolu
+  // (décroché ou raccroché) pour qu'il ne réapparaisse pas à une réouverture
+  // ultérieure de l'app — sans effet s'il n'existe pas (idempotent).
+  const clearActiveCall = (targetId: string) => {
+    void fetch("/api/ext/call/offer", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetId }),
+    }).catch(() => {})
+  }
 
   const cleanup = () => {
     // Suivi quota : si l'appel a utilisé le relais Cloudflare, on remonte la durée.
@@ -168,6 +177,14 @@ export default function CallCenter({ user }: { user: User }) {
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       send({ kind: "offer", to: target.id, from: { id: user.id, name: user.name }, data: offer })
+      // Persiste l'offer côté serveur (en plus du broadcast) — permet à l'app
+      // du destinataire de retrouver l'appel à la réouverture si le broadcast
+      // a été manqué pendant qu'elle était en arrière-plan (cf. checkPending).
+      fetch("/api/ext/call/offer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetId: target.id, callerId: user.id, callerName: user.name, offer }),
+      }).catch(() => { /* best-effort */ })
       // Notification push best-effort en plus du signal temps réel — celui-ci
       // n'arrive que si la WebView est active ; le push peut réveiller le
       // téléphone (son + bannière) même app réduite, le temps que la personne
@@ -215,6 +232,7 @@ export default function CallCenter({ user }: { user: User }) {
       const answer = await pc.createAnswer()
       await pc.setLocalDescription(answer)
       send({ kind: "answer", to: p.id, from: { id: user.id, name: user.name }, data: answer })
+      clearActiveCall(user.id)
       setPhaseR("connected")
     } catch (e) {
       flash((e as Error)?.message === "MIC_DENIED" ? "Micro refusé — autorisez le micro." : "Échec de la connexion.")
@@ -222,7 +240,18 @@ export default function CallCenter({ user }: { user: User }) {
     }
   }
 
-  const hangup = () => { const p = peerRef.current; if (p) send({ kind: "hangup", to: p.id, from: { id: user.id, name: user.name } }); cleanup() }
+  const hangup = () => {
+    const p = peerRef.current
+    if (p) {
+      send({ kind: "hangup", to: p.id, from: { id: user.id, name: user.name } })
+      // On ne sait pas si on était appelant ou appelé — la ligne persistée est
+      // indexée par le DESTINATAIRE de l'appel, donc l'une des deux clés (la
+      // sienne ou celle du correspondant) correspond ; l'autre est un no-op.
+      clearActiveCall(user.id)
+      clearActiveCall(p.id)
+    }
+    cleanup()
+  }
 
   const toggleMute = () => {
     const s = localRef.current; if (!s) return
@@ -277,6 +306,32 @@ export default function CallCenter({ user }: { user: User }) {
     })
     chanRef.current = ch
     return () => { void sb.removeChannel(ch); chanRef.current = null }
+  }, [user?.id])
+
+  // Retrouve un appel manqué au chargement / retour au premier plan : le
+  // broadcast temps réel (offer) ne peut pas être reçu pendant que la WebView
+  // est suspendue en arrière-plan, même si une notification push a réveillé
+  // le téléphone — sans ça, l'utilisateur voit la notification mais aucun
+  // bandeau "Accepter" en rouvrant l'app.
+  useEffect(() => {
+    if (!user?.id) return
+    const checkPending = async () => {
+      if (phaseRef.current !== "idle") return
+      try {
+        const r = await fetch(`/api/ext/call/pending?userId=${encodeURIComponent(user.id)}`)
+        const j = await r.json()
+        const call = j?.call as { callerId: string; callerName: string; offer: RTCSessionDescriptionInit } | null
+        if (call && phaseRef.current === "idle") {
+          pendingOffer.current = call.offer
+          setPeerR({ id: call.callerId, name: call.callerName })
+          setPhaseR("incoming")
+        }
+      } catch { /* noop */ }
+    }
+    void checkPending()
+    const onVisible = () => { if (document.visibilityState === "visible") void checkPending() }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
   }, [user?.id])
 
   // Déclenchement depuis la messagerie
