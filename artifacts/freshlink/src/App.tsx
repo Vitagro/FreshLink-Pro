@@ -94,6 +94,8 @@ function MainApp() {
       // effet chez un acheteur déjà connecté tant qu'il ne se reconnecte pas.
       hydrateConfigs().catch(() => {})
     }).catch(() => {})
+    // Enregistrement push natif (no-op hors app mobile Capacitor, cf. notify.ts).
+    import("@/lib/notify").then(({ registerPush }) => { void registerPush(user.id) }).catch(() => {})
   }, [user])
 
   const handleLogin = (loggedUser: User, forceView?: "mobile" | "backoffice") => {

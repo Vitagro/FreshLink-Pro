@@ -3,8 +3,9 @@
 // création existants (nouveau message, appel entrant, notification interne) pour
 // réveiller l'app même fermée/téléphone verrouillé.
 //
-// Configuration : FIREBASE_SERVICE_ACCOUNT_JSON (le JSON complet du compte de
-// service Firebase, sur une seule ligne, en variable d'env — jamais commité).
+// Configuration : FIREBASE_SERVICE_ACCOUNT_JSON — le JSON du compte de service
+// Firebase, encodé en base64 (le JSON brut contient des guillemets qui cassent
+// la directive Apache SetEnv utilisée par deploy.yml — jamais commité).
 // Tant que cette variable est absente, sendPushToUser() ne fait rien (no-op
 // silencieux) — même comportement de dégradation gracieuse que lib/email.ts
 // quand aucune clé fournisseur n'est configurée.
@@ -31,7 +32,7 @@ function getFirebaseApp(): App | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) { app = null; return app; }
   try {
-    const serviceAccount = JSON.parse(raw);
+    const serviceAccount = JSON.parse(Buffer.from(raw, "base64").toString("utf-8"));
     app = getApps()[0] ?? initializeApp({ credential: cert(serviceAccount) });
   } catch (e) {
     logger.error("[push] FIREBASE_SERVICE_ACCOUNT_JSON invalide: " + String(e));

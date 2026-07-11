@@ -128,6 +128,7 @@ jobs:
           SetEnv ANTHROPIC_API_KEY "${{ secrets.ANTHROPIC_API_KEY }}"
           SetEnv WA_GROUP_PV_URL "${{ secrets.WA_GROUP_PV_URL }}"
           SetEnv WA_GROUP_ALERT_URL "${{ secrets.WA_GROUP_ALERT_URL }}"
+          SetEnv FIREBASE_SERVICE_ACCOUNT_JSON "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}"
 
           RewriteEngine On
           RewriteCond %{REQUEST_URI} !^/api/
