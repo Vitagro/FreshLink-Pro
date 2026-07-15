@@ -203,21 +203,46 @@ export interface Client {
   remisePct?: number        // remise globale % accordée à ce client (ex: 5 = 5%)
   remiseActive?: boolean    // true = la remise est appliquée sur ses achats
   promotions?: string[]     // codes / libellés de promotions actives
-  // Échelle client (tarification) — distincte de `segment` (loyalty)
-  echelle?: Tier
+  // Échelle client (tarification) — distincte de `segment` (loyalty).
+  // Référence l'id d'un EchelonClient (liste dynamique, cf. plus bas).
+  echelle?: string
+  // "manuel" (défaut) = echelle fixée à la main sur la fiche client.
+  // "auto" = echelle recalculée depuis les seuils tonnage/fréquence/CA de
+  // chaque échelon (cf. computeEchelonAuto) ; `echelle` sert alors de cache
+  // du dernier résultat calculé (mis à jour au recalcul, pas en temps réel).
+  echelleMode?: "manuel" | "auto"
   // Équipe/groupe propriétaire de ce client (id de l'admin racine du groupe).
   // undefined = legacy/partagé par toutes les équipes (transition douce).
   groupeId?: string
 }
 
-// Échelle client utilisée pour la tarification par palier
-export type Tier = "vip" | "gold" | "titanium" | "silver"
-export const TIER_LABELS: Record<Tier, string> = {
-  vip:      "VIP",
-  gold:     "Gold",
-  titanium: "Titanium",
-  silver:   "Silver",
+// ── Échelle client — liste dynamique de paliers de tarification ────────────
+// Gérée dans l'écran BOEchelonsClient (créer/renommer/réordonner/supprimer).
+export interface EchelonClient {
+  id: string
+  nom: string
+  couleur: string   // classes Tailwind (badge), ex: "bg-amber-100 text-amber-700 border-amber-200"
+  ordre: number      // 1 = palier le plus bas, croissant vers le haut
+  actif: boolean
+  // Seuils d'attribution automatique (mode "auto") — toutes les conditions
+  // renseignées doivent être atteintes (ET logique). Un seuil absent/0 est
+  // ignoré pour cet échelon.
+  auto?: {
+    minTonnageKg?: number
+    minCommandes?: number    // nb de commandes sur la période glissante
+    minCADh?: number
+    periodeJours: number     // fenêtre glissante en jours (ex: 90)
+  }
 }
+
+// Seed par défaut — conserve les 4 échelons déjà en prod (mêmes id, donc les
+// fiches client existantes avec echelle="vip" etc. restent valides sans migration.
+export const DEFAULT_ECHELONS: EchelonClient[] = [
+  { id: "silver",   nom: "Silver",   couleur: "bg-zinc-100 text-zinc-700 border-zinc-200",       ordre: 1, actif: true },
+  { id: "gold",     nom: "Gold",     couleur: "bg-yellow-100 text-yellow-700 border-yellow-200", ordre: 2, actif: true },
+  { id: "titanium", nom: "Titanium", couleur: "bg-slate-100 text-slate-700 border-slate-200",    ordre: 3, actif: true },
+  { id: "vip",      nom: "VIP",      couleur: "bg-amber-100 text-amber-700 border-amber-200",    ordre: 4, actif: true },
+]
 
 // ── Visite prevendeur ──────────────────────────────────────────────────────
 export type VisiteResultat = "commande" | "sans_commande"
@@ -330,7 +355,7 @@ export interface Article {
   tauxMargeParticulier?: number
   clientPrices?: Record<string, { prix?: number; promo?: number; ajust?: number }> // overrides par client individuel
   secteurPrices?: Record<string, { prix?: number; promo?: number; ajust?: number }> // overrides par secteur
-  echellePrices?: Partial<Record<Tier, { prix?: number; promo?: number; ajust?: number }>> // overrides par échelle client (VIP/Gold/Titanium/Silver)
+  echellePrices?: Record<string, { prix?: number; promo?: number; ajust?: number }> // overrides par échelle client (id EchelonClient)
   // Charge appliquée à cet article pour le calcul du coût de revient
   // (transport, manutention, perte…) — référence un ChargeArticle du catalogue.
   chargeArticleId?: string
@@ -2446,6 +2471,37 @@ export function isClientVisible(client: Client, user: User | null | undefined): 
   return client.groupeId === effectiveGroupId(user)
 }
 
+// ── Attribution automatique de l'échelle client ─────────────────────────────
+// Statuts de commande comptabilisés dans le tonnage/CA/fréquence (on exclut
+// les commandes non confirmées ou refusées/retournées).
+const ECHELON_AUTO_COUNTED_STATUTS = new Set(["valide", "en_preparation", "charge", "en_transit", "livre"])
+
+// Calcule l'échelon "auto" d'un client à partir de ses commandes sur la
+// fenêtre glissante propre à chaque échelon (auto.periodeJours). Renvoie
+// l'id du palier le plus haut (plus grand `ordre`) dont TOUS les seuils
+// renseignés (tonnage/commandes/CA) sont atteints, ou undefined si aucun.
+export function computeEchelonAuto(clientId: string, commandes: Commande[], echelons: EchelonClient[]): string | undefined {
+  const now = Date.now()
+  const candidats = [...echelons].filter(e => e.actif && e.auto).sort((a, b) => b.ordre - a.ordre)
+  for (const e of candidats) {
+    const auto = e.auto!
+    const periodeMs = auto.periodeJours * 24 * 60 * 60 * 1000
+    const cmds = commandes.filter(c =>
+      c.clientId === clientId &&
+      ECHELON_AUTO_COUNTED_STATUTS.has(c.statut) &&
+      (now - new Date(c.date).getTime()) <= periodeMs
+    )
+    if (cmds.length === 0) continue
+    const tonnage = cmds.reduce((s, c) => s + c.lignes.reduce((t, l) => t + l.quantite, 0), 0)
+    const ca = cmds.reduce((s, c) => s + c.lignes.reduce((t, l) => t + l.total, 0), 0)
+    const okTonnage   = !auto.minTonnageKg  || tonnage      >= auto.minTonnageKg
+    const okCommandes = !auto.minCommandes  || cmds.length  >= auto.minCommandes
+    const okCA        = !auto.minCADh       || ca           >= auto.minCADh
+    if (okTonnage && okCommandes && okCA) return e.id
+  }
+  return undefined
+}
+
 // ============================================================
 // STORE API
 // ============================================================
@@ -2632,6 +2688,51 @@ export const store = {
     if (idx >= 0) { cl[idx] = { ...cl[idx], ...updates }; store.saveClients(cl) }
   },
   deleteClient: (id: string) => { store.saveClients(store.getClients().filter(c => c.id !== id)); deleteSynced("fl_clients", [id]) },
+
+  // --- Échelons client (tarification par palier, liste dynamique) ───────────
+  getEchelons: (): EchelonClient[] => {
+    const raw = getLS<EchelonClient[]>("fl_echelons_client", DEFAULT_ECHELONS)
+    if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_ECHELONS
+    return raw
+  },
+  saveEchelons: (e: EchelonClient[]) => setLS("fl_echelons_client", e),
+  addEchelon: (e: EchelonClient) => { const all = store.getEchelons(); all.push(e); store.saveEchelons(all); return e },
+  updateEchelon: (id: string, updates: Partial<EchelonClient>) => {
+    const all = store.getEchelons()
+    const idx = all.findIndex(e => e.id === id)
+    if (idx >= 0) { all[idx] = { ...all[idx], ...updates }; store.saveEchelons(all) }
+  },
+  // Supprime un échelon et nettoie ses références : les clients qui l'avaient
+  // repassent sans échelle, et les tarifs par échelle configurés dessus sur
+  // chaque article sont retirés (sinon des ids orphelins traîneraient).
+  deleteEchelon: (id: string) => {
+    store.saveEchelons(store.getEchelons().filter(e => e.id !== id))
+    const clients = store.getClients()
+    let clientsChanged = false
+    clients.forEach(c => { if (c.echelle === id) { c.echelle = undefined; clientsChanged = true } })
+    if (clientsChanged) store.saveClients(clients)
+    const articles = store.getArticles()
+    let articlesChanged = false
+    articles.forEach(a => {
+      if (a.echellePrices && id in a.echellePrices) { delete a.echellePrices[id]; articlesChanged = true }
+    })
+    if (articlesChanged) store.saveArticles(articles)
+  },
+  // Recalcule l'échelle de tous les clients en mode "auto" (cf. computeEchelonAuto)
+  // et met à jour le cache `Client.echelle`. Renvoie le nombre de clients modifiés.
+  recalculerEchelonsAuto: (): number => {
+    const clients = store.getClients()
+    const commandes = store.getCommandes()
+    const echelons = store.getEchelons()
+    let changed = 0
+    clients.forEach(c => {
+      if (c.echelleMode !== "auto") return
+      const next = computeEchelonAuto(c.id, commandes, echelons)
+      if (next !== c.echelle) { c.echelle = next; changed++ }
+    })
+    if (changed > 0) store.saveClients(clients)
+    return changed
+  },
 
   // --- Articles ---
   // Normalisation défensive : un article importé/synchronisé peut arriver

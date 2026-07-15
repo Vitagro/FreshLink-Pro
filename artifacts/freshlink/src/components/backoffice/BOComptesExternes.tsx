@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { store, TIER_LABELS, isClientVisible, type User, type Client, type Tier } from "@/lib/store"
+import { store, isClientVisible, type User, type Client } from "@/lib/store"
 import { loadZonesConfig, resolveAffectation } from "@/lib/commercial/zones"
 
 interface Props { user: User }
@@ -29,12 +29,6 @@ const CATEGORIE_OPTIONS: { value: "chr" | "marchand" | "particulier"; label: str
   { value: "chr",         label: "CHR / HORECA" },
   { value: "marchand",    label: "Marchand" },
   { value: "particulier", label: "Particulier" },
-]
-const ECHELLE_OPTIONS: { value: Tier; label: string }[] = [
-  { value: "vip",      label: TIER_LABELS.vip },
-  { value: "gold",     label: TIER_LABELS.gold },
-  { value: "titanium", label: TIER_LABELS.titanium },
-  { value: "silver",   label: TIER_LABELS.silver },
 ]
 const TAILLE_OPTIONS: { value: Client["taille"]; label: string }[] = [
   { value: "50-100kg",   label: "50–100 kg" },
@@ -80,6 +74,7 @@ function ClientForm({
   color?: "blue" | "indigo"
 }) {
   const [form, setForm] = useState(initial)
+  const [echelons] = useState(() => store.getEchelons())
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm(p => ({ ...p, [k]: v }))
 
@@ -172,14 +167,25 @@ function ClientForm({
           </select>
         </div>
 
-        {/* Échelle client (tarification VIP/Gold/Titanium/Silver) */}
+        {/* Échelle client (paliers de tarification dynamiques — écran Échelons Client) */}
         <div className="flex flex-col gap-1">
           <label className={`text-xs font-semibold ${c.label}`}>Échelle client</label>
-          <select value={form.echelle ?? ""} onChange={e => set("echelle", (e.target.value || undefined) as Tier | undefined)}
-            className={`px-3 py-2 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 ${c.input}`}>
-            <option value="">— Aucune —</option>
-            {ECHELLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
+          <div className="flex gap-1.5">
+            <select value={form.echelleMode ?? "manuel"} onChange={e => set("echelleMode", e.target.value as "manuel" | "auto")}
+              className={`px-2 py-2 rounded-xl border bg-white text-xs focus:outline-none focus:ring-2 ${c.input}`}>
+              <option value="manuel">Manuel</option>
+              <option value="auto">Auto</option>
+            </select>
+            <select value={form.echelle ?? ""} disabled={form.echelleMode === "auto"}
+              onChange={e => set("echelle", e.target.value || undefined)}
+              className={`flex-1 px-3 py-2 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 disabled:opacity-50 disabled:bg-slate-50 ${c.input}`}>
+              <option value="">— Aucune —</option>
+              {echelons.map(ec => <option key={ec.id} value={ec.id}>{ec.nom}</option>)}
+            </select>
+          </div>
+          {form.echelleMode === "auto" && (
+            <p className="text-[10px] text-muted-foreground">Calculée automatiquement (tonnage/fréquence/CA) — voir écran Échelons Client pour recalculer.</p>
+          )}
         </div>
 
         {/* Rôle CHR — propriétaire pilote la gestion via l'ERP, gérant commande via le shop */}
@@ -679,7 +685,7 @@ export default function BOComptesExternes({ user }: Props) {
             rotation: editClient.rotation, telephone: editClient.telephone,
             email: editClient.email, adresse: editClient.adresse, ice: editClient.ice,
             notes: editClient.notes, categorie: editClient.categorie, chrRole: editClient.chrRole,
-            echelle: editClient.echelle,
+            echelle: editClient.echelle, echelleMode: editClient.echelleMode,
             creditAutorise: editClient.creditAutorise, plafondCredit: editClient.plafondCredit,
             creditSolde: editClient.creditSolde, modalitePaiement: editClient.modalitePaiement,
             prevendeurId: editClient.prevendeurId, teamLeadId: editClient.teamLeadId,

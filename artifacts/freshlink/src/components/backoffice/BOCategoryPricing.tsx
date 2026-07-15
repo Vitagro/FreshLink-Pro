@@ -1,8 +1,8 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import * as XLSX from "xlsx"
-import { store, TIER_LABELS } from "@/lib/store"
-import type { Article, Client, Tier } from "@/lib/store"
+import { store } from "@/lib/store"
+import type { Article, Client, EchelonClient } from "@/lib/store"
 
 type Cat = "chr" | "marchand" | "particulier"
 type Mode = "segment" | "secteur" | "echelle" | "client"
@@ -14,13 +14,7 @@ const CAT_COLORS: Record<Cat, string> = {
   particulier: "bg-green-100  text-green-700  border-green-200",
 }
 
-const TIERS: Tier[] = ["vip", "gold", "titanium", "silver"]
-const TIER_COLORS: Record<Tier, string> = {
-  vip:      "bg-amber-100  text-amber-700  border-amber-200",
-  gold:     "bg-yellow-100 text-yellow-700 border-yellow-200",
-  titanium: "bg-slate-100  text-slate-700  border-slate-200",
-  silver:   "bg-zinc-100   text-zinc-700   border-zinc-200",
-}
+const FALLBACK_TIER_COLOR = "bg-primary/10 text-primary border-primary/20"
 
 // ── Export / Import helpers (CSV · Excel · JSON) ─────────────────────────────
 const EXPORT_FIELDS = ["id","nom","famille","unite","prixAchat","prixCHR","prixMarchand","prixParticulier","promoCHR","promoMarchand","promoParticulier","ajustCHR","ajustMarchand","ajustParticulier","tauxMargeCHR","tauxMargeMarchand","tauxMargeParticulier"] as const
@@ -97,12 +91,13 @@ const getField = (cat: Cat): { prix: keyof Article; promo: keyof Article; ajust:
 export default function BOCategoryPricing() {
   const [articles, setArticles]     = useState<Article[]>([])
   const [clients, setClients]       = useState<Client[]>([])
+  const [echelons, setEchelons]     = useState<EchelonClient[]>([])
   const [search, setSearch]         = useState("")
   const [showInactive, setShowInactive] = useState(true)   // show ALL articles by default
   const [mode, setMode]             = useState<Mode>("segment")
   const [activeCat, setActiveCat]   = useState<Cat>("chr")
   const [activeSecteur, setActiveSecteur] = useState<string>("")
-  const [activeTier, setActiveTier] = useState<Tier>("vip")
+  const [activeTier, setActiveTier] = useState<string>("")
   const [selectedClient, setSelectedClient] = useState<string>("")
   const [edits, setEdits]           = useState<Record<string, { prix?: number; promo?: number; ajust?: number; taux?: number }>>({})
   const [saved, setSaved]           = useState(false)
@@ -126,6 +121,9 @@ export default function BOCategoryPricing() {
     setArticles(store.getArticles())
     setClients(store.getClients().filter(c => (c as unknown as Record<string,unknown>).actif !== false))
     try { setChargesArt(store.getChargesArticle()) } catch { setChargesArt([]) }
+    const ec = [...store.getEchelons()].sort((a, b) => b.ordre - a.ordre)
+    setEchelons(ec)
+    if (ec.length > 0) setActiveTier(ec[0].id)
   }, [])
 
   // Charge unitaire (DH) appliquée à un article via son chargeArticleId
@@ -493,16 +491,19 @@ export default function BOCategoryPricing() {
         </div>
       ) : mode === "echelle" ? (
         <div className="flex gap-2 flex-wrap">
-          {TIERS.map(tier => (
+          {echelons.length === 0 && (
+            <p className="text-xs text-muted-foreground">Aucun échelon défini — créez-en un dans l&apos;écran Échelons Client.</p>
+          )}
+          {echelons.map(ec => (
             <button
-              key={tier}
-              onClick={() => { setActiveTier(tier); setEdits({}) }}
+              key={ec.id}
+              onClick={() => { setActiveTier(ec.id); setEdits({}) }}
               className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
-                activeTier === tier
-                  ? TIER_COLORS[tier] + " shadow-sm"
+                activeTier === ec.id
+                  ? ec.couleur + " shadow-sm"
                   : "border-border text-muted-foreground hover:text-foreground bg-card"
               }`}>
-              {TIER_LABELS[tier]}
+              {ec.nom}
             </button>
           ))}
         </div>
@@ -684,7 +685,9 @@ export default function BOCategoryPricing() {
                     <>
                       <th className="text-center px-4 py-3 font-semibold">
                         {mode === "echelle" ? (
-                          <span className={`px-2 py-0.5 rounded-full text-xs border ${TIER_COLORS[activeTier]}`}>{TIER_LABELS[activeTier]}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs border ${echelons.find(e => e.id === activeTier)?.couleur ?? FALLBACK_TIER_COLOR}`}>
+                            {echelons.find(e => e.id === activeTier)?.nom ?? activeTier}
+                          </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full text-xs border bg-sky-100 text-sky-700 border-sky-200">{activeSecteur}</span>
                         )}
