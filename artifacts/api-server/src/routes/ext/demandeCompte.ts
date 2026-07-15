@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { rateLimit } from "../../lib/ext/rateLimit.js";
+import { verifyApiKey, readWebIntegrationConfig } from "../../lib/ext/webIntegration.js";
 
 // ══════════════════════════════════════════════════════════════
 // POST /ext/demande-compte — Création automatique de compte client
@@ -129,6 +130,23 @@ async function phoneExists(tel: string): Promise<boolean> {
 
 router.post("/", async (req: Request, res: Response) => {
   if (rateLimit(req, res, { key: "demande-compte", limit: 5, windowMs: 60_000 })) return;
+
+  const apiKey = req.headers["x-api-key"] as string | undefined;
+  if (apiKey) {
+    if (!(await verifyApiKey(apiKey))) {
+      res.status(401).json({ error: "Clé API invalide" });
+      return;
+    }
+  } else {
+    // Sans clé : toléré par défaut (config absente), sauf si l'admin a
+    // explicitement désactivé "Demandes de compte" (demandesComptes = false)
+    // dans le BO — ce toggle était défini mais jamais appliqué ici.
+    const cfg = await readWebIntegrationConfig();
+    if (cfg && cfg.enabled && cfg.demandesComptes === false) {
+      res.status(401).json({ error: "Clé API requise." });
+      return;
+    }
+  }
 
   const body = (req.body ?? {}) as Record<string, string>;
 

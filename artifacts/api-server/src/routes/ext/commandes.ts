@@ -1,8 +1,12 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { rateLimit } from "../../lib/ext/rateLimit.js";
-import { verifyApiKey } from "../../lib/ext/webIntegration.js";
+import { verifyApiKey, readWebIntegrationConfig } from "../../lib/ext/webIntegration.js";
 import { sendEmail } from "../../lib/email.js";
+import { verifyToken } from "../../lib/extToken.js";
+import { normalizePhone } from "./auth.js";
+
+const ADMIN_ROLES = new Set(["super_super_admin", "super_admin", "admin"]);
 
 const SHOP_ORDER_ALERT_EMAIL = process.env.SHOP_ORDER_ALERT_EMAIL || "sales@vita-agro.com";
 
@@ -147,9 +151,22 @@ async function notifyOrder(commande: Record<string, unknown>): Promise<void> {
 router.post("/", async (req: Request, res: Response) => {
   if (rateLimit(req, res, { key: "commandes", limit: 10, windowMs: 60_000 })) return;
   const apiKey = req.headers["x-api-key"] as string | undefined;
-  if (apiKey && !(await verifyApiKey(apiKey))) {
-    res.status(401).json({ error: "Clé API invalide" });
-    return;
+  if (apiKey) {
+    if (!(await verifyApiKey(apiKey))) {
+      res.status(401).json({ error: "Clé API invalide" });
+      return;
+    }
+  } else {
+    // Pas de clé fournie : on tolère par défaut (formulaire de commande du
+    // site public, non configuré). Mais si l'admin a explicitement désactivé
+    // "Commandes via API" dans le BO (Intégration Site Web → commandesPubliques
+    // = false), ce toggle doit réellement bloquer les requêtes sans clé —
+    // avant ce correctif il n'était jamais lu ici et n'avait donc aucun effet.
+    const cfg = await readWebIntegrationConfig();
+    if (cfg && cfg.enabled && cfg.commandesPubliques === false) {
+      res.status(401).json({ error: "Clé API requise." });
+      return;
+    }
   }
 
   const body = (req.body ?? {}) as Record<string, unknown>;
@@ -274,18 +291,64 @@ router.post("/", async (req: Request, res: Response) => {
   res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
 });
 
+// Renvoie le numéro de téléphone associé à l'utilisateur authentifié
+// (fl_users, service role), ou null si introuvable.
+async function getOwnPhone(sbUrl: string, sbKey: string, userId: string): Promise<string | null> {
+  try {
+    const r = await fetch(
+      `${sbUrl}/rest/v1/fl_users?id=eq.${encodeURIComponent(userId)}&select=payload&limit=1`,
+      { headers: { apikey: sbKey, Authorization: `Bearer ${sbKey}` } }
+    );
+    if (!r.ok) return null;
+    const rows = await r.json() as { payload?: Record<string, unknown> }[];
+    const phone = rows?.[0]?.payload?.telephone;
+    return typeof phone === "string" && phone.length > 0 ? phone : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── GET /ext/commandes?tel=xxx ──────────────────────────────────────────
-// Lit les commandes d'un client depuis fl_commandes ou fl_commandes_web
+// Lit les commandes d'un client depuis fl_commandes ou fl_commandes_web.
+// Authentification requise : un client ne peut lire que ses propres
+// commandes (son propre numéro, vérifié via le token) ; seul un rôle admin
+// peut consulter les commandes d'un tiers via ?tel=.
 router.get("/", async (req: Request, res: Response) => {
+  if (rateLimit(req, res, { key: "commandes-read", limit: 30, windowMs: 60_000 })) return;
+
   if (!SB_URL || !SB_SERVER_KEY) {
     res.json([]);
     return;
   }
 
-  const sbH = { apikey: SB_SERVER_KEY, Authorization: `Bearer ${SB_SERVER_KEY}` };
+  const authHeader = req.headers.authorization ?? "";
+  const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  const payload = bearerToken ? verifyToken(bearerToken) : null;
+  if (!payload) {
+    res.status(401).json({ error: "Authentification requise." });
+    return;
+  }
+
   const tel = (req.query["tel"] as string | undefined) || (req.query["telephone"] as string | undefined);
   if (!tel) { res.status(400).json({ error: "tel requis." }); return; }
 
+  const isAdmin = ADMIN_ROLES.has(String(payload.role ?? ""));
+  if (!isAdmin) {
+    const ownPhone = await getOwnPhone(SB_URL, SB_SERVER_KEY, String(payload.sub ?? ""));
+    if (!ownPhone) {
+      res.status(403).json({ error: "Accès refusé." });
+      return;
+    }
+    const requested = normalizePhone(tel.trim());
+    const own = normalizePhone(ownPhone);
+    const matchesOwn = own.local === requested.local;
+    if (!matchesOwn) {
+      res.status(403).json({ error: "Accès refusé — vous ne pouvez consulter que vos propres commandes." });
+      return;
+    }
+  }
+
+  const sbH = { apikey: SB_SERVER_KEY, Authorization: `Bearer ${SB_SERVER_KEY}` };
   const telEnc = encodeURIComponent(tel.trim());
 
   // ── Essai 1 : fl_commandes format JSONB — filtre sur payload->>telephone ──

@@ -4,7 +4,7 @@ import { CATALOGUE_SEED } from "../../lib/ext/catalogueSeed.js";
 import { ERP_DEFAULT_ARTICLES } from "../../lib/ext/defaultArticles.js";
 import { getArticlePhoto } from "../../lib/ext/articlePhotos.js";
 import { darijaName } from "../../lib/ext/darijaNames.js";
-import { verifyApiKey } from "../../lib/ext/webIntegration.js";
+import { verifyApiKey, readWebIntegrationConfig } from "../../lib/ext/webIntegration.js";
 
 const router = Router();
 
@@ -38,9 +38,20 @@ router.get("/", async (req: Request, res: Response) => {
   // Mais si un site externe envoie X-Api-Key (cf. BO → Intégration Site Web),
   // on la valide réellement contre la clé enregistrée côté serveur.
   const apiKey = req.headers["x-api-key"] as string | undefined;
-  if (apiKey && !(await verifyApiKey(apiKey))) {
-    res.status(401).json({ error: "Clé API invalide" });
-    return;
+  if (apiKey) {
+    if (!(await verifyApiKey(apiKey))) {
+      res.status(401).json({ error: "Clé API invalide" });
+      return;
+    }
+  } else {
+    // Sans clé : toléré par défaut (config absente), sauf si l'admin a
+    // explicitement désactivé "Catalogue public" (cataloguePublic = false)
+    // dans le BO — ce toggle était défini mais jamais appliqué ici.
+    const cfg = await readWebIntegrationConfig();
+    if (cfg && cfg.enabled && cfg.cataloguePublic === false) {
+      res.status(401).json({ error: "Clé API requise." });
+      return;
+    }
   }
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
   // Prefer service role key (server-side only) to bypass RLS on fl_articles
