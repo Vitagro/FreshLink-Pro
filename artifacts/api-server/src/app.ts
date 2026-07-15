@@ -26,9 +26,28 @@ app.use(
     },
   }),
 );
-app.use(cors({
-  origin: true,
-  credentials: true,
+// Origines autorisées à recevoir Access-Control-Allow-Credentials (cookies de
+// session : SADMIN_COOKIE, DEVICE_COOKIE — cf. lib/deviceGuard.ts, routes/admin,
+// routes/device). Les endpoints publics /ext/* (catalogue, commandes, etc.)
+// n'utilisent pas de cookies et gèrent déjà leur propre en-tête CORS permissif
+// par route — seul le flag "credentials" est restreint ici, pas l'origine
+// elle-même, pour ne pas casser l'intégration site externe déjà en place.
+const TRUSTED_ORIGINS = new Set(
+  ["https://erp.vita-agro.com", ...(process.env.TRUSTED_ORIGINS ?? "").split(",")]
+    .map((o) => o.trim())
+    .filter(Boolean),
+);
+if (process.env.NODE_ENV !== "production") {
+  TRUSTED_ORIGINS.add("http://localhost:5173");
+  TRUSTED_ORIGINS.add("http://localhost:8080");
+}
+
+app.use(cors((req, callback) => {
+  const origin = req.header("Origin");
+  callback(null, {
+    origin: origin ?? true,
+    credentials: !!origin && TRUSTED_ORIGINS.has(origin),
+  });
 }));
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
