@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { store, type AccountRequest, type User, type Client, type Fournisseur } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 function generatePassword(len = 10): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
@@ -224,6 +225,12 @@ export default function BODemandesComptes({ user }: Props) {
 
   const handleApprove = async () => {
     if (!selected) return
+    // Fournisseur/client ont chacun leur permission dédiée ; le type "livreur"
+    // n'a pas de clé dédiée dans la matrice — non gaté volontairement plutôt
+    // que de deviner la bonne permission.
+    const approvePerm = selected.type === "fournisseur" ? "approuver_compte_fournisseur"
+      : selected.type === "client" ? "approuver_compte_client" : null
+    if (approvePerm && !hasPermission(user.role, approvePerm)) return
     const phone = selected.telephone?.replace(/\D/g, "") ?? ""
     const linkedUserId = (selected as { _linkedUserId?: string })._linkedUserId
 
@@ -330,6 +337,7 @@ export default function BODemandesComptes({ user }: Props) {
 
   const handleReject = async () => {
     if (!selected) return
+    if (!hasPermission(user.role, "rejeter_demande_compte")) return
     const linkedUserId = (selected as { _linkedUserId?: string })._linkedUserId
     if (linkedUserId) await setUserActifSb(linkedUserId, false)  // désactive le compte web
     await writeRequestStatut(selected.id, "rejete", { rejectedBy: user.id, rejectedAt: new Date().toISOString(), rejectReason })

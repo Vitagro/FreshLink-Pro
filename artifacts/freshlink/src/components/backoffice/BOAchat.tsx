@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { store, type BonAchat, type Article, type Fournisseur, type ChargeArticle, paDeviationConfirmMessage } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
@@ -204,6 +205,7 @@ export default function BOAchat() {
   }
 
   const handleValidateBon = async (bon: BonAchat) => {
+    if (!hasPermission(store.getSession()?.role, "valider_achat")) return
     store.updateBonAchat(bon.id, { statut: "validé" })
     await sendEmail({
       to_email: bon.emailDestinataire || emailConfig,
@@ -219,6 +221,7 @@ export default function BOAchat() {
   }
 
   const handleSubmitBon = async () => {
+    if (!hasPermission(store.getSession()?.role, "creer_bon_achat")) return
     const fournisseur = fournisseurs.find(f => f.id === formFournisseurId)
     if (!fournisseur) return
     // Garde-fou anti-faute-de-frappe (FR + AR) avant d'écraser le PA catalogue

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { store, type Article, type TransfertStock, type CaisseVide, type CaisseVideMouvement, type ContenantTare, DEFAULT_CONTENANTS_TARE, FAMILLES_ARTICLES, type BonLivraison, type Retour, paDeviationConfirmMessage } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { deleteArticle } from "@/lib/supabase/db"
 
@@ -92,6 +93,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
   }
 
   const handleSaveInventaire = () => {
+    if (!hasPermission(store.getSession()?.role, "faire_inventaire")) return
     const all = store.getArticles()
     const ecarts: { nom: string; ecart: number; unite: string }[] = []
     const now = new Date().toISOString().split("T")[0]
@@ -129,6 +131,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
 
   // Reset stock to 0 for all or selected articles in inventory
   const handleResetStockInventaire = (field: "stockDisponible" | "stockDefect", ids?: Set<string>) => {
+    if (!hasPermission(store.getSession()?.role, "ajuster_stock")) return
     const label = field === "stockDisponible" ? "stock CONFORME" : "stock DEFECT"
     const count = ids ? ids.size : filtered.length
     if (!confirm(`Remettre le ${label} a 0 pour ${count} article(s) ?`)) return

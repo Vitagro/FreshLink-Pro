@@ -7,9 +7,10 @@ import {
   type PeriodeDistribution, type CategorieCharge,
   type Salarie, type PaiementSalaire, type ReserveCaisseSnap,
   type StatutSalarie, type TypeContrat,
-  type Client, type BonLivraison,
+  type Client, type BonLivraison, type UserRole,
   CATEGORIE_CHARGE_LABELS, DELAI_RECOUVREMENT_LABELS,
 } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n: number) => (Number(n) || 0).toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -271,6 +272,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // ── Auto-enregistrement encaissements ─────────────────────────────────────
   const autoSyncCaisse = () => {
     if (isReadOnly) { toast("Compte demo : lecture seule"); return }
+    if (!hasPermission(user.role as UserRole, "valider_cash")) return
     const commandes = store.getVisibleCommandes().filter(c => c.statut === "livre")
     const existingRefs = new Set(caisse.filter(e => e.reference).map(e => e.reference!))
     let added = 0
@@ -1195,6 +1197,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
         const alertCount = creditClients.filter(c => c.isOverdue || c.isOverPlafond).length
 
         const handleCreditPaiement = () => {
+          if (!hasPermission(user.role as UserRole, "gerer_recouvrement")) return
           if (!creditPaiClientId || !creditPaiMontant || Number(creditPaiMontant) <= 0) return
           const allClients = store.getClients()
           const idx = allClients.findIndex(c => c.id === creditPaiClientId)

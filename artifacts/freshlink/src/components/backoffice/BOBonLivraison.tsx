@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import type { User } from "@/lib/store"
 import { store, MODALITE_LABELS } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import {
   printBLFromBO,
   downloadBLFromBO,
@@ -1261,6 +1262,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
   }
 
   const validateBL = (id: string) => {
+    if (!hasPermission(user.role, "valider_bl")) return
     const updated = bls.map(b => b.id === id
       ? { ...b, statut: "valide" as BLStatut, qcValidePar: user.name, qcValideAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       : b)

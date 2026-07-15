@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { store, type Commande, type Trip, type Livreur, type TransportCompany, type User, ROLE_COLORS } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import { uploadToStorage } from "@/lib/supabase/client"
 import { printBL, printFeuilleRoute, type FeuilleRouteData } from "@/lib/print"
 
@@ -219,6 +220,7 @@ export default function BODispatch({ user }: Props) {
 
   const [creatingTrip, setCreatingTrip] = useState(false)
   const handleCreateTrip = () => {
+    if (!hasPermission(user.role, "creer_trip")) return
     if (!selectedLivreurId || selectedCmds.length === 0) return
     if (creatingTrip) return // anti double-clic — jamais deux tournées/doubles affectations
     setCreatingTrip(true)
@@ -260,6 +262,7 @@ export default function BODispatch({ user }: Props) {
   }
 
   const updateTripStatus = (id: string, statut: Trip["statut"]) => {
+    if (!hasPermission(user.role, "valider_trip")) return
     store.updateTrip(id, { statut })
     if (statut === "terminé") {
       const trip = store.getTrips().find(t => t.id === id)

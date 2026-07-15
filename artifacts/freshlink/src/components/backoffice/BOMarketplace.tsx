@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { store, type Article, type User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -665,6 +666,7 @@ export default function BOMarketplace({ user }: Props) {
   }
 
   const handleSave = async (updated: Article) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) return
     const all = articles.map(a => a.id === updated.id ? updated : a)
     store.saveArticles(all)
     setArticles(all)
@@ -687,6 +689,7 @@ export default function BOMarketplace({ user }: Props) {
   }
 
   const handleBulkPublish = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) return
     if (!window.confirm(`Publier ${filtered.length} articles filtrés sur le site web ?`)) return
     const toPublish: Article[] = []
     const all = articles.map(a => {
@@ -712,6 +715,7 @@ export default function BOMarketplace({ user }: Props) {
   }
 
   const handleBulkUnpublish = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) return
     if (!window.confirm(`Dépublier ${filtered.length} articles filtrés du site web ?`)) return
     const toUnpublish: Article[] = []
     const all = articles.map(a => {

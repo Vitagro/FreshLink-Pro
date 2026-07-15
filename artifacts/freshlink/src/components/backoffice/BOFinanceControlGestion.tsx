@@ -1,6 +1,7 @@
 ﻿"use client"
 import { useState, useMemo } from "react"
 import { store, type User, isSuperSuperAdmin } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 const JAWAD_EMAIL = "jawad@vita-fresh.ma"
 
@@ -182,6 +183,7 @@ export default function BOFinanceControlGestion({ user }: { user: User }) {
   const numInp = inp + " text-right font-mono"
 
   const handleSend = async () => {
+    if (!hasPermission(user.role, "envoyer_rapports")) return
     setSending(true)
     const { ok, error } = await sendDailyReport(rapportEmail)
     setSentOk(ok)

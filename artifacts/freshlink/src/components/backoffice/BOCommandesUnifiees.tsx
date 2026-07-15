@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { store, type Commande, type LigneCommande } from "@/lib/store"
 import type { User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 interface Props { user: User }
 
@@ -209,6 +210,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const [noLignes, setNoLignes]           = useState<{ articleId: string; quantite: string; prixVente: string }[]>([{ articleId: "", quantite: "", prixVente: "" }])
 
   const saveNewOrder = async () => {
+    if (!hasPermission(user.role, "creer_commande")) return
     if (savingOrder) return // anti double-clic — jamais deux commandes identiques
     const client = store.getClients().find(c => c.id === noClientId)
     if (!client) { setMsg({ ok: false, text: "Choisissez un client." }); return }
@@ -283,6 +285,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
 
   // ── Mise à jour statut ───────────────────────────────────────────────────────
   const updateStatut = async (cmd: CmdUnifiee, newStatut: string) => {
+    if (!hasPermission(user.role, "valider_commande")) return
     setUpdating(true)
     try {
       // Mise à jour du statut dans le payload JSONB via l'API service_role (bypass RLS)
@@ -317,6 +320,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
 
   // ── Supprimer une commande ───────────────────────────────────────────────────
   const deleteCommande = async (cmd: CmdUnifiee) => {
+    if (!hasPermission(user.role, "supprimer_commande")) return
     if (!confirm(`⚠️ Supprimer définitivement la commande ${cmd.numero} de ${cmd.nom_client} ?\n\nCette action est irréversible.`)) return
     try {
       // Commande ERP locale → retirer aussi du store localStorage
@@ -390,6 +394,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
   }
 
   const bulkDelete = async () => {
+    if (!hasPermission(user.role, "supprimer_commande")) return
     if (bulkBusy || selectedCmds.length === 0) return // anti double-clic
     if (!confirm(`⚠️ Supprimer définitivement ${selectedCmds.length} commande(s) sélectionnée(s) ?\n\nCette action est irréversible.`)) return
     setBulkBusy(true)
@@ -639,13 +644,13 @@ export default function BOCommandesUnifiees({ user }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          {hasPermission(user.role, "creer_commande") && <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
             Nouvelle commande
-          </button>
-          <button
+          </button>}
+          {hasPermission(user.role, "exporter_donnees") && <button
             onClick={exportParClientArticle}
             disabled={filtered.length === 0}
             title="Exporte les commandes filtrées, une ligne par client × article, avec quantité et montant cumulés"
@@ -655,7 +660,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v11a2 2 0 01-2 2z" />
             </svg>
             Exporter (client &amp; article)
-          </button>
+          </button>}
           <button
             onClick={load}
             className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"

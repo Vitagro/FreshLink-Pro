@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { store, effectiveGroupId, canSeeAllGroups } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Analyse Crédit — fournisseurs + clients (rapport quotidien)
@@ -61,6 +62,7 @@ export default function BOAnalyseCredit() {
   useEffect(() => { load(date) }, [date, load])
 
   const sendNow = async () => {
+    if (!hasPermission(store.getSession()?.role, "envoyer_rapports")) return
     setSending(true); setSendMsg(null)
     try {
       const to = sendTo.trim()

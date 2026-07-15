@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { store, type User, type UserRole, type UserAccessType, type GranularPermissions, type Civilite, ROLE_LABELS, ROLE_COLORS, JAWAD_ID, FAMILLES_ARTICLES, getAllSecteurs, effectiveGroupId } from "@/lib/store"
 import { autoAssignPermissions } from "@/lib/rolePermissions"
+import { hasPermission } from "@/lib/permissions"
 import { sendEmail } from "@/lib/email"
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1231,12 +1232,21 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
   const canCreateTeamMember = isTeamLeader
   // resp_commercial can edit objectifs of their team members
   const canEditObjectifs = currentUser.role === "resp_commercial" || currentUser.role === "team_leader" || isFullAdmin
+  // Droits d'accès (Matrice des Permissions) — vérification supplémentaire en
+  // ET avec la logique de rôle existante ci-dessus : ne peut que RESTREINDRE,
+  // jamais élargir un accès que le rôle n'avait pas déjà.
+  const canModifierUtilisateur = hasPermission(currentUser.role, "modifier_utilisateur")
+  const canDesactiverUtilisateur = hasPermission(currentUser.role, "desactiver_utilisateur")
+  const canCreerUtilisateur = hasPermission(currentUser.role, "creer_utilisateur")
+
   const canEditUser = (u: User) => {
+    if (!canModifierUtilisateur) return false
     if (isFullAdmin) return true
     if (isTeamLeader && teamAllowedRoles.includes(u.role)) return true
     return false
   }
   const canDeleteUser = (u: User) => {
+    if (!canDesactiverUtilisateur) return false
     if (u.id === JAWAD_ID) return false
     if (isJawadUser) return u.id !== currentUser.id
     return isFullAdmin && u.role !== "super_super_admin"
@@ -1250,7 +1260,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
       ? teamAllowedRoles
       : []
 
-  const canOpenNewForm = isFullAdmin || isTeamLeader
+  const canOpenNewForm = (isFullAdmin || isTeamLeader) && canCreerUtilisateur
 
   const reload = () => {
     const all = store.getUsers()
@@ -1381,6 +1391,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
 
   const handleSave = () => {
     if (!(form.name ?? "").trim() || !(form.email ?? "").trim()) return
+    if (editing ? !canModifierUtilisateur : !canCreerUtilisateur) return
     const all = store.getUsers()
     let savedUser: User | null = null
     if (editing) {
@@ -1423,6 +1434,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
   }
 
   const toggleActive = (u: User) => {
+    if (!canDesactiverUtilisateur) return
     const all = store.getUsers()
     const idx = all.findIndex(x => x.id === u.id)
     if (idx >= 0) {

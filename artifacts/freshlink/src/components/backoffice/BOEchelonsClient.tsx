@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type EchelonClient } from "@/lib/store"
+import { store, type EchelonClient, type User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Échelons Client — liste dynamique des paliers de tarification (VIP/Gold/...).
@@ -47,7 +48,12 @@ function slugify(nom: string): string {
     .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || `echelon-${Date.now()}`
 }
 
-export default function BOEchelonsClient() {
+export default function BOEchelonsClient({ user }: { user: User }) {
+  const canCreer = hasPermission(user.role, "creer_echelon")
+  const canModifier = hasPermission(user.role, "modifier_echelon")
+  const canSupprimer = hasPermission(user.role, "supprimer_echelon")
+  const canConfigurerAuto = hasPermission(user.role, "configurer_attribution_auto")
+
   const [echelons, setEchelons] = useState<EchelonClient[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -59,8 +65,9 @@ export default function BOEchelonsClient() {
   const reload = () => setEchelons([...store.getEchelons()].sort((a, b) => b.ordre - a.ordre))
   useEffect(() => { reload() }, [])
 
-  const openNew = () => { setEditingId(null); setForm(EMPTY_FORM); setShowForm(true) }
+  const openNew = () => { if (!canCreer) return; setEditingId(null); setForm(EMPTY_FORM); setShowForm(true) }
   const openEdit = (e: EchelonClient) => {
+    if (!canModifier) return
     setEditingId(e.id)
     setForm({
       id: e.id, nom: e.nom, couleur: e.couleur, actif: e.actif,
@@ -75,6 +82,7 @@ export default function BOEchelonsClient() {
 
   const handleSave = () => {
     if (!form.nom.trim()) return
+    if (editingId ? !canModifier : !canCreer) return
     const num = (s: string) => (s.trim() === "" ? undefined : Number(s))
     const auto: EchelonClient["auto"] = form.autoActif ? {
       minTonnageKg: num(form.minTonnageKg),
@@ -95,12 +103,14 @@ export default function BOEchelonsClient() {
   }
 
   const handleDelete = (e: EchelonClient) => {
+    if (!canSupprimer) return
     store.deleteEchelon(e.id)
     setConfirmDel(null)
     reload()
   }
 
   const move = (e: EchelonClient, dir: 1 | -1) => {
+    if (!canModifier) return
     const sorted = [...echelons].sort((a, b) => a.ordre - b.ordre)
     const idx = sorted.findIndex(x => x.id === e.id)
     const swapIdx = idx + dir
@@ -112,6 +122,7 @@ export default function BOEchelonsClient() {
   }
 
   const handleRecalculer = () => {
+    if (!canConfigurerAuto) return
     setRecalculating(true)
     const n = store.recalculerEchelonsAuto()
     setRecalcMsg(n > 0 ? `${n} client(s) mis à jour.` : "Aucun changement — tous les clients en mode auto sont déjà à jour.")
@@ -130,14 +141,18 @@ export default function BOEchelonsClient() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={handleRecalculer} disabled={recalculating}
-            className="px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50">
-            {recalculating ? "Calcul…" : "🔄 Recalculer les échelons auto"}
-          </button>
-          <button onClick={openNew}
-            className="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-colors">
-            + Nouvel échelon
-          </button>
+          {canConfigurerAuto && (
+            <button onClick={handleRecalculer} disabled={recalculating}
+              className="px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50">
+              {recalculating ? "Calcul…" : "🔄 Recalculer les échelons auto"}
+            </button>
+          )}
+          {canCreer && (
+            <button onClick={openNew}
+              className="px-4 py-2.5 rounded-xl text-sm font-bold text-white bg-primary hover:bg-primary/90 transition-colors">
+              + Nouvel échelon
+            </button>
+          )}
         </div>
       </div>
 
@@ -168,9 +183,9 @@ export default function BOEchelonsClient() {
                   </td>
                   <td className="px-4 py-3 text-center">
                     <div className="flex items-center justify-center gap-1">
-                      <button onClick={() => move(e, 1)} title="Monter" className="w-6 h-6 rounded hover:bg-muted text-muted-foreground">▲</button>
+                      <button onClick={() => move(e, 1)} disabled={!canModifier} title="Monter" className="w-6 h-6 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed">▲</button>
                       <span className="w-6 text-center font-mono">{e.ordre}</span>
-                      <button onClick={() => move(e, -1)} title="Descendre" className="w-6 h-6 rounded hover:bg-muted text-muted-foreground">▼</button>
+                      <button onClick={() => move(e, -1)} disabled={!canModifier} title="Descendre" className="w-6 h-6 rounded hover:bg-muted text-muted-foreground disabled:opacity-30 disabled:cursor-not-allowed">▼</button>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
@@ -184,15 +199,16 @@ export default function BOEchelonsClient() {
                     ) : <span className="italic">Manuel uniquement</span>}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <button onClick={() => { store.updateEchelon(e.id, { actif: !e.actif }); reload() }}
-                      className={`relative w-10 h-5 rounded-full transition-colors ${e.actif ? "bg-emerald-500" : "bg-slate-200"}`}>
+                    <button onClick={() => { if (!canModifier) return; store.updateEchelon(e.id, { actif: !e.actif }); reload() }}
+                      disabled={!canModifier}
+                      className={`relative w-10 h-5 rounded-full transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${e.actif ? "bg-emerald-500" : "bg-slate-200"}`}>
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${e.actif ? "left-5" : "left-0.5"}`} />
                     </button>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => openEdit(e)} className="text-xs font-semibold text-primary hover:underline">Modifier</button>
-                      <button onClick={() => setConfirmDel(e)} className="text-xs font-semibold text-red-600 hover:underline">Supprimer</button>
+                      {canModifier && <button onClick={() => openEdit(e)} className="text-xs font-semibold text-primary hover:underline">Modifier</button>}
+                      {canSupprimer && <button onClick={() => setConfirmDel(e)} className="text-xs font-semibold text-red-600 hover:underline">Supprimer</button>}
                     </div>
                   </td>
                 </tr>

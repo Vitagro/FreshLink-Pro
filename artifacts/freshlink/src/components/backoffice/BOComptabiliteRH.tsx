@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import type { User } from "@/lib/store"
+import { store, type User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import type { FichePayroll } from "./BOResources"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -203,6 +204,7 @@ function FicheDetail({ fiche, onSave, onClose, benefNetEntreprise, caisseSolde }
   const resteEnCaisse     = actionnaire ? caisseSolde - totalActionnaire : null
 
   const handleValidate = () => {
+    if (!hasPermission(store.getSession()?.role, "gerer_salaires")) return
     const updated: FichePayroll = {
       ...fiche,
       benefEntreprise:  actionnaire ? benefNetEntreprise : undefined,

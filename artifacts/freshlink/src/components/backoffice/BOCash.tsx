@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { store, type BonLivraison, type User, DEFAULT_CAISSE_PRICING, type CaissePricing, DEFAULT_FRAIS_BL, type FraisBlConfig, canEditRecord } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import { printBL, printFacture as printFactureLib } from "@/lib/print"
 
 // ── FMT ──────────────────────────────────────────────────────────────────
@@ -408,6 +409,7 @@ export default function BOCash({ user }: { user: User }) {
   }
 
   const handleEncaisser = (id: string) => {
+    if (!hasPermission(user.role, "valider_cash")) return
     const all = store.getBonsLivraison()
     const idx = all.findIndex(b => b.id === id)
     if (idx < 0) return

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { store, type User, type WebIntegrationConfig } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 interface Props { user: User }
 
@@ -51,6 +52,7 @@ export default function BOWebIntegration({ user }: Props) {
 
   const handleSave = () => {
     if (!cfg) return
+    if (!hasPermission(user.role, "modifier_api_config")) return
     const updated = { ...cfg, updatedAt: new Date().toISOString(), updatedBy: user.id }
     ;(store as any).saveWebIntegrationConfig(updated)
     fetch(`${BASE}/api/ext/web-integration-config`, {

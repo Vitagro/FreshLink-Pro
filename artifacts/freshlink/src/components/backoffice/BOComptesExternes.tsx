@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { store, isClientVisible, type User, type Client } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import { loadZonesConfig, resolveAffectation } from "@/lib/commercial/zones"
 
 interface Props { user: User }
@@ -288,8 +289,9 @@ export default function BOComptesExternes({ user }: Props) {
   const [editId, setEditId]         = useState<string | null>(null)
   const [confirmDel, setConfirmDel] = useState<{ id: string; nom: string } | null>(null)
 
-  const canAdd    = ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal
-  const canDelete = ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal
+  const canAdd    = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "creer_client")
+  const canEditClient = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "modifier_client")
+  const canDelete = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "supprimer_client")
 
   const reload = useCallback(() => {
     // 1. Données locales (affichage instantané)
@@ -481,6 +483,7 @@ export default function BOComptesExternes({ user }: Props) {
 
   // ── Save new client (+ auto-create login si demandé) ─────────────────────────
   const handleAdd = async (data: Omit<Client, "id" | "createdBy" | "createdAt">) => {
+    if (!hasPermission(user.role, "creer_client")) return
     if (!data.nom.trim()) { flash(false, "Le nom est obligatoire."); return }
     data = await avecAffectation(data)   // auto-rattachement prévendeur selon le secteur
     const clientId = await nextClientId()
@@ -529,6 +532,7 @@ export default function BOComptesExternes({ user }: Props) {
 
   // ── Save edited client ───────────────────────────────────────────────────────
   const handleEdit = async (data: Omit<Client, "id" | "createdBy" | "createdAt">) => {
+    if (!hasPermission(user.role, "modifier_client")) return
     if (!editId || !data.nom.trim()) { flash(false, "Le nom est obligatoire."); return }
     data = await avecAffectation(data)   // auto-rattachement prévendeur selon le secteur
     const cid = editId
@@ -572,7 +576,7 @@ export default function BOComptesExternes({ user }: Props) {
 
   // ── Delete client ────────────────────────────────────────────────────────────
   const handleConfirmDelete = () => {
-    if (!confirmDel) return
+    if (!confirmDel || !hasPermission(user.role, "supprimer_client")) return
     store.deleteClient(confirmDel.id)
     // ✅ Suppression Supabase en cascade
     fetch("/api/sync-write", {
@@ -880,7 +884,7 @@ export default function BOComptesExternes({ user }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         {/* Edit button */}
-                        {canAdd && (
+                        {canEditClient && (
                           <button
                             onClick={() => { setShowAdd(false); setEditId(c.id) }}
                             title="Modifier ce client"

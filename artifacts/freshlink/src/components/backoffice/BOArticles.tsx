@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { store, type Article, type HistoriquePrixAchat, FAMILLE_GROUPES, getAllFamilles, addCustomFamille, paDeviationConfirmMessage } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 import { resolveArticlePhoto } from "@/lib/articlePhotoHelper"
 import { getArticlePhoto } from "@/lib/articlePhotos"
 import { deleteArticle } from "@/lib/supabase/db"
@@ -285,6 +286,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
 
   const handleSave = () => {
     if (!form.nom) return
+    if (!hasPermission(store.getSession()?.role, "modifier_article")) return
     // Garde-fou anti-faute-de-frappe (FR + AR) sur modification manuelle du PA
     if (editArt && form.prixAchat !== editArt.prixAchat) {
       const deviation = store.checkPaDeviationSuspecte(editArt.id, form.prixAchat)
@@ -309,12 +311,16 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   }
 
   const handleDelete = (id: string) => {
+    if (!hasPermission(store.getSession()?.role, "supprimer_article")) return
     if (!window.confirm("Supprimer définitivement cet article ? Cette action est irréversible.")) return
     deleteArticle(id).catch(e => console.error("[BOArticles] delete sync error:", e))
     setArticles(store.getArticles().filter(a => a.id !== id))
   }
 
   const handleToggleActif = (id: string) => {
+    const target = store.getArticles().find(a => a.id === id)
+    const willActivate = !(target?.actif ?? true)
+    if (!hasPermission(store.getSession()?.role, willActivate ? "activer_article" : "desactiver_article")) return
     const all = store.getArticles().map(a => a.id === id ? { ...a, actif: !(a.actif ?? true) } : a)
     store.saveArticles(all)
     const updated = all.find(a => a.id === id)
@@ -323,6 +329,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   }
 
   const handleToggleCatalogue = (id: string) => {
+    if (!hasPermission(store.getSession()?.role, "catalogue_toggle")) return
     const all = store.getArticles().map(a => a.id === id ? { ...a, catalogueVisible: !(a.catalogueVisible ?? true) } : a)
     store.saveArticles(all)
     const updated = all.find(a => a.id === id)

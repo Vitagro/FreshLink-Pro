@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from "react"
 import * as XLSX from "xlsx"
 import { store } from "@/lib/store"
-import type { Article, Client, EchelonClient } from "@/lib/store"
+import type { Article, Client, EchelonClient, User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
 
 type Cat = "chr" | "marchand" | "particulier"
 type Mode = "segment" | "secteur" | "echelle" | "client"
@@ -88,7 +89,14 @@ const FIELD_MAP: Record<Cat, { prix: keyof Article; promo: keyof Article; ajust:
 }
 const getField = (cat: Cat): { prix: keyof Article; promo: keyof Article; ajust: keyof Article; taux: keyof Article } => FIELD_MAP[cat]
 
-export default function BOCategoryPricing() {
+export default function BOCategoryPricing({ user }: { user: User }) {
+  const canModifyByMode: Record<Mode, boolean> = {
+    segment: hasPermission(user.role, "modifier_tarifs_segment"),
+    secteur: hasPermission(user.role, "modifier_tarifs_secteur"),
+    echelle: hasPermission(user.role, "modifier_tarifs_echelle"),
+    client:  hasPermission(user.role, "modifier_tarifs_client_individuel"),
+  }
+  const canVoirMarge = hasPermission(user.role, "voir_marge")
   const [articles, setArticles]     = useState<Article[]>([])
   const [clients, setClients]       = useState<Client[]>([])
   const [echelons, setEchelons]     = useState<EchelonClient[]>([])
@@ -320,6 +328,7 @@ export default function BOCategoryPricing() {
   // ── Save ─────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
+    if (!canModifyByMode[mode]) return
     const all = store.getArticles()
     const touchedIds: string[] = []
     for (const [artId, edit] of Object.entries(edits)) {
@@ -431,7 +440,8 @@ export default function BOCategoryPricing() {
           {/* Save */}
           <button
             onClick={handleSave}
-            disabled={Object.keys(edits).length === 0}
+            disabled={Object.keys(edits).length === 0 || !canModifyByMode[mode]}
+            title={!canModifyByMode[mode] ? "Permission refusée pour ce mode de tarification" : undefined}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 transition-opacity"
             style={{ background: "oklch(0.38 0.2 260)" }}>
             {saved ? "✓ Sauvegardé" : "Enregistrer les tarifs"}
@@ -833,7 +843,7 @@ export default function BOCategoryPricing() {
                                   <span className="text-xs text-muted-foreground">%</span>
                                 </div>
                                 <span className={`text-[10px] font-semibold ${sousCible ? "text-red-600" : "text-muted-foreground"}`}>
-                                  réel : {margeReelle.toFixed(1)}%
+                                  {canVoirMarge ? `réel : ${margeReelle.toFixed(1)}%` : "🔒 marge masquée"}
                                 </span>
                               </div>
                             )
