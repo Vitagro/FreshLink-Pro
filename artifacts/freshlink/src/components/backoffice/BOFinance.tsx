@@ -977,6 +977,105 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
               </div>
             )
           })()}
+
+          {/* ── Analyse des charges : jour / mois / tonnage / catégorie ── */}
+          {(() => {
+            const chargesPeriod = charges.filter(c => c.date >= periodFilter.from && c.date <= periodFilter.to)
+            const totalPeriod = chargesPeriod.reduce((s, c) => s + c.montant, 0)
+
+            const byJour = new Map<string, number>()
+            chargesPeriod.forEach(c => byJour.set(c.date, (byJour.get(c.date) ?? 0) + c.montant))
+            const joursTries = [...byJour.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+
+            const byMois = new Map<string, number>()
+            chargesPeriod.forEach(c => { const m = c.date.slice(0, 7); byMois.set(m, (byMois.get(m) ?? 0) + c.montant) })
+            const moisTries = [...byMois.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+
+            // Tonnage retenu = commandes livrées (kg) sur la même période — cohérent
+            // avec le CA utilisé ailleurs dans Finance (isolation par équipe incluse).
+            const commandesLivrees = store.getVisibleCommandes().filter(c => c.statut === "livre" && c.date >= periodFilter.from && c.date <= periodFilter.to)
+            const tonnageKg = commandesLivrees.reduce((s, c) => s + c.lignes.reduce((t, l) => t + l.quantite, 0), 0)
+            const coutParKg = tonnageKg > 0 ? totalPeriod / tonnageKg : 0
+
+            const byCategorie = Object.entries(CATEGORIE_CHARGE_LABELS)
+              .map(([cat, label]) => ({ cat, label, total: chargesPeriod.filter(c => c.categorie === cat).reduce((s, c) => s + c.montant, 0) }))
+              .filter(x => x.total > 0)
+              .sort((a, b) => b.total - a.total)
+
+            return (
+              <div className="flex flex-col gap-4">
+                <h3 className="font-bold text-sm">Analyse des charges — {periodFilter.from} → {periodFilter.to}</h3>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KpiCard label="Total charges (période)" value={`${fmt(totalPeriod)} DH`} color="text-red-600" />
+                  <KpiCard label="Tonnage livré (période)" value={`${(tonnageKg / 1000).toFixed(2)} T`} color="text-blue-600" />
+                  <KpiCard label="Coût charge / kg" value={`${coutParKg.toFixed(2)} DH`} color="text-orange-600" />
+                  <KpiCard label="Coût charge / tonne" value={`${fmt(coutParKg * 1000)} DH`} color="text-orange-600" />
+                </div>
+
+                <div className="grid lg:grid-cols-2 gap-4">
+                  <div className="bg-card rounded-2xl border border-border p-4">
+                    <h4 className="font-semibold text-sm mb-3">Charges par jour</h4>
+                    {joursTries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Aucune charge sur la période.</p>
+                    ) : (
+                      <div className="max-h-64 overflow-y-auto">
+                        <table className="w-full text-xs">
+                          <tbody>
+                            {joursTries.map(([day, montant]) => (
+                              <tr key={day} className="border-t border-border/50 first:border-0">
+                                <td className="py-1.5 text-muted-foreground">{day}</td>
+                                <td className="py-1.5 text-right font-mono font-semibold">{fmt(montant)} DH</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-card rounded-2xl border border-border p-4">
+                    <h4 className="font-semibold text-sm mb-3">Charges par mois</h4>
+                    {moisTries.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Aucune charge sur la période.</p>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <tbody>
+                          {moisTries.map(([mois, montant]) => (
+                            <tr key={mois} className="border-t border-border/50 first:border-0">
+                              <td className="py-1.5 text-muted-foreground">{mois}</td>
+                              <td className="py-1.5 text-right font-mono font-semibold">{fmt(montant)} DH</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-card rounded-2xl border border-border p-4">
+                  <h4 className="font-semibold text-sm mb-3">Charges par catégorie</h4>
+                  {byCategorie.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Aucune charge sur la période.</p>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      {byCategorie.map(({ cat, label, total }) => (
+                        <div key={cat} className="rounded-xl border border-border p-3">
+                          <p className="text-xs text-muted-foreground">{label.split("(")[0].trim()}</p>
+                          <p className="font-bold text-sm mt-1 font-mono">{fmt(total)} DH</p>
+                          <p className="text-[10px] text-muted-foreground">{totalPeriod > 0 ? ((total / totalPeriod) * 100).toFixed(1) : 0}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-muted-foreground">
+                  💡 Le tonnage retenu correspond aux commandes livrées (statut « livré ») sur la période sélectionnée plus haut (filtre de période). Le coût par kg/tonne rapporte le total des charges de la période au tonnage effectivement livré.
+                </p>
+              </div>
+            )
+          })()}
         </div>
       )}
 
