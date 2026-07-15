@@ -1,17 +1,25 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import * as XLSX from "xlsx"
-import { store } from "@/lib/store"
-import type { Article, Client } from "@/lib/store"
+import { store, TIER_LABELS } from "@/lib/store"
+import type { Article, Client, Tier } from "@/lib/store"
 
 type Cat = "chr" | "marchand" | "particulier"
-type Mode = "segment" | "client"
+type Mode = "segment" | "secteur" | "echelle" | "client"
 
 const CAT_LABELS: Record<Cat, string> = { chr: "CHR / HORECA", marchand: "Marchand", particulier: "Particulier" }
 const CAT_COLORS: Record<Cat, string> = {
   chr:         "bg-purple-100 text-purple-700 border-purple-200",
   marchand:    "bg-blue-100   text-blue-700   border-blue-200",
   particulier: "bg-green-100  text-green-700  border-green-200",
+}
+
+const TIERS: Tier[] = ["vip", "gold", "titanium", "silver"]
+const TIER_COLORS: Record<Tier, string> = {
+  vip:      "bg-amber-100  text-amber-700  border-amber-200",
+  gold:     "bg-yellow-100 text-yellow-700 border-yellow-200",
+  titanium: "bg-slate-100  text-slate-700  border-slate-200",
+  silver:   "bg-zinc-100   text-zinc-700   border-zinc-200",
 }
 
 // ── Export / Import helpers (CSV · Excel · JSON) ─────────────────────────────
@@ -93,6 +101,8 @@ export default function BOCategoryPricing() {
   const [showInactive, setShowInactive] = useState(true)   // show ALL articles by default
   const [mode, setMode]             = useState<Mode>("segment")
   const [activeCat, setActiveCat]   = useState<Cat>("chr")
+  const [activeSecteur, setActiveSecteur] = useState<string>("")
+  const [activeTier, setActiveTier] = useState<Tier>("vip")
   const [selectedClient, setSelectedClient] = useState<string>("")
   const [edits, setEdits]           = useState<Record<string, { prix?: number; promo?: number; ajust?: number; taux?: number }>>({})
   const [saved, setSaved]           = useState(false)
@@ -207,6 +217,23 @@ export default function BOCategoryPricing() {
     return ""
   }
 
+  const getSecteurVal = (art: Article, field: PriceField): string => {
+    if (!activeSecteur) return ""
+    const edited = edits[art.id]?.[field]
+    if (edited !== undefined) return String(edited)
+    const override = field === "taux" ? undefined : art.secteurPrices?.[activeSecteur]?.[field]
+    if (override !== undefined) return String(override)
+    return ""
+  }
+
+  const getEchelleVal = (art: Article, field: PriceField): string => {
+    const edited = edits[art.id]?.[field]
+    if (edited !== undefined) return String(edited)
+    const override = field === "taux" ? undefined : art.echellePrices?.[activeTier]?.[field]
+    if (override !== undefined) return String(override)
+    return ""
+  }
+
   const setVal = (artId: string, field: PriceField, val: string) => {
     setEdits(prev => ({
       ...prev,
@@ -216,6 +243,8 @@ export default function BOCategoryPricing() {
 
   // Liste des familles distinctes
   const familles = Array.from(new Set(articles.map(a => a.famille).filter(Boolean))).sort() as string[]
+  // Liste des secteurs distincts (issus des fiches client)
+  const secteurs = Array.from(new Set(clients.map(c => c.secteur).filter(Boolean))).sort() as string[]
 
   // Applique un pricing en masse à tous les articles d'une famille → pré-remplit
   // les edits du segment actif (l'utilisateur valide ensuite avec « Enregistrer »).
@@ -252,6 +281,9 @@ export default function BOCategoryPricing() {
     return (c?.categorie as Cat) ?? "particulier"
   }
 
+  // Aperçu du prix effectif — reflète les edits en cours (non encore enregistrés),
+  // suit la même précédence/formule que store.computePrixEffectif (utilisé, lui,
+  // au moment réel de la commande une fois les tarifs enregistrés).
   const effectivePrix = (art: Article): number => {
     if (mode === "client" && selectedClient) {
       const override = edits[art.id]?.prix ?? art.clientPrices?.[selectedClient]?.prix
@@ -264,6 +296,20 @@ export default function BOCategoryPricing() {
         const catPrix = (art as unknown as Record<string, unknown>)[getField(cat).prix as string] as number
         base = catPrix > 0 ? catPrix : store.computePV(art)
       }
+      return Math.round((base * (1 - promo / 100) + ajust) * 100) / 100
+    }
+    if (mode === "secteur") {
+      const prix  = Number(getSecteurVal(art, "prix")) || 0
+      const promo = Number(getSecteurVal(art, "promo")) || 0
+      const ajust = Number(getSecteurVal(art, "ajust")) || 0
+      const base  = prix > 0 ? prix : store.computePV(art)
+      return Math.round((base * (1 - promo / 100) + ajust) * 100) / 100
+    }
+    if (mode === "echelle") {
+      const prix  = Number(getEchelleVal(art, "prix")) || 0
+      const promo = Number(getEchelleVal(art, "promo")) || 0
+      const ajust = Number(getEchelleVal(art, "ajust")) || 0
+      const base  = prix > 0 ? prix : store.computePV(art)
       return Math.round((base * (1 - promo / 100) + ajust) * 100) / 100
     }
     const catPrix = Number(getSegVal(art, activeCat, "prix")) || 0
@@ -288,7 +334,29 @@ export default function BOCategoryPricing() {
         if (edit.promo !== undefined) (all[idx] as unknown as Record<string, unknown>)[promoKey as string] = edit.promo
         if (edit.ajust !== undefined) (all[idx] as unknown as Record<string, unknown>)[ajustKey as string] = edit.ajust
         if (edit.taux  !== undefined) (all[idx] as unknown as Record<string, unknown>)[tauxKey  as string] = edit.taux
-      } else if (selectedClient) {
+      } else if (mode === "secteur" && activeSecteur) {
+        if (!all[idx].secteurPrices) all[idx].secteurPrices = {}
+        const prev = all[idx].secteurPrices![activeSecteur] ?? {}
+        all[idx].secteurPrices![activeSecteur] = {
+          ...prev,
+          ...(edit.prix  !== undefined ? { prix:  edit.prix  } : {}),
+          ...(edit.promo !== undefined ? { promo: edit.promo } : {}),
+          ...(edit.ajust !== undefined ? { ajust: edit.ajust } : {}),
+        }
+        if (edit.prix === undefined && edit.promo === undefined && edit.ajust === undefined)
+          delete all[idx].secteurPrices![activeSecteur]
+      } else if (mode === "echelle") {
+        if (!all[idx].echellePrices) all[idx].echellePrices = {}
+        const prev = all[idx].echellePrices![activeTier] ?? {}
+        all[idx].echellePrices![activeTier] = {
+          ...prev,
+          ...(edit.prix  !== undefined ? { prix:  edit.prix  } : {}),
+          ...(edit.promo !== undefined ? { promo: edit.promo } : {}),
+          ...(edit.ajust !== undefined ? { ajust: edit.ajust } : {}),
+        }
+        if (edit.prix === undefined && edit.promo === undefined && edit.ajust === undefined)
+          delete all[idx].echellePrices![activeTier]
+      } else if (mode === "client" && selectedClient) {
         if (!all[idx].clientPrices) all[idx].clientPrices = {}
         const prev = all[idx].clientPrices![selectedClient] ?? {}
         all[idx].clientPrices![selectedClient] = {
@@ -339,7 +407,7 @@ export default function BOCategoryPricing() {
         <div>
           <h2 className="text-lg font-bold text-foreground">Tarifs par Catégorie</h2>
           <p className="text-xs text-muted-foreground">
-            {articles.length} articles · Prix par segment ou par client individuel
+            {articles.length} articles · Prix par segment, secteur, échelle client ou client individuel
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -384,11 +452,21 @@ export default function BOCategoryPricing() {
       )}
 
       {/* Mode toggle */}
-      <div className="flex items-center gap-1 p-1 bg-muted rounded-xl w-fit border border-border">
+      <div className="flex items-center gap-1 p-1 bg-muted rounded-xl w-fit border border-border flex-wrap">
         <button
           onClick={() => { setMode("segment"); setEdits({}) }}
           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mode === "segment" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
           Par segment
+        </button>
+        <button
+          onClick={() => { setMode("secteur"); setEdits({}) }}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mode === "secteur" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+          Par secteur
+        </button>
+        <button
+          onClick={() => { setMode("echelle"); setEdits({}) }}
+          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mode === "echelle" ? "bg-card shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+          Par échelle client
         </button>
         <button
           onClick={() => { setMode("client"); setEdits({}) }}
@@ -397,7 +475,7 @@ export default function BOCategoryPricing() {
         </button>
       </div>
 
-      {/* Segment tabs OR client selector */}
+      {/* Segment tabs / secteur selector / échelle tabs / client selector */}
       {mode === "segment" ? (
         <div className="flex gap-2 flex-wrap">
           {(["chr", "marchand", "particulier"] as Cat[]).map(cat => (
@@ -412,6 +490,39 @@ export default function BOCategoryPricing() {
               {CAT_LABELS[cat]}
             </button>
           ))}
+        </div>
+      ) : mode === "echelle" ? (
+        <div className="flex gap-2 flex-wrap">
+          {TIERS.map(tier => (
+            <button
+              key={tier}
+              onClick={() => { setActiveTier(tier); setEdits({}) }}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${
+                activeTier === tier
+                  ? TIER_COLORS[tier] + " shadow-sm"
+                  : "border-border text-muted-foreground hover:text-foreground bg-card"
+              }`}>
+              {TIER_LABELS[tier]}
+            </button>
+          ))}
+        </div>
+      ) : mode === "secteur" ? (
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-60">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <select
+              value={activeSecteur}
+              onChange={e => { setActiveSecteur(e.target.value); setEdits({}) }}
+              className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary appearance-none">
+              <option value="">-- Sélectionner un secteur --</option>
+              {secteurs.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          {secteurs.length === 0 && (
+            <p className="text-xs text-muted-foreground">Aucun secteur trouvé sur les fiches client.</p>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -540,8 +651,18 @@ export default function BOCategoryPricing() {
         </div>
       )}
 
+      {/* Empty state for secteur mode without selection */}
+      {mode === "secteur" && !activeSecteur && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center bg-card rounded-xl border border-border">
+          <svg className="w-10 h-10 text-muted-foreground/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <p className="text-sm font-medium text-muted-foreground">Sélectionnez un secteur pour voir et modifier ses tarifs</p>
+        </div>
+      )}
+
       {/* Table */}
-      {(mode === "segment" || selectedClient) && (
+      {(mode === "segment" || mode === "echelle" || (mode === "secteur" && activeSecteur) || selectedClient) && (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -558,6 +679,19 @@ export default function BOCategoryPricing() {
                       <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Remise %</th>
                       <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Ajust. PV (DH)</th>
                       <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Taux marge cible (%)</th>
+                    </>
+                  ) : mode === "secteur" || mode === "echelle" ? (
+                    <>
+                      <th className="text-center px-4 py-3 font-semibold">
+                        {mode === "echelle" ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs border ${TIER_COLORS[activeTier]}`}>{TIER_LABELS[activeTier]}</span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-xs border bg-sky-100 text-sky-700 border-sky-200">{activeSecteur}</span>
+                        )}
+                        {" "}Prix (DH)
+                      </th>
+                      <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Remise %</th>
+                      <th className="text-center px-4 py-3 font-semibold text-muted-foreground">Ajust. PV (DH)</th>
                     </>
                   ) : (
                     <>
@@ -579,6 +713,61 @@ export default function BOCategoryPricing() {
                   const stdPrix = store.computePV(art)
                   const final   = effectivePrix(art)
                   const hasOverride = mode === "client" && selectedClient && !!art.clientPrices?.[selectedClient]
+
+                  if (mode === "secteur" || mode === "echelle") {
+                    const getVal = mode === "secteur"
+                      ? (field: PriceField) => getSecteurVal(art, field)
+                      : (field: PriceField) => getEchelleVal(art, field)
+                    const dimPrix  = Number(getVal("prix"))  || 0
+                    const dimPromo = Number(getVal("promo")) || 0
+                    const dimAjust = Number(getVal("ajust")) || 0
+                    const hasCustom = dimPrix > 0 || dimPromo > 0 || dimAjust !== 0
+                    return (
+                      <tr key={art.id} className={`border-b border-border last:border-0 hover:bg-muted/20 ${hasCustom ? "bg-primary/[0.03]" : ""} ${!art.actif ? "opacity-60" : ""}`}>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-foreground">{art.nom}</p>
+                            {!art.actif && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Inactif</span>}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{art.famille} · {art.unite}{art.um ? ` / ${art.um}` : ""}</p>
+                        </td>
+                        <td className="px-4 py-3 text-center text-muted-foreground font-mono">{stdPrix} DH</td>
+                        <td className="px-4 py-3 text-center">
+                          <input type="number" min={0} step={0.5}
+                            value={getVal("prix")}
+                            onChange={e => setVal(art.id, "prix", e.target.value)}
+                            placeholder={String(stdPrix)}
+                            className="w-24 px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <input type="number" min={0} max={100} step={1}
+                              value={getVal("promo")}
+                              onChange={e => setVal(art.id, "promo", e.target.value)}
+                              placeholder="0"
+                              className="w-16 px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
+                            <span className="text-xs text-muted-foreground">%</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <input type="number" step={0.5}
+                              value={getVal("ajust")}
+                              onChange={e => setVal(art.id, "ajust", e.target.value)}
+                              placeholder="0"
+                              title="Ajustement PV en DH : négatif = remise, positif = marge (appliqué après la remise %)"
+                              className="w-20 px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
+                            <span className="text-xs text-muted-foreground">DH</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`font-bold font-mono ${hasCustom ? "text-primary" : "text-muted-foreground"}`}>
+                            {final.toFixed(2)} DH
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  }
 
                   if (mode === "segment") {
                     const catPrix  = Number(getSegVal(art, activeCat, "prix"))  || 0

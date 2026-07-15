@@ -88,13 +88,34 @@ function summarize(entries: CreditEntry[], valeurJour: number, creditJour: numbe
   };
 }
 
-async function buildReport(dateJ: string) {
+async function buildReport(dateJ: string, groupeId?: string | null) {
   // ── FOURNISSEURS ───────────────────────────────────────────────────────────
-  const [credits, bonsAchat, bls] = await Promise.all([
+  const [credits, bonsAchat, bls, clientRows] = await Promise.all([
     sbRows("fl_credits_fournisseurs"),
     sbRows("fl_bons_achat"),
     sbRows("fl_bons_livraison", 4000),
+    // Uniquement nécessaire si on filtre par équipe (cf. groupeId ci-dessous) —
+    // sert à savoir quel client appartient à quel groupe/équipe.
+    groupeId ? sbRows("fl_clients", 5000) : Promise.resolve([] as Row[]),
   ]);
+
+  // ── Isolation par équipe (optionnelle, cf. BOAnalyseCredit.tsx) ─────────────
+  // Un client sans groupeId (legacy/partagé) reste visible dans tous les cas.
+  let blsFiltered = bls;
+  if (groupeId) {
+    const groupeById: Record<string, string | undefined> = {};
+    const groupeByNom: Record<string, string | undefined> = {};
+    clientRows.forEach(c => {
+      const cg = c.groupeId != null ? S(c.groupeId) : undefined;
+      groupeById[S(c.id)] = cg;
+      if (c.nom) groupeByNom[S(c.nom)] = cg;
+    });
+    blsFiltered = bls.filter(b => {
+      const cg = b.clientId ? groupeById[S(b.clientId)] : groupeByNom[S(b.clientNom)];
+      return cg == null || cg === groupeId;
+    });
+  }
+  const blsSource = blsFiltered;
 
   const fOutstanding: CreditEntry[] = credits
     .filter(c => S(c.statut) !== "solde")
@@ -112,7 +133,7 @@ async function buildReport(dateJ: string) {
   const fournisseurs = summarize(fOutstanding, valeurAchatJour, creditFJour, nbFournisseursJour);
 
   // ── CLIENTS (crédit = BL « émis » non encaissés) ──────────────────────────
-  const clientCredit: CreditEntry[] = bls
+  const clientCredit: CreditEntry[] = blsSource
     .filter(b => S(b.statut) === "émis" || S(b.statut) === "emis")
     .map(b => ({
       nom: S(b.clientNom) || "—",
@@ -122,7 +143,7 @@ async function buildReport(dateJ: string) {
     }))
     .filter(e => e.reste > 0);
 
-  const blsJour = bls.filter(b => day(b.date) === dateJ);
+  const blsJour = blsSource.filter(b => day(b.date) === dateJ);
   const valeurVenteJour = blsJour.reduce((s, b) => s + (N(b.montantTTC) || N(b.montantTotal)), 0);
   const creditCJour = clientCredit.filter(e => e.date === dateJ).reduce((s, e) => s + e.reste, 0);
   const nbClientsJour = new Set(blsJour.map(b => S(b.clientNom)).filter(Boolean)).size;
@@ -181,7 +202,11 @@ router.get("/", async (req: Request, res: Response) => {
   if (!SB_SRV) { res.status(500).json({ error: "service-role unavailable" }); return; }
 
   const dateJ = (req.query["date"] as string | undefined) || new Date().toISOString().slice(0, 10);
-  const rep = await buildReport(dateJ);
+  // groupeId : filtre optionnel côté équipe (BOAnalyseCredit.tsx l'envoie pour
+  // un membre d'équipe non super_super_admin — cf. effectiveGroupId côté BO).
+  // Absent → rapport global (comportement historique, utilisé aussi par le cron).
+  const groupeId = (req.query["groupeId"] as string | undefined) || null;
+  const rep = await buildReport(dateJ, groupeId);
 
   // ── Envoi email (cron quotidien ou bouton « Envoyer maintenant ») ─────────
   const wantSend = (req.query["send"] as string | undefined) === "1";

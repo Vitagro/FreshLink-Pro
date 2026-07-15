@@ -107,7 +107,7 @@ export default function BODispatch({ user }: Props) {
   }, [])
 
   const refresh = () => {
-    setCommandes(store.getCommandes())
+    setCommandes(store.getVisibleCommandes())
     setTrips(store.getTrips())
     setLivreurs(store.getLivreurs())
     setTransporteurs(store.getTransportCompanies())

@@ -252,7 +252,7 @@ export default function BOPricingConcurrence({ user }: Props) {
     const cutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
     const m: Record<string, number> = {}
     try {
-      store.getCommandes().filter(c => c.date >= cutoff).forEach(c => {
+      store.getVisibleCommandes().filter(c => c.date >= cutoff).forEach(c => {
         c.lignes.forEach(l => { m[l.articleId] = (m[l.articleId] ?? 0) + (Number(l.quantite) || 0) })
       })
     } catch { /* noop */ }

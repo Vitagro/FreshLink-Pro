@@ -72,8 +72,8 @@ export default function BOAlertesClients({ user }: Props) {
   // ── Construction des alertes : fréquence (client × article) ─────────────────
   const alerts = useMemo<ClientArticleAlert[]>(() => {
     const cfg       = store.getAlertConfig()
-    const commandes = store.getCommandes()
-    const clientById  = new Map(store.getClients().map(c => [c.id, c]))
+    const commandes = store.getVisibleCommandes()
+    const clientById  = new Map(store.getVisibleClients().map(c => [c.id, c]))
     const articleById = new Map(store.getArticles().map(a => [a.id, a]))
     const userById    = new Map(store.getUsers().map(u => [u.id, u]))
     const today = new Date()

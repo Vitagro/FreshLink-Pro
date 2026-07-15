@@ -226,7 +226,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       .filter(l => l.articleId && toNum(l.quantite) > 0)
       .map(l => {
         const art = articles.find(a => a.id === l.articleId)!
-        const pv = toNum(l.prixVente) || store.computePV(art)
+        const pv = toNum(l.prixVente) || store.computePrixEffectif(art, client)
         const q = toNum(l.quantite) || 0
         return { articleId: art.id, articleNom: art.nom, unite: art.unite, quantite: q, prixUnitaire: pv, prixVente: pv, total: q * pv }
       })
@@ -263,7 +263,12 @@ export default function BOCommandesUnifiees({ user }: Props) {
         .filter(r => r.payload && !String(r.id).startsWith("__"))
         .map(r => normalizeERP(r))
       orders.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
-      setCmds(orders)
+      // Isolation par équipe : ces commandes viennent directement de Supabase
+      // (contourne store.getCommandes()) et n'ont pas de clientId direct, donc
+      // on recoupe par téléphone avec l'ensemble des clients visibles.
+      const normTel = (t: string | undefined) => String(t ?? "").replace(/\D/g, "")
+      const visibleTels = new Set(store.getVisibleClients().map(c => normTel(c.telephone)).filter(Boolean))
+      setCmds(orders.filter(o => !normTel(o.telephone) || visibleTels.has(normTel(o.telephone))))
     } catch (e) {
       console.error("[BOCommandesUnifiees]", e)
     }
@@ -722,7 +727,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                   return (
                     <div key={i} className="flex items-center gap-2">
                       <select value={l.articleId}
-                        onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, articleId: e.target.value, prixVente: e.target.value ? String(store.computePV(store.getArticles().find(a => a.id === e.target.value)!)) : "" } : x))}
+                        onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, articleId: e.target.value, prixVente: e.target.value ? String(store.computePrixEffectif(store.getArticles().find(a => a.id === e.target.value)!, store.getClients().find(c => c.id === noClientId))) : "" } : x))}
                         className="flex-1 px-2 py-2 rounded-lg border border-slate-200 text-sm">
                         <option value="">— Article —</option>
                         {store.getArticles().slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(a => <option key={a.id} value={a.id}>{a.nom}{a.nomAr ? ` / ${a.nomAr}` : ""}</option>)}

@@ -43,8 +43,8 @@ interface BesoinRow extends BesoinLigneEmail {
 
 function computeStats(date: string): DailyStats {
   const bonsAchat   = store.getBonsAchat().filter(b => b.date === date)
-  const commandes   = store.getCommandes().filter(c => c.date === date)
-  const bls         = store.getBonsLivraison().filter(b => b.date === date)
+  const commandes   = store.getVisibleCommandes().filter(c => c.date === date)
+  const bls         = store.getVisibleBonsLivraison().filter(b => b.date === date)
   const retours     = store.getRetours().filter(r => r.date === date)
   const articles    = store.getArticles()
 
@@ -70,7 +70,7 @@ function computeStats(date: string): DailyStats {
     })
     nbCreditFournisseurs = fourSet.size
   } catch { /* noop */ }
-  const clientsAvecCredit = store.getClients().filter(c => (Number(c.creditSolde) || 0) > 0)
+  const clientsAvecCredit = store.getVisibleClients().filter(c => (Number(c.creditSolde) || 0) > 0)
   const creditClients   = clientsAvecCredit.reduce((s, c) => s + (Number(c.creditSolde) || 0), 0)
   const nbCreditClients = clientsAvecCredit.length
 

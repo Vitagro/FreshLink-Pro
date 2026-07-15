@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { store, effectiveGroupId, canSeeAllGroups } from "@/lib/store"
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Analyse Crédit — fournisseurs + clients (rapport quotidien)
@@ -43,7 +44,11 @@ export default function BOAnalyseCredit() {
   const load = useCallback(async (d: string) => {
     setLoading(true); setError("")
     try {
-      const res = await fetch(`/api/ext/rapport-credit?date=${encodeURIComponent(d)}`, { cache: "no-store" })
+      // Isolation par équipe : chaque équipe ne voit que le crédit de ses
+      // propres clients — sauf le super administrateur (vision globale).
+      const me = store.getSession()
+      const groupeParam = me && !canSeeAllGroups(me) ? `&groupeId=${encodeURIComponent(effectiveGroupId(me))}` : ""
+      const res = await fetch(`/api/ext/rapport-credit?date=${encodeURIComponent(d)}${groupeParam}`, { cache: "no-store" })
       if (!res.ok) throw new Error((await res.json().catch(() => ({})) as { error?: string }).error ?? `HTTP ${res.status}`)
       setReport(await res.json())
     } catch (e) {

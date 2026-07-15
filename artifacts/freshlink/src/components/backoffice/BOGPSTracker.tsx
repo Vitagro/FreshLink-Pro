@@ -177,7 +177,7 @@ export default function BOGPSTracker({ user }: Props) {
 
   // ── Load clients for ETA ──
   useEffect(() => {
-    const all = store.getClients().filter(c => c.gpsLat && c.gpsLng)
+    const all = store.getVisibleClients().filter(c => c.gpsLat && c.gpsLng)
     setEtaClients(all)
   }, [])
 

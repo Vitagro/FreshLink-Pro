@@ -265,9 +265,10 @@ export default function MobileCommercial({ user }: Props) {
     const all = store.getCommandes()
     const idx = all.findIndex(c => c.id === editCmd.id)
     if (idx >= 0) {
+      const editClient = clients.find(c => c.id === editCmd.clientId)
       const lignesData = editLignes.map(l => {
         const art = articles.find(a => a.id === l.articleId)!
-        const pv = Number(l.prixVente) || store.computePV(art)
+        const pv = Number(l.prixVente) || store.computePrixEffectif(art, editClient)
         const inUMMode = !!(art.um && art.colisageParUM && l.uniteMode === art.um)
         const qtyUM = inUMMode ? Number(l.quantite) : undefined
         const qtyBase = inUMMode ? Number(l.quantite) * (art.colisageParUM ?? 1) : Number(l.quantite)
@@ -533,7 +534,8 @@ export default function MobileCommercial({ user }: Props) {
       if (field === "articleId") {
         const art = articles.find(a => a.id === value)
         if (art) {
-          updated[i].prixVente = store.computePV(art).toString()
+          const selClient = clients.find(c => c.id === selectedClientId)
+          updated[i].prixVente = store.computePrixEffectif(art, selClient).toString()
           const selArt = articles.find(a => a.id === value)
           updated[i].uniteMode = (selArt?.um) ? selArt.um : "base"
           updated[i].quantite = "1"
@@ -560,7 +562,7 @@ export default function MobileCommercial({ user }: Props) {
     const client = clients.find(c => c.id === selectedClientId)!
     const lignesData = lignes.map(l => {
       const art = articles.find(a => a.id === l.articleId)!
-      const pv = Number(l.prixVente) || store.computePV(art)
+      const pv = Number(l.prixVente) || store.computePrixEffectif(art, client)
       const inUMMode = !!(art.um && art.colisageParUM && l.uniteMode === art.um)
       const qtyUM = inUMMode ? Number(l.quantite) : undefined
       const qtyBase = baseQty(l)   // always kg / base unit
@@ -700,11 +702,12 @@ export default function MobileCommercial({ user }: Props) {
       .filter(c => c.clientId === selectedClientId)
       .sort((a, b) => b.date.localeCompare(a.date))[0]
     if (!lastCmd) return
+    const panierClient = clients.find(c => c.id === selectedClientId)
     const newLignes: LigneForm[] = lastCmd.lignes
       .filter(l => l.articleId)
       .map(l => {
         const art = articles.find(a => a.id === l.articleId)
-        const pv = art ? store.computePV(art) : (l.prixVente ?? 0)
+        const pv = art ? store.computePrixEffectif(art, panierClient) : (l.prixVente ?? 0)
         // Restore UM mode if the last order used UM
         const wasUM = !!(l.quantiteUM && l.um && art?.um && art.um === l.um && art.colisageParUM)
         const displayQty = wasUM
@@ -1320,7 +1323,7 @@ export default function MobileCommercial({ user }: Props) {
             </div>
           ) : pickerArticles.map(a => {
             const inCart = lignes.some(l => l.articleId === a.id)
-            const pv = store.computePV(a)
+            const pv = store.computePrixEffectif(a, clients.find(c => c.id === selectedClientId))
             const globalCount = globalRotation[a.id] ?? 0
             const habitCount = clientHabits[a.id]?.count ?? 0
             return (
@@ -1382,7 +1385,7 @@ export default function MobileCommercial({ user }: Props) {
 
         {lignes.map((ligne, i) => {
           const art = articles.find(a => a.id === ligne.articleId)
-          const pvCalc = art ? store.computePV(art) : 0
+          const pvCalc = art ? store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId)) : 0
           return (
             <div key={i} className="bg-card rounded-xl border border-border p-3 flex flex-col gap-2.5">
               <div className="flex items-center justify-between">
@@ -1598,7 +1601,7 @@ export default function MobileCommercial({ user }: Props) {
                           className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0.00" />
                       ) : (
                         <div className="px-3 py-2 rounded-xl border-2 border-slate-300 bg-slate-100 text-sm font-black text-slate-900 select-none cursor-not-allowed flex items-center justify-between gap-2">
-                          <span>{ligne.prixVente || art ? (Number(ligne.prixVente) || (art ? store.computePV(art) : 0)).toFixed(2) : "—"} DH</span>
+                          <span>{ligne.prixVente || art ? (Number(ligne.prixVente) || (art ? store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId)) : 0)).toFixed(2) : "—"} DH</span>
                           <div className="flex items-center gap-1 shrink-0">
                             <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -1693,7 +1696,7 @@ export default function MobileCommercial({ user }: Props) {
                     </p>
                   </div>
                   <button onClick={() => {
-                    const pv = store.computePV(art)
+                    const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
                     const hab = clientHabits[art.id]
                     const hasUM = !!(hab?.dernierQteUM && hab?.dernierUM && art.um && hab.dernierUM === art.um)
                     const dq = hab?.dernierQte ?? 0
@@ -1845,7 +1848,7 @@ export default function MobileCommercial({ user }: Props) {
                   .map(([artId, hab]) => {
                     const art = articles.find(a => a.id === artId)
                     if (!art) return null
-                    const pv = store.computePV(art)
+                    const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
                     const inCart = lignes.some(l => l.articleId === artId)
                     const stockOk = art.stockDisponible > 0
                     return (

@@ -144,8 +144,8 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
     setSalaries(store.getSalaries())
     setPaiements(store.getPaiementsSalaires())
     setReserveSnaps(store.getReserveSnaps())
-    setClients(store.getClients())
-    setBls(store.getBonsLivraison())
+    setClients(store.getVisibleClients())
+    setBls(store.getVisibleBonsLivraison())
     setTauxCaisse(getTauxCaisse())
   }, [])
 
@@ -155,8 +155,8 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
     setCaisse(store.getCaisseEntries())
     setSalaries(store.getSalaries())
     setPaiements(store.getPaiementsSalaires())
-    setClients(store.getClients())
-    setBls(store.getBonsLivraison())
+    setClients(store.getVisibleClients())
+    setBls(store.getVisibleBonsLivraison())
     setReserveSnaps(store.getReserveSnaps())
   }
 
@@ -165,7 +165,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // ── Finance calculations ──────────────────────────────────────────────────
   const synthese = useMemo(() => {
     const bonsAchat = store.getBonsAchat()
-    const commandes = store.getCommandes()
+    const commandes = store.getVisibleCommandes()
     const inPeriod = (date: string) => date >= periodFilter.from && date <= periodFilter.to
 
     const totalAchat = bonsAchat
@@ -201,7 +201,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // ── Profitabilité par jour ────────────────────────────────────────────────
   const profitParJour = useMemo(() => {
     const bonsAchat = store.getBonsAchat()
-    const commandes = store.getCommandes()
+    const commandes = store.getVisibleCommandes()
     const inPeriod = (date: string) => date >= periodFilter.from && date <= periodFilter.to
 
     // Group days that have activity
@@ -230,7 +230,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // ── Profitabilité par trip (BL) ───────────────────────────────────────────
   const profitParTrip = useMemo(() => {
     const inPeriod = (date: string) => date >= periodFilter.from && date <= periodFilter.to
-    const commandes = store.getCommandes()
+    const commandes = store.getVisibleCommandes()
     const bonsAchat = store.getBonsAchat()
 
     const totalChargesPeriod = charges.filter(c => inPeriod(c.date)).reduce((s, c) => s + c.montant, 0)
@@ -271,7 +271,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // ── Auto-enregistrement encaissements ─────────────────────────────────────
   const autoSyncCaisse = () => {
     if (isReadOnly) { toast("Compte demo : lecture seule"); return }
-    const commandes = store.getCommandes().filter(c => c.statut === "livre")
+    const commandes = store.getVisibleCommandes().filter(c => c.statut === "livre")
     const existingRefs = new Set(caisse.filter(e => e.reference).map(e => e.reference!))
     let added = 0
     commandes.forEach(c => {

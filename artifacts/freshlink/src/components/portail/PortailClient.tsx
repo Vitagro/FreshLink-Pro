@@ -216,12 +216,12 @@ export default function PortailClient({ user, onLogout }: Props) {
 
   const familles = ["Toutes", ...Array.from(new Set(articles.map(a => a.famille ?? "").filter(Boolean)))]
 
-  // Prix adapté à la catégorie du client connecté
+  // Prix adapté à la catégorie/secteur/échelle du client connecté
   const clientCategorie: "chr" | "marchand" | "particulier" | undefined =
     client?.categorie ??
     ((client as unknown as { type?: string })?.type === "chr" ? "chr" :
       (client as unknown as { type?: string })?.type === "marchand" ? "marchand" : undefined)
-  const artPrix = (art: Article): number => store.computePV(art, clientCategorie)
+  const artPrix = (art: Article): number => store.computePrixEffectif(art, client)
   const isCHR = clientCategorie === "chr"
 
   const filteredCatalogue = articles.filter(a => {

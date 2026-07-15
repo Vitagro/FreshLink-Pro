@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { store, type User, type Client } from "@/lib/store"
+import { store, TIER_LABELS, isClientVisible, type User, type Client, type Tier } from "@/lib/store"
 import { loadZonesConfig, resolveAffectation } from "@/lib/commercial/zones"
 
 interface Props { user: User }
@@ -29,6 +29,12 @@ const CATEGORIE_OPTIONS: { value: "chr" | "marchand" | "particulier"; label: str
   { value: "chr",         label: "CHR / HORECA" },
   { value: "marchand",    label: "Marchand" },
   { value: "particulier", label: "Particulier" },
+]
+const ECHELLE_OPTIONS: { value: Tier; label: string }[] = [
+  { value: "vip",      label: TIER_LABELS.vip },
+  { value: "gold",     label: TIER_LABELS.gold },
+  { value: "titanium", label: TIER_LABELS.titanium },
+  { value: "silver",   label: TIER_LABELS.silver },
 ]
 const TAILLE_OPTIONS: { value: Client["taille"]; label: string }[] = [
   { value: "50-100kg",   label: "50–100 kg" },
@@ -166,6 +172,16 @@ function ClientForm({
           </select>
         </div>
 
+        {/* Échelle client (tarification VIP/Gold/Titanium/Silver) */}
+        <div className="flex flex-col gap-1">
+          <label className={`text-xs font-semibold ${c.label}`}>Échelle client</label>
+          <select value={form.echelle ?? ""} onChange={e => set("echelle", (e.target.value || undefined) as Tier | undefined)}
+            className={`px-3 py-2 rounded-xl border bg-white text-sm focus:outline-none focus:ring-2 ${c.input}`}>
+            <option value="">— Aucune —</option>
+            {ECHELLE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+
         {/* Rôle CHR — propriétaire pilote la gestion via l'ERP, gérant commande via le shop */}
         {form.categorie === "chr" && (
           <div className="flex flex-col gap-1">
@@ -273,7 +289,7 @@ export default function BOComptesExternes({ user }: Props) {
     // 1. Données locales (affichage instantané)
     const localClients = store.getClients()
     const localUsers   = store.getUsers()
-    setClients(localClients)
+    setClients(localClients.filter(c => isClientVisible(c, user)))
     setUsers(localUsers)
     // 2. ⚡ Fusion des comptes créés via le SITE WEB (présents uniquement dans Supabase,
     //    pas dans le localStorage de l'app). Lecture service_role via /api/sync-read.
@@ -315,7 +331,7 @@ export default function BOComptesExternes({ user }: Props) {
             source: "web",
           } as unknown as Client)
         })
-        setClients(Array.from(byId.values()))
+        setClients(Array.from(byId.values()).filter(c => isClientVisible(c, user)))
 
         const uById = new Map<string, User>()
         localUsers.forEach(u => uById.set(u.id, u))
@@ -663,6 +679,7 @@ export default function BOComptesExternes({ user }: Props) {
             rotation: editClient.rotation, telephone: editClient.telephone,
             email: editClient.email, adresse: editClient.adresse, ice: editClient.ice,
             notes: editClient.notes, categorie: editClient.categorie, chrRole: editClient.chrRole,
+            echelle: editClient.echelle,
             creditAutorise: editClient.creditAutorise, plafondCredit: editClient.plafondCredit,
             creditSolde: editClient.creditSolde, modalitePaiement: editClient.modalitePaiement,
             prevendeurId: editClient.prevendeurId, teamLeadId: editClient.teamLeadId,

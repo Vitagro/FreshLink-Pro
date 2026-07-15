@@ -206,7 +206,7 @@ export default function BOFinanceControlGestion({ user }: { user: User }) {
   // Real daily data for dynamic axes
   const realData = useMemo(() => {
     const today = new Date().toISOString().split("T")[0]
-    const commandes = store.getCommandes().filter((c: {date?: string}) => c.date === today)
+    const commandes = store.getVisibleCommandes().filter((c: {date?: string}) => c.date === today)
     const bonsAchat = store.getBonsAchat().filter((b: {date?: string}) => b.date === today)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const caToday = commandes.reduce((s: number, c: any) => s + (c.lignes?.reduce((si: number, l: {total: number}) => si + l.total, 0) ?? 0), 0)

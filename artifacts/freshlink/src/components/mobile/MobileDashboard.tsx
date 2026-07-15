@@ -28,10 +28,10 @@ export default function MobileDashboard({ user }: Props) {
   const chatRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setCommandes(store.getCommandes())
+    setCommandes(store.getVisibleCommandes())
     setMessages(store.getMessages())
     const interval = setInterval(() => {
-      setCommandes(store.getCommandes())
+      setCommandes(store.getVisibleCommandes())
       setMessages(store.getMessages())
     }, 5000)
     return () => clearInterval(interval)

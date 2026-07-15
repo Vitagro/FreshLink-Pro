@@ -286,7 +286,7 @@ export default function BODemandesComptes({ user }: Props) {
         telephone: selected.telephone, email: selected.email, adresse: selected.ville ?? "",
         createdBy: user.id, createdAt: new Date().toISOString(),
       }
-      store.saveClients([...store.getClients(), client]); newUser.clientId = client.id
+      store.addClient(client); newUser.clientId = client.id
     }
     if (selected.type === "fournisseur" && !selected._linkedFournisseurId) {
       const fourn: Fournisseur = {

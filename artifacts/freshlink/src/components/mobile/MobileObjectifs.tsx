@@ -74,19 +74,19 @@ function BarRow({ label, value, max, color, unit }: { label: string; value: numb
 }
 
 export default function MobileObjectifs({ user }: Props) {
-  const [commandes, setCommandes] = useState(store.getCommandes())
+  const [commandes, setCommandes] = useState(store.getVisibleCommandes())
   const [visites, setVisites] = useState(store.getVisites())
   const today = store.today()
   const week = getWeekRange(today)
   const month = getMonthRange(today)
 
   useEffect(() => {
-    setCommandes(store.getCommandes())
+    setCommandes(store.getVisibleCommandes())
     setVisites(store.getVisites())
     // Hydrate depuis Supabase (fusion non destructive) — reflète les commandes
     // synchronisées même si on ouvre le bilan en premier après un changement de rôle.
     import("@/lib/supabase/db").then(async (db) => {
-      try { await db.fetchCommandes(); setCommandes(store.getCommandes()) } catch { /* offline */ }
+      try { await db.fetchCommandes(); setCommandes(store.getVisibleCommandes()) } catch { /* offline */ }
     })
   }, [])
 

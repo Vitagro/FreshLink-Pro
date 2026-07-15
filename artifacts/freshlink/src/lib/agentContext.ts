@@ -24,12 +24,12 @@ function dateNJoursAgo(n: number): string {
 
 // ── JARIRI — Commercial / Vente terrain ─────────────────────────────────────
 function contextCommercial(user: User): string {
-  const clients = store.getClients()
+  const clients = store.getVisibleClients()
   const mesClients = user.role === "prevendeur" ? clients.filter(c => c.prevendeurId === user.id)
     : user.role === "team_leader" ? clients.filter(c => c.teamLeadId === user.id)
     : clients
   const cutoff7j = dateNJoursAgo(7)
-  const commandesRecentes = store.getCommandes().filter(c => c.date >= cutoff7j)
+  const commandesRecentes = store.getVisibleCommandes().filter(c => c.date >= cutoff7j)
   const caParClient = new Map<string, number>()
   commandesRecentes.forEach(c => caParClient.set(c.clientId, (caParClient.get(c.clientId) ?? 0) + c.lignes.reduce((s, l) => s + (l.total || 0), 0)))
   const topClients = [...mesClients].map(c => ({ c, ca: caParClient.get(c.id) ?? 0 })).sort((a, b) => b.ca - a.ca).slice(0, 8)
@@ -74,7 +74,7 @@ Bons de livraison du jour : ${bls.length} (${totalCaisses} caisse(s) au total)`
 
 // ── AZMI — Finance & Crédit ──────────────────────────────────────────────────
 function contextCredit(_user: User): string {
-  const clients = store.getClients()
+  const clients = store.getVisibleClients()
   const enAttente = clients.filter(c => c.creditStatut === "attente_validation")
   const overLimit = clients.filter(c => (c.creditSolde ?? 0) > (c.plafondCredit ?? Infinity))
   const soldeTotal = clients.reduce((s, c) => s + (c.creditSolde ?? 0), 0)
@@ -140,7 +140,7 @@ function contextSourcing(user: User): string {
 // commercial global (secteurs couverts, clients par zone) pour situer
 // où prospecter en priorité.
 function contextProspection(_user: User): string {
-  const clients = store.getClients()
+  const clients = store.getVisibleClients()
   const parSecteur = new Map<string, number>()
   clients.forEach(c => parSecteur.set(c.secteur || "Non renseigné", (parSecteur.get(c.secteur || "Non renseigné") ?? 0) + 1))
   const lignes = [...parSecteur.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([s, n]) => `  • ${s} : ${n} client(s) actif(s)`).join("\n")

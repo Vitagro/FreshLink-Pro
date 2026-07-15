@@ -80,7 +80,7 @@ export default function BOLoyalty({ user }: Props) {
   }
   const [newRule, setNewRule] = useState<typeof EMPTY_RULE>({ ...EMPTY_RULE })
 
-  const clients = useMemo(() => store.getClients(), [])
+  const clients = useMemo(() => store.getVisibleClients(), [])
   const articles = useMemo(() => store.getArticles(), [])
 
   const flash = (msg: string) => { setSaveMsg(msg); setTimeout(() => setSaveMsg(""), 3000) }

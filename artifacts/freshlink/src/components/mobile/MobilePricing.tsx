@@ -71,7 +71,7 @@ export default function MobilePricing({ user }: Props) {
       }))
     )
     setClientItems(
-      store.getClients().map(c => ({
+      store.getVisibleClients().map(c => ({
         id: c.id,
         label: c.nom,
         sublabel: c.telephone ?? c.secteur ?? undefined,

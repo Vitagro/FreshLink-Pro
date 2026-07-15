@@ -133,10 +133,10 @@ export default function BOWhatsApp({ user }: Props) {
   const [retardHeures, setRetardHeures] = useState("")
 
   useEffect(() => {
-    setClients(store.getClients())
+    setClients(store.getVisibleClients())
     setFournisseurs(store.getFournisseurs())
     setEquipe(store.getUsers().filter(u => u.actif))
-    setBonsLivraison(store.getBonsLivraison().slice(-100).reverse()) // last 100
+    setBonsLivraison(store.getVisibleBonsLivraison().slice(-100).reverse()) // last 100
     setLogs(JSON.parse(localStorage.getItem("fl_whatsapp_logs") || "[]"))
   }, [])
 

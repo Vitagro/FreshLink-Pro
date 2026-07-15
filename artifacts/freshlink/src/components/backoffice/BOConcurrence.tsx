@@ -268,7 +268,7 @@ export default function BOConcurrence({ user }: { user: User }) {
     const byClient = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
     const byPrevendeur = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
 
-    store.getCommandes().filter(c => inRange(c.date)).forEach(c => {
+    store.getVisibleCommandes().filter(c => inRange(c.date)).forEach(c => {
       const jour = String(c.date ?? "").slice(0, 10)
       let total = 0
       c.lignes.forEach(l => { add(byArticle.commande, l.articleNom, l.quantite); total += Number(l.quantite) || 0 })
@@ -284,7 +284,7 @@ export default function BOConcurrence({ user }: { user: User }) {
       add(byJour.achat, jour, total)
     })
 
-    store.getBonsLivraison().filter(b => inRange(b.date) && !!b.factureId).forEach(b => {
+    store.getVisibleBonsLivraison().filter(b => inRange(b.date) && !!b.factureId).forEach(b => {
       const jour = String(b.date ?? "").slice(0, 10)
       let total = 0
       b.lignes.forEach(l => { add(byArticle.facture, l.articleNom, l.quantite); total += Number(l.quantite) || 0 })
@@ -314,7 +314,7 @@ export default function BOConcurrence({ user }: { user: User }) {
   // filtre "seulement ceux qu'on a commandés".
   const articlesCommandes = useMemo(() => {
     const set = new Set<string>()
-    store.getCommandes().forEach(c => c.lignes.forEach(l => { if (l.articleNom) set.add(l.articleNom) }))
+    store.getVisibleCommandes().forEach(c => c.lignes.forEach(l => { if (l.articleNom) set.add(l.articleNom) }))
     return set
   }, [])
   const famillesDisponibles = useMemo(() => [...new Set(store.getArticles().map(a => a.famille).filter(Boolean))].sort(), [])

@@ -77,8 +77,8 @@ export default function BORapportLivraison({ user: _user }: Props) {
 
   useEffect(() => {
     setTrips(store.getTrips())
-    setBls(store.getBonsLivraison())
-    setCommandes(store.getCommandes())
+    setBls(store.getVisibleBonsLivraison())
+    setCommandes(store.getVisibleCommandes())
   }, [])
 
   const livreurs = [...new Set(trips.map(t => t.livreurNom))]

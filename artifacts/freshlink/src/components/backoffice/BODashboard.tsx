@@ -67,13 +67,13 @@ const DELAI_MS: Record<string, number> = {
 }
 
 export default function BODashboard({ user }: Props) {
-  const [commandes, setCommandes] = useState(store.getCommandes())
+  const [commandes, setCommandes] = useState(store.getVisibleCommandes())
   const [articles, setArticles] = useState(store.getArticles())
-  const [clients, setClients] = useState(store.getClients())
+  const [clients, setClients] = useState(store.getVisibleClients())
   const [bonsAchat, setBonsAchat] = useState(store.getBonsAchat())
   const [users, setUsers] = useState(store.getUsers())
   const [retours, setRetours] = useState(store.getRetours())
-  const [bls, setBls] = useState(store.getBonsLivraison())
+  const [bls, setBls] = useState(store.getVisibleBonsLivraison())
   const [visites, setVisites] = useState(store.getVisites ? store.getVisites() : [])
   const [dashTab, setDashTab] = useState<DashTab>("global")
   // Factures impayées (fl_invoices) → intégrées au crédit (sinon crédit=0 alors
@@ -103,13 +103,13 @@ export default function BODashboard({ user }: Props) {
   const [refreshTick, setRefreshTick] = useState(0)
 
   const refreshData = () => {
-    setCommandes(store.getCommandes())
+    setCommandes(store.getVisibleCommandes())
     setArticles(store.getArticles())
-    setClients(store.getClients())
+    setClients(store.getVisibleClients())
     setBonsAchat(store.getBonsAchat())
     setUsers(store.getUsers())
     setRetours(store.getRetours())
-    setBls(store.getBonsLivraison())
+    setBls(store.getVisibleBonsLivraison())
     setVisites(store.getVisites ? store.getVisites() : [])
     setLastRefreshed(new Date())
   }

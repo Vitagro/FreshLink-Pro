@@ -20,7 +20,7 @@ export default function BOAffectationCommerciale({ user }: Props) {
   const [filterPrevendeur, setFilterPrevendeur] = useState("")
 
   const reload = () => {
-    setClients(store.getClients())
+    setClients(store.getVisibleClients())
     setUsers(store.getUsers())
   }
 

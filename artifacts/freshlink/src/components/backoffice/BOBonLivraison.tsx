@@ -281,7 +281,8 @@ function BLEditor({
     setLignes(prev => prev.map(l => {
       if (l.id !== ligneId) return l
       if (!art) return { ...l, articleId: "", articleNom: "", articleNomAr: undefined }
-      const prixUnit = l.prixUnit || store.computePV(art) || 0
+      const blClient = clients.find(c => c.id === form.clientId)
+      const prixUnit = l.prixUnit || store.computePrixEffectif(art, blClient) || 0
       return {
         ...l,
         articleId:    art.id,
@@ -1361,11 +1362,16 @@ export default function BOBonLivraison({ user }: { user: User }) {
     ? (a.clientNom ?? "").localeCompare(b.clientNom ?? "", "fr")
     : String(b.date ?? "").localeCompare(String(a.date ?? "")))
 
-  const enCours   = useMemo(() => applyFilters(bls.filter(b => EN_COURS_STATUTS.includes(b.statut))), [bls, search, filterStatut, filterClient, filterLivreur, filterTrip, filterArticle])
-  const historique = useMemo(() => applyFilters(bls.filter(b => HISTORIQUE_STATUTS.includes(b.statut))), [bls, search, filterStatut, filterClient, filterLivreur, filterTrip, filterArticle])
+  // Isolation par équipe : `bls` reste la liste complète (base des sauvegardes
+  // via saveBLs) — on ne filtre que la dérivation affichée, ici.
+  const visibleClientIds = useMemo(() => new Set(store.getVisibleClients().map(c => c.id)), [])
+  const blsVisibles = useMemo(() => bls.filter(b => !b.clientId || visibleClientIds.has(b.clientId)), [bls, visibleClientIds])
+
+  const enCours   = useMemo(() => applyFilters(blsVisibles.filter(b => EN_COURS_STATUTS.includes(b.statut))), [blsVisibles, search, filterStatut, filterClient, filterLivreur, filterTrip, filterArticle])
+  const historique = useMemo(() => applyFilters(blsVisibles.filter(b => HISTORIQUE_STATUTS.includes(b.statut))), [blsVisibles, search, filterStatut, filterClient, filterLivreur, filterTrip, filterArticle])
   const displayed  = mainTab === "en_cours" ? enCours : historique
 
-  const totalTTC  = bls.reduce((s, b) => s + b.totalTTC, 0)
+  const totalTTC  = blsVisibles.reduce((s, b) => s + b.totalTTC, 0)
   const nbLivre   = bls.filter(b => b.statut === "livre").length
   const nbEnCours = bls.filter(b => b.statut === "en_livraison").length
 

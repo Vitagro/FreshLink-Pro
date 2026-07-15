@@ -39,7 +39,7 @@ export default function BOCommercial({ user }: Props) {
   useEffect(() => { refresh() }, [])
   useEffect(() => { if (commandes.length > 0) initMap() }, [commandes])
 
-  const refresh = () => setCommandes(store.getCommandes())
+  const refresh = () => setCommandes(store.getVisibleCommandes())
 
   // Re-render when Supabase pushes fresh data
   useEffect(() => {
@@ -158,7 +158,7 @@ export default function BOCommercial({ user }: Props) {
   const canEditDate = user.role === "super_super_admin"
 
   // BO commandes show only "commercial" clients (not fournisseur/client portal accounts)
-  const boClients = store.getClients().filter(c => {
+  const boClients = store.getVisibleClients().filter(c => {
     // exclude portal-linked accounts — they have their own portal
     const users = store.getUsers()
     const hasClientPortal = users.some(u => u.role === "client" && u.clientId === c.id)

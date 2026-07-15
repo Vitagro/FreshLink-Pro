@@ -306,9 +306,14 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   })()
 
   useEffect(() => {
+    // Les bons de préparation restent globaux (comme MobilePreparation côté
+    // terrain) : un bon peut regrouper des clients de plusieurs équipes sur
+    // un même trip physique, l'équipe logistique doit voir l'ensemble.
+    // Seules les commandes proposées à la sélection pour CRÉER un nouveau
+    // bon sont limitées à celles visibles par l'utilisateur connecté.
     setBons(store.getBonsPreparation())
     setTrips(store.getTrips())
-    setCommandes(store.getCommandes())
+    setCommandes(store.getVisibleCommandes())
     setArticles(store.getArticles())
   }, [])
 

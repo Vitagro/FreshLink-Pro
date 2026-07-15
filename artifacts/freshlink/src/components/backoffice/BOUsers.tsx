@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { store, type User, type UserRole, type UserAccessType, type GranularPermissions, type Civilite, ROLE_LABELS, ROLE_COLORS, JAWAD_ID, FAMILLES_ARTICLES, getAllSecteurs } from "@/lib/store"
+import { store, type User, type UserRole, type UserAccessType, type GranularPermissions, type Civilite, ROLE_LABELS, ROLE_COLORS, JAWAD_ID, FAMILLES_ARTICLES, getAllSecteurs, effectiveGroupId } from "@/lib/store"
 import { autoAssignPermissions } from "@/lib/rolePermissions"
 import { sendEmail } from "@/lib/email"
 
@@ -1344,7 +1344,10 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
 
   const openNew = () => {
     setEditing(null)
-    setForm(EMPTY_USER)
+    // Équipe par défaut = celle de l'admin qui crée le compte — modifiable
+    // via le sélecteur "Équipe" (utile pour super_super_admin qui gère
+    // plusieurs équipes).
+    setForm({ ...EMPTY_USER, groupeId: effectiveGroupId(currentUser) })
     setShowForm(true)
   }
 
@@ -1354,6 +1357,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
     setForm({
       name: u.name, email: u.email, password: u.password, role: u.role, accessType: u.accessType,
       secteur: u.secteur || "", depotId: u.depotId, phone: u.phone || "", actif: u.actif, isDemo: u.isDemo || false,
+      groupeId: u.groupeId,
       canViewAchat: u.canViewAchat || false, canViewCommercial: u.canViewCommercial || false,
       canViewLogistique: u.canViewLogistique || false, canViewStock: u.canViewStock || false,
       canViewCash: u.canViewCash || false, canViewFinance: u.canViewFinance || false,
@@ -2283,6 +2287,26 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                         )
                       })}
                     </div>
+                  </div>
+
+                  {/* ── Équipe (isolation des données par groupe) ────────────────── */}
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className="text-xs font-semibold text-foreground">Équipe</label>
+                    <select
+                      value={(form as { groupeId?: string }).groupeId ?? ""}
+                      onChange={e => setForm({ ...form, groupeId: e.target.value || undefined } as typeof form)}
+                      className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                      <option value="">— Aucune (visible par toutes les équipes) —</option>
+                      {users
+                        .filter(u => u.role === "super_super_admin" || u.role === "super_admin" || u.role === "admin")
+                        .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+                        .map(admin => (
+                          <option key={admin.id} value={effectiveGroupId(admin)}>
+                            {admin.name} ({admin.role === "super_super_admin" ? "Super Admin" : admin.role === "super_admin" ? "Super Admin" : "Admin"})
+                          </option>
+                        ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">Ce compte et les clients qu&apos;il crée ne seront visibles que par cette équipe (sauf pour le super administrateur, qui voit tout).</p>
                   </div>
 
                   {/* ── Subtype selector — Client ──────────────────────────────── */}

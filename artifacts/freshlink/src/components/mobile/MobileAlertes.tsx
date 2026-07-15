@@ -62,8 +62,8 @@ export default function MobileAlertes({ user }: Props) {
   useEffect(() => {
     const alertConfig   = store.getAlertConfig()
     const inactivityDays = alertConfig.inactivityDays ?? 30
-    const allClients    = store.getClients().filter(c => c.prevendeurId === user.id || !c.prevendeurId)
-    const allCommandes  = store.getCommandes()
+    const allClients    = store.getVisibleClients().filter(c => c.prevendeurId === user.id || !c.prevendeurId)
+    const allCommandes  = store.getVisibleCommandes()
     const allVisites    = store.getVisites()
     const today         = new Date()
     const generated: AlertItem[] = []
@@ -233,7 +233,7 @@ export default function MobileAlertes({ user }: Props) {
   }, [activeAlerts, treatedAlerts, filter, showTreated])
 
   const allClientsForSelect = useMemo(() =>
-    store.getClients().filter(c => c.prevendeurId === user.id || !c.prevendeurId)
+    store.getVisibleClients().filter(c => c.prevendeurId === user.id || !c.prevendeurId)
       .sort((a, b) => a.nom.localeCompare(b.nom)),
     [user.id]
   )

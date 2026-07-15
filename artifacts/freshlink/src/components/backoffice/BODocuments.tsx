@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { store, type CompanyConfig } from "@/lib/store"
+import { store, isClientVisible, type CompanyConfig, type Client } from "@/lib/store"
 import ComboBox, { type ComboItem } from "@/components/ui/ComboBox"
 
 // ──────────────────────────────────────────────────────────────
@@ -678,7 +678,7 @@ export default function BODocuments({ user }: { user: { id: string; name: string
     // Load ALL clients (not just CHR) — show all in ComboBox with CHR badge
     try {
       // 1. Local store immediately (fast)
-      const localAll = store.getClients()
+      const localAll = store.getVisibleClients()
       const toRecord = (c: typeof localAll[0]): ClientRecord => ({
         id: c.id,
         nom: c.nom,
@@ -694,8 +694,10 @@ export default function BODocuments({ user }: { user: { id: string; name: string
       // 2. Supabase in parallel — always try to get fresh data
       const { data } = await sb.from("fl_clients").select("id, payload")
       if (data && data.length > 0) {
+        const me = store.getSession()
         const sbClients = (data as { id: string; payload: Record<string, unknown> }[])
           .filter(r => r.payload?.nom)
+          .filter(r => isClientVisible({ groupeId: r.payload?.groupeId as string | undefined } as Client, me))
           .map(r => ({
             id: r.id,
             nom: String(r.payload?.nom ?? ""),

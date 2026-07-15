@@ -376,7 +376,7 @@ export default function BOCash({ user }: { user: User }) {
   }
 
   useEffect(() => {
-    setBls(store.getBonsLivraison())
+    setBls(store.getVisibleBonsLivraison())
     setCaissePricing(store.getCaissePricing())
     // Charger les factures existantes (numérotation FAC-YY-XXXX + récap).
     // Si Supabase est indisponible, la numérotation repart de la séquence locale.
@@ -403,7 +403,7 @@ export default function BOCash({ user }: { user: User }) {
       caissePricing: pricing,
     }
     store.saveBonsLivraison(all)
-    setBls(store.getBonsLivraison())
+    setBls(store.getVisibleBonsLivraison())
     setEditingCaisseId(null)
   }
 
@@ -430,7 +430,7 @@ export default function BOCash({ user }: { user: User }) {
         createdBy: "cashman",
       })
     }
-    setBls(store.getBonsLivraison())
+    setBls(store.getVisibleBonsLivraison())
   }
 
   const filtered = bls.filter(bl => {
@@ -558,7 +558,7 @@ export default function BOCash({ user }: { user: User }) {
       }
 
       // 4. Rafraîchir l'état local
-      setBls(store.getBonsLivraison())
+      setBls(store.getVisibleBonsLivraison())
       setInvoices(prev => [payload, ...prev])
       setFactSelected(new Set())
       setFactMsg({ ok: true, text: droitTimbre > 0

@@ -57,6 +57,11 @@ export interface User {
   role: UserRole
   accessType?: UserAccessType   // "mobile" | "backoffice" | "both" — overrides role-based routing
   secteur?: string
+  // Équipe/groupe : id de l'admin racine du groupe auquel ce compte appartient.
+  // Un admin sans groupeId explicite est lui-même racine de son propre groupe
+  // (voir effectiveGroupId). undefined pour un compte non-admin = hérite du
+  // groupe de l'admin qui l'a créé (posé explicitement à la création).
+  groupeId?: string
   phone?: string
   actif: boolean
   mustChangePassword?: boolean  // true = must change on first login
@@ -198,6 +203,20 @@ export interface Client {
   remisePct?: number        // remise globale % accordée à ce client (ex: 5 = 5%)
   remiseActive?: boolean    // true = la remise est appliquée sur ses achats
   promotions?: string[]     // codes / libellés de promotions actives
+  // Échelle client (tarification) — distincte de `segment` (loyalty)
+  echelle?: Tier
+  // Équipe/groupe propriétaire de ce client (id de l'admin racine du groupe).
+  // undefined = legacy/partagé par toutes les équipes (transition douce).
+  groupeId?: string
+}
+
+// Échelle client utilisée pour la tarification par palier
+export type Tier = "vip" | "gold" | "titanium" | "silver"
+export const TIER_LABELS: Record<Tier, string> = {
+  vip:      "VIP",
+  gold:     "Gold",
+  titanium: "Titanium",
+  silver:   "Silver",
 }
 
 // ── Visite prevendeur ──────────────────────────────────────────────────────
@@ -310,6 +329,8 @@ export interface Article {
   tauxMargeMarchand?: number
   tauxMargeParticulier?: number
   clientPrices?: Record<string, { prix?: number; promo?: number; ajust?: number }> // overrides par client individuel
+  secteurPrices?: Record<string, { prix?: number; promo?: number; ajust?: number }> // overrides par secteur
+  echellePrices?: Partial<Record<Tier, { prix?: number; promo?: number; ajust?: number }>> // overrides par échelle client (VIP/Gold/Titanium/Silver)
   // Charge appliquée à cet article pour le calcul du coût de revient
   // (transport, manutention, perte…) — référence un ChargeArticle du catalogue.
   chargeArticleId?: string
@@ -2401,6 +2422,30 @@ export function passwordMatches(stored: string | undefined, input: string): bool
   return stored === input
 }
 
+// ── Équipes/Groupes (isolation des données) ─────────────────────────────────
+// Un groupe = un admin racine (super_admin/admin/super_super_admin). Un
+// compte sans groupeId explicite est lui-même racine de son propre groupe —
+// les comptes créés « sous » cet admin héritent de son id comme groupeId.
+export function effectiveGroupId(user: User): string {
+  return user.groupeId ?? user.id
+}
+
+// Seul Jawad (super_super_admin) voit toutes les équipes combinées.
+export function canSeeAllGroups(user: User | null | undefined): boolean {
+  return user?.role === "super_super_admin"
+}
+
+// Un client est visible si : l'utilisateur voit tout (super_super_admin),
+// le client n'est pas encore rattaché à une équipe (legacy/partagé par
+// toutes les équipes, transition douce), ou il appartient à l'équipe de
+// l'utilisateur connecté.
+export function isClientVisible(client: Client, user: User | null | undefined): boolean {
+  if (canSeeAllGroups(user)) return true
+  if (client.groupeId == null) return true
+  if (!user) return false
+  return client.groupeId === effectiveGroupId(user)
+}
+
 // ============================================================
 // STORE API
 // ============================================================
@@ -2562,8 +2607,25 @@ export const store = {
     }
     return [...byKey.values()]
   },
+  // Liste des clients visibles par l'utilisateur connecté (isolation par
+  // équipe/groupe — cf. isClientVisible). À utiliser pour l'AFFICHAGE
+  // (listes, tableaux de bord, recouvrement...) — jamais comme base d'une
+  // lecture-modification-écriture (getClients() reste la source complète
+  // pour addClient/updateClient/deleteClient, sous peine d'écraser en
+  // sauvegarde les clients des autres équipes).
+  getVisibleClients: (): Client[] => {
+    const me = store.getSession()
+    return store.getClients().filter(c => isClientVisible(c, me))
+  },
   saveClients: (c: Client[]) => setLS("fl_clients", c),
-  addClient: (c: Client) => { const cl = store.getClients(); cl.push(c); store.saveClients(cl); return c },
+  // Tague le nouveau client avec le groupe/équipe de son créateur (sauf si un
+  // groupeId a déjà été fourni explicitement) — dès sa création, ce client
+  // n'est plus visible que par l'équipe qui l'a recruté (cf. isClientVisible).
+  addClient: (c: Client) => {
+    const me = store.getSession()
+    const stamped: Client = { ...c, groupeId: c.groupeId ?? (me ? effectiveGroupId(me) : undefined) }
+    const cl = store.getClients(); cl.push(stamped); store.saveClients(cl); return stamped
+  },
   updateClient: (id: string, updates: Partial<Client>) => {
     const cl = store.getClients()
     const idx = cl.findIndex(c => c.id === id)
@@ -2692,6 +2754,43 @@ export const store = {
     if (clientCategorie === "marchand" && article.prixMarchand && article.prixMarchand > 0) return article.prixMarchand
     if (clientCategorie === "particulier" && article.prixParticulier && article.prixParticulier > 0) return article.prixParticulier
     return pv
+  },
+
+  // Prix effectif appliqué à une commande réelle pour un client donné.
+  // Priorité (le plus spécifique gagne) : override individuel (clientPrices)
+  // > échelle (echellePrices) > secteur (secteurPrices) > catégorie (computePV)
+  // > PV standard. La promo % et l'ajustement DH du niveau retenu sont
+  // ensuite appliqués (même formule que l'écran Tarifs par Catégorie).
+  computePrixEffectif: (article: Article, client?: Client | null): number => {
+    let base: number
+    let promo = 0
+    let ajust = 0
+
+    const clientOverride = client ? article.clientPrices?.[client.id] : undefined
+    const echelleOverride = client?.echelle ? article.echellePrices?.[client.echelle] : undefined
+    const secteurOverride = client?.secteur ? article.secteurPrices?.[client.secteur] : undefined
+
+    if (clientOverride?.prix !== undefined && clientOverride.prix > 0) {
+      base = clientOverride.prix
+      promo = clientOverride.promo ?? 0
+      ajust = clientOverride.ajust ?? 0
+    } else if (echelleOverride?.prix !== undefined && echelleOverride.prix > 0) {
+      base = echelleOverride.prix
+      promo = echelleOverride.promo ?? 0
+      ajust = echelleOverride.ajust ?? 0
+    } else if (secteurOverride?.prix !== undefined && secteurOverride.prix > 0) {
+      base = secteurOverride.prix
+      promo = secteurOverride.promo ?? 0
+      ajust = secteurOverride.ajust ?? 0
+    } else {
+      base = store.computePV(article, client?.categorie)
+      // Promo/ajust du segment de catégorie s'appliquent aussi en fallback
+      if (client?.categorie === "chr")         { promo = article.promoCHR ?? 0;         ajust = article.ajustCHR ?? 0 }
+      else if (client?.categorie === "marchand")    { promo = article.promoMarchand ?? 0;    ajust = article.ajustMarchand ?? 0 }
+      else if (client?.categorie === "particulier") { promo = article.promoParticulier ?? 0; ajust = article.ajustParticulier ?? 0 }
+    }
+
+    return Math.round((base * (1 - promo / 100) + ajust) * 100) / 100
   },
 
   // --- Non-achat signalements ---
@@ -2959,6 +3058,12 @@ export const store = {
 
   // --- Commandes ---
   getCommandes: (): Commande[] => getLS("fl_commandes", []),
+  // Commandes des clients visibles par l'utilisateur connecté — pour
+  // l'affichage uniquement (mêmes règles que getVisibleClients).
+  getVisibleCommandes: (): Commande[] => {
+    const visibleIds = new Set(store.getVisibleClients().map(c => c.id))
+    return store.getCommandes().filter(cmd => visibleIds.has(cmd.clientId))
+  },
   saveCommandes: (c: Commande[]) => setLS("fl_commandes", c),
   addCommande: (c: Commande) => {
     const cmds = store.getCommandes()
@@ -3086,6 +3191,12 @@ export const store = {
 
   // --- Bons de livraison ---
   getBonsLivraison: (): BonLivraison[] => getLS("fl_bons_livraison", []),
+  // Bons de livraison des clients visibles par l'utilisateur connecté —
+  // pour l'affichage uniquement (mêmes règles que getVisibleClients).
+  getVisibleBonsLivraison: (): BonLivraison[] => {
+    const visibleIds = new Set(store.getVisibleClients().map(c => c.id))
+    return store.getBonsLivraison().filter(bl => !bl.clientId || visibleIds.has(bl.clientId))
+  },
   saveBonsLivraison: (b: BonLivraison[]) => setLS("fl_bons_livraison", b),
   addBonLivraison: (b: BonLivraison) => { const bls = store.getBonsLivraison(); bls.push(b); store.saveBonsLivraison(bls) },
   updateBonLivraison: (id: string, updates: Partial<BonLivraison>) => {
@@ -3096,6 +3207,14 @@ export const store = {
 
   // --- Bons de Préparation ---
   getBonsPreparation: (): BonPreparation[] => getLS("fl_bons_preparation", []),
+  // Bons de préparation touchant au moins un client visible par l'utilisateur
+  // connecté (un bon peut couvrir plusieurs clients de tournées différentes —
+  // on ne masque pas tout le bon logistique pour une seule ligne d'une autre
+  // équipe). Pour l'affichage uniquement (mêmes règles que getVisibleClients).
+  getVisibleBonsPreparation: (): BonPreparation[] => {
+    const visibleIds = new Set(store.getVisibleClients().map(c => c.id))
+    return store.getBonsPreparation().filter(bp => bp.clientIds.some(id => visibleIds.has(id)))
+  },
   saveBonsPreparation: (b: BonPreparation[]) => setLS("fl_bons_preparation", b),
   addBonPreparation: (b: BonPreparation) => { const arr = store.getBonsPreparation(); arr.push(b); store.saveBonsPreparation(arr) },
   updateBonPreparation: (id: string, updates: Partial<BonPreparation>) => {
