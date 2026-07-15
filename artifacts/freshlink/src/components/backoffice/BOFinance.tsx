@@ -11,6 +11,7 @@ import {
   CATEGORIE_CHARGE_LABELS, DELAI_RECOUVREMENT_LABELS,
 } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n: number) => (Number(n) || 0).toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -272,7 +273,9 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // ── Auto-enregistrement encaissements ─────────────────────────────────────
   const autoSyncCaisse = () => {
     if (isReadOnly) { toast("Compte demo : lecture seule"); return }
-    if (!hasPermission(user.role as UserRole, "valider_cash")) return
+    const actor = { ...user, role: user.role as UserRole }
+    if (!hasPermission(actor.role, "valider_cash")) { logAction(actor, "valider_cash", "denied", { type: "caisse", label: "sync auto" }); return }
+    logAction(actor, "valider_cash", "success", { type: "caisse", label: "sync auto" })
     const commandes = store.getVisibleCommandes().filter(c => c.statut === "livre")
     const existingRefs = new Set(caisse.filter(e => e.reference).map(e => e.reference!))
     let added = 0
@@ -1197,11 +1200,13 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
         const alertCount = creditClients.filter(c => c.isOverdue || c.isOverPlafond).length
 
         const handleCreditPaiement = () => {
-          if (!hasPermission(user.role as UserRole, "gerer_recouvrement")) return
+          const actor = { ...user, role: user.role as UserRole }
+          if (!hasPermission(actor.role, "gerer_recouvrement")) { logAction(actor, "gerer_recouvrement", "denied", { type: "client", id: creditPaiClientId }); return }
           if (!creditPaiClientId || !creditPaiMontant || Number(creditPaiMontant) <= 0) return
           const allClients = store.getClients()
           const idx = allClients.findIndex(c => c.id === creditPaiClientId)
           if (idx < 0) return
+          logAction(actor, "gerer_recouvrement", "success", { type: "client", id: creditPaiClientId, label: allClients[idx].nom })
           const newSolde = Math.max(0, (allClients[idx].creditSolde ?? 0) - Number(creditPaiMontant))
           allClients[idx] = { ...allClients[idx], creditSolde: newSolde }
           store.saveClients(allClients)

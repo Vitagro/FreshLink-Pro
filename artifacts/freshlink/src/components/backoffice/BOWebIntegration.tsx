@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { store, type User, type WebIntegrationConfig } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 interface Props { user: User }
 
@@ -52,7 +53,8 @@ export default function BOWebIntegration({ user }: Props) {
 
   const handleSave = () => {
     if (!cfg) return
-    if (!hasPermission(user.role, "modifier_api_config")) return
+    if (!hasPermission(user.role, "modifier_api_config")) { logAction(user, "modifier_api_config", "denied"); return }
+    logAction(user, "modifier_api_config", "success")
     const updated = { ...cfg, updatedAt: new Date().toISOString(), updatedBy: user.id }
     ;(store as any).saveWebIntegrationConfig(updated)
     fetch(`${BASE}/api/ext/web-integration-config`, {

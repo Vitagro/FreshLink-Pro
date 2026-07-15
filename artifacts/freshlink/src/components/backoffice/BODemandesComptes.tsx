@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { store, type AccountRequest, type User, type Client, type Fournisseur } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 function generatePassword(len = 10): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789"
@@ -230,7 +231,10 @@ export default function BODemandesComptes({ user }: Props) {
     // que de deviner la bonne permission.
     const approvePerm = selected.type === "fournisseur" ? "approuver_compte_fournisseur"
       : selected.type === "client" ? "approuver_compte_client" : null
-    if (approvePerm && !hasPermission(user.role, approvePerm)) return
+    if (approvePerm) {
+      if (!hasPermission(user.role, approvePerm)) { logAction(user, approvePerm, "denied", { type: "demande_compte", label: selected.nom }); return }
+      logAction(user, approvePerm, "success", { type: "demande_compte", label: selected.nom })
+    }
     const phone = selected.telephone?.replace(/\D/g, "") ?? ""
     const linkedUserId = (selected as { _linkedUserId?: string })._linkedUserId
 
@@ -337,7 +341,8 @@ export default function BODemandesComptes({ user }: Props) {
 
   const handleReject = async () => {
     if (!selected) return
-    if (!hasPermission(user.role, "rejeter_demande_compte")) return
+    if (!hasPermission(user.role, "rejeter_demande_compte")) { logAction(user, "rejeter_demande_compte", "denied", { type: "demande_compte", label: selected.nom }); return }
+    logAction(user, "rejeter_demande_compte", "success", { type: "demande_compte", label: selected.nom })
     const linkedUserId = (selected as { _linkedUserId?: string })._linkedUserId
     if (linkedUserId) await setUserActifSb(linkedUserId, false)  // désactive le compte web
     await writeRequestStatut(selected.id, "rejete", { rejectedBy: user.id, rejectedAt: new Date().toISOString(), rejectReason })

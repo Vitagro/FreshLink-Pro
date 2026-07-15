@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import * as XLSX from "xlsx"
 import { store, type Client } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { fetchClients, upsertClient, importClients, getLastSupabaseError } from "@/lib/supabase/db"
 import { createClient } from "@/lib/supabase/client"
 
@@ -254,7 +255,9 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
   }
 
   const handleForceSync = async () => {
-    if (!hasPermission(store.getSession()?.role, "backup_restore")) return
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "backup_restore")) { logAction(session, "backup_restore", "denied", { type: "sync_forcee" }); return }
+    logAction(session, "backup_restore", "success", { type: "sync_forcee" })
     setForceSyncLoading(true)
     setForceSyncResult(null)
     const results: { table: string; count: number; error?: string }[] = []
@@ -670,7 +673,9 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
           {/* Download ALL tables as comprehensive JSON */}
           <button
             onClick={() => {
-              if (!hasPermission(store.getSession()?.role, "backup_restore")) return
+              const session = store.getSession()
+              if (!hasPermission(session?.role, "backup_restore")) { logAction(session, "backup_restore", "denied", { type: "export_complet" }); return }
+              logAction(session, "backup_restore", "success", { type: "export_complet" })
               const backup = {
                 exportedAt: new Date().toISOString(),
                 version: "1.0.0",
@@ -708,7 +713,9 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
             <input type="file" accept=".json" className="hidden" onChange={e => {
               const file = e.target.files?.[0]
               if (!file) return
-              if (!hasPermission(store.getSession()?.role, "backup_restore")) { e.target.value = ""; return }
+              const session = store.getSession()
+              if (!hasPermission(session?.role, "backup_restore")) { logAction(session, "backup_restore", "denied", { type: "import_backup", label: file.name }); e.target.value = ""; return }
+              logAction(session, "backup_restore", "success", { type: "import_backup", label: file.name })
               const reader = new FileReader()
               reader.onload = ev => {
                 try {

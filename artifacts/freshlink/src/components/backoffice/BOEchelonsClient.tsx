@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { store, type EchelonClient, type User } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Échelons Client — liste dynamique des paliers de tarification (VIP/Gold/...).
@@ -82,7 +83,9 @@ export default function BOEchelonsClient({ user }: { user: User }) {
 
   const handleSave = () => {
     if (!form.nom.trim()) return
-    if (editingId ? !canModifier : !canCreer) return
+    const permKey = editingId ? "modifier_echelon" : "creer_echelon"
+    if (editingId ? !canModifier : !canCreer) { logAction(user, permKey, "denied", { type: "echelon", label: form.nom }); return }
+    logAction(user, permKey, "success", { type: "echelon", id: editingId ?? undefined, label: form.nom })
     const num = (s: string) => (s.trim() === "" ? undefined : Number(s))
     const auto: EchelonClient["auto"] = form.autoActif ? {
       minTonnageKg: num(form.minTonnageKg),
@@ -103,7 +106,8 @@ export default function BOEchelonsClient({ user }: { user: User }) {
   }
 
   const handleDelete = (e: EchelonClient) => {
-    if (!canSupprimer) return
+    if (!canSupprimer) { logAction(user, "supprimer_echelon", "denied", { type: "echelon", id: e.id, label: e.nom }); return }
+    logAction(user, "supprimer_echelon", "success", { type: "echelon", id: e.id, label: e.nom })
     store.deleteEchelon(e.id)
     setConfirmDel(null)
     reload()
@@ -122,7 +126,8 @@ export default function BOEchelonsClient({ user }: { user: User }) {
   }
 
   const handleRecalculer = () => {
-    if (!canConfigurerAuto) return
+    if (!canConfigurerAuto) { logAction(user, "configurer_attribution_auto", "denied", { type: "echelon", label: "recalcul auto" }); return }
+    logAction(user, "configurer_attribution_auto", "success", { type: "echelon", label: "recalcul auto" })
     setRecalculating(true)
     const n = store.recalculerEchelonsAuto()
     setRecalcMsg(n > 0 ? `${n} client(s) mis à jour.` : "Aucun changement — tous les clients en mode auto sont déjà à jour.")

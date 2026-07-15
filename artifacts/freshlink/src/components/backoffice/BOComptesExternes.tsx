@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { store, isClientVisible, type User, type Client } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { loadZonesConfig, resolveAffectation } from "@/lib/commercial/zones"
 
 interface Props { user: User }
@@ -483,12 +484,13 @@ export default function BOComptesExternes({ user }: Props) {
 
   // ── Save new client (+ auto-create login si demandé) ─────────────────────────
   const handleAdd = async (data: Omit<Client, "id" | "createdBy" | "createdAt">) => {
-    if (!hasPermission(user.role, "creer_client")) return
+    if (!hasPermission(user.role, "creer_client")) { logAction(user, "creer_client", "denied", { label: data.nom }); return }
     if (!data.nom.trim()) { flash(false, "Le nom est obligatoire."); return }
     data = await avecAffectation(data)   // auto-rattachement prévendeur selon le secteur
     const clientId = await nextClientId()
     const fullClient = { ...data, id: clientId, createdBy: user.id, createdAt: new Date().toISOString() }
     store.addClient(fullClient)
+    logAction(user, "creer_client", "success", { type: "client", id: clientId, label: data.nom })
 
     // Rôle du compte de connexion selon la hiérarchie CHR
     const chrRole = data.categorie === "chr" ? data.chrRole : undefined
@@ -532,10 +534,11 @@ export default function BOComptesExternes({ user }: Props) {
 
   // ── Save edited client ───────────────────────────────────────────────────────
   const handleEdit = async (data: Omit<Client, "id" | "createdBy" | "createdAt">) => {
-    if (!hasPermission(user.role, "modifier_client")) return
+    if (!hasPermission(user.role, "modifier_client")) { logAction(user, "modifier_client", "denied", { type: "client", id: editId ?? undefined, label: data.nom }); return }
     if (!editId || !data.nom.trim()) { flash(false, "Le nom est obligatoire."); return }
     data = await avecAffectation(data)   // auto-rattachement prévendeur selon le secteur
     const cid = editId
+    logAction(user, "modifier_client", "success", { type: "client", id: cid, label: data.nom })
     store.updateClient(cid, data)
     setEditId(null)
 
@@ -576,7 +579,9 @@ export default function BOComptesExternes({ user }: Props) {
 
   // ── Delete client ────────────────────────────────────────────────────────────
   const handleConfirmDelete = () => {
-    if (!confirmDel || !hasPermission(user.role, "supprimer_client")) return
+    if (!confirmDel) return
+    if (!hasPermission(user.role, "supprimer_client")) { logAction(user, "supprimer_client", "denied", { type: "client", id: confirmDel.id, label: confirmDel.nom }); return }
+    logAction(user, "supprimer_client", "success", { type: "client", id: confirmDel.id, label: confirmDel.nom })
     store.deleteClient(confirmDel.id)
     // ✅ Suppression Supabase en cascade
     fetch("/api/sync-write", {

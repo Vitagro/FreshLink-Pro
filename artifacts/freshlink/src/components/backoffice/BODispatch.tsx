@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { store, type Commande, type Trip, type Livreur, type TransportCompany, type User, ROLE_COLORS } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { uploadToStorage } from "@/lib/supabase/client"
 import { printBL, printFeuilleRoute, type FeuilleRouteData } from "@/lib/print"
 
@@ -220,12 +221,13 @@ export default function BODispatch({ user }: Props) {
 
   const [creatingTrip, setCreatingTrip] = useState(false)
   const handleCreateTrip = () => {
-    if (!hasPermission(user.role, "creer_trip")) return
+    if (!hasPermission(user.role, "creer_trip")) { logAction(user, "creer_trip", "denied"); return }
     if (!selectedLivreurId || selectedCmds.length === 0) return
     if (creatingTrip) return // anti double-clic — jamais deux tournées/doubles affectations
     setCreatingTrip(true)
     const livreur = livreurs.find(l => l.id === selectedLivreurId)
     if (!livreur) return
+    logAction(user, "creer_trip", "success", { type: "livreur", id: livreur.id, label: `${livreur.prenom} ${livreur.nom}` })
     const cmds = commandes.filter(c => selectedCmds.includes(c.id))
     const itineraire = cmds
       .filter(c => c.gpsLat && c.gpsLng)
@@ -262,7 +264,8 @@ export default function BODispatch({ user }: Props) {
   }
 
   const updateTripStatus = (id: string, statut: Trip["statut"]) => {
-    if (!hasPermission(user.role, "valider_trip")) return
+    if (!hasPermission(user.role, "valider_trip")) { logAction(user, "valider_trip", "denied", { type: "trip", id }); return }
+    logAction(user, "valider_trip", "success", { type: "trip", id, label: statut })
     store.updateTrip(id, { statut })
     if (statut === "terminé") {
       const trip = store.getTrips().find(t => t.id === id)

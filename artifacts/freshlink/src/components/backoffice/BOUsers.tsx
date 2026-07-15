@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { store, type User, type UserRole, type UserAccessType, type GranularPermissions, type Civilite, ROLE_LABELS, ROLE_COLORS, JAWAD_ID, FAMILLES_ARTICLES, getAllSecteurs, effectiveGroupId } from "@/lib/store"
 import { autoAssignPermissions } from "@/lib/rolePermissions"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { sendEmail } from "@/lib/email"
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1391,7 +1392,9 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
 
   const handleSave = () => {
     if (!(form.name ?? "").trim() || !(form.email ?? "").trim()) return
-    if (editing ? !canModifierUtilisateur : !canCreerUtilisateur) return
+    const permKey = editing ? "modifier_utilisateur" : "creer_utilisateur"
+    if (editing ? !canModifierUtilisateur : !canCreerUtilisateur) { logAction(currentUser, permKey, "denied", { type: "utilisateur", id: editing?.id, label: form.name }); return }
+    logAction(currentUser, permKey, "success", { type: "utilisateur", id: editing?.id, label: form.name })
     const all = store.getUsers()
     let savedUser: User | null = null
     if (editing) {
@@ -1434,7 +1437,8 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
   }
 
   const toggleActive = (u: User) => {
-    if (!canDesactiverUtilisateur) return
+    if (!canDesactiverUtilisateur) { logAction(currentUser, "desactiver_utilisateur", "denied", { type: "utilisateur", id: u.id, label: u.name }); return }
+    logAction(currentUser, "desactiver_utilisateur", "success", { type: "utilisateur", id: u.id, label: u.name })
     const all = store.getUsers()
     const idx = all.findIndex(x => x.id === u.id)
     if (idx >= 0) {

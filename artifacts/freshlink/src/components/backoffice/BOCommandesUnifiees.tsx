@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { store, type Commande, type LigneCommande } from "@/lib/store"
 import type { User } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 interface Props { user: User }
 
@@ -210,10 +211,11 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const [noLignes, setNoLignes]           = useState<{ articleId: string; quantite: string; prixVente: string }[]>([{ articleId: "", quantite: "", prixVente: "" }])
 
   const saveNewOrder = async () => {
-    if (!hasPermission(user.role, "creer_commande")) return
+    if (!hasPermission(user.role, "creer_commande")) { logAction(user, "creer_commande", "denied"); return }
     if (savingOrder) return // anti double-clic — jamais deux commandes identiques
     const client = store.getClients().find(c => c.id === noClientId)
     if (!client) { setMsg({ ok: false, text: "Choisissez un client." }); return }
+    logAction(user, "creer_commande", "success", { type: "client", id: client.id, label: client.nom })
     const articles = store.getArticles()
     // Convertit chiffres arabes-indiens (٠-٩) et persans (۰-۹) en ASCII avant
     // parseFloat — Number()/parseFloat() renvoient NaN sur ces glyphes, ce qui
@@ -285,7 +287,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
 
   // ── Mise à jour statut ───────────────────────────────────────────────────────
   const updateStatut = async (cmd: CmdUnifiee, newStatut: string) => {
-    if (!hasPermission(user.role, "valider_commande")) return
+    if (!hasPermission(user.role, "valider_commande")) { logAction(user, "valider_commande", "denied", { type: "commande", id: cmd.id, label: cmd.numero }); return }
+    logAction(user, "valider_commande", "success", { type: "commande", id: cmd.id, label: `${cmd.numero} → ${newStatut}` })
     setUpdating(true)
     try {
       // Mise à jour du statut dans le payload JSONB via l'API service_role (bypass RLS)
@@ -320,8 +323,9 @@ export default function BOCommandesUnifiees({ user }: Props) {
 
   // ── Supprimer une commande ───────────────────────────────────────────────────
   const deleteCommande = async (cmd: CmdUnifiee) => {
-    if (!hasPermission(user.role, "supprimer_commande")) return
+    if (!hasPermission(user.role, "supprimer_commande")) { logAction(user, "supprimer_commande", "denied", { type: "commande", id: cmd.id, label: cmd.numero }); return }
     if (!confirm(`⚠️ Supprimer définitivement la commande ${cmd.numero} de ${cmd.nom_client} ?\n\nCette action est irréversible.`)) return
+    logAction(user, "supprimer_commande", "success", { type: "commande", id: cmd.id, label: cmd.numero })
     try {
       // Commande ERP locale → retirer aussi du store localStorage
       if (cmd.source === "erp") {
@@ -394,9 +398,10 @@ export default function BOCommandesUnifiees({ user }: Props) {
   }
 
   const bulkDelete = async () => {
-    if (!hasPermission(user.role, "supprimer_commande")) return
+    if (!hasPermission(user.role, "supprimer_commande")) { logAction(user, "supprimer_commande", "denied", { type: "commande", label: `${selectedCmds.length} commande(s)` }); return }
     if (bulkBusy || selectedCmds.length === 0) return // anti double-clic
     if (!confirm(`⚠️ Supprimer définitivement ${selectedCmds.length} commande(s) sélectionnée(s) ?\n\nCette action est irréversible.`)) return
+    logAction(user, "supprimer_commande", "success", { type: "commande", label: `${selectedCmds.length} commande(s)` })
     setBulkBusy(true)
     try {
       const byTable = new Map<string, CmdUnifiee[]>()
@@ -604,6 +609,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
   // toutes les commandes filtrées.
   const exportParClientArticle = async () => {
     if (filtered.length === 0) return
+    logAction(user, "exporter_donnees", "success", { type: "commandes", label: `${filtered.length} commande(s)` })
     const XLSX = await import("xlsx")
     const agg = new Map<string, { client: string; telephone: string; article: string; unite: string; quantite: number; montant: number; nbCommandes: Set<string> }>()
     filtered.forEach(c => {

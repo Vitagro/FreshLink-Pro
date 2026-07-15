@@ -3,7 +3,8 @@ import { useState, useEffect, useRef } from "react"
 import * as XLSX from "xlsx"
 import { store } from "@/lib/store"
 import type { Article, Client, EchelonClient, User } from "@/lib/store"
-import { hasPermission } from "@/lib/permissions"
+import { hasPermission, type PermKey } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 type Cat = "chr" | "marchand" | "particulier"
 type Mode = "segment" | "secteur" | "echelle" | "client"
@@ -97,6 +98,10 @@ export default function BOCategoryPricing({ user }: { user: User }) {
     client:  hasPermission(user.role, "modifier_tarifs_client_individuel"),
   }
   const canVoirMarge = hasPermission(user.role, "voir_marge")
+  const permKeyByMode: Record<Mode, PermKey> = {
+    segment: "modifier_tarifs_segment", secteur: "modifier_tarifs_secteur",
+    echelle: "modifier_tarifs_echelle", client: "modifier_tarifs_client_individuel",
+  }
   const [articles, setArticles]     = useState<Article[]>([])
   const [clients, setClients]       = useState<Client[]>([])
   const [echelons, setEchelons]     = useState<EchelonClient[]>([])
@@ -328,7 +333,9 @@ export default function BOCategoryPricing({ user }: { user: User }) {
   // ── Save ─────────────────────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!canModifyByMode[mode]) return
+    const permKey = permKeyByMode[mode]
+    if (!canModifyByMode[mode]) { logAction(user, permKey, "denied"); return }
+    logAction(user, permKey, "success", { type: "tarification", label: mode === "secteur" ? activeSecteur : mode === "echelle" ? activeTier : mode === "client" ? selectedClient : activeCat })
     const all = store.getArticles()
     const touchedIds: string[] = []
     for (const [artId, edit] of Object.entries(edits)) {

@@ -2,6 +2,7 @@
 import { useState, useMemo } from "react"
 import { store, type User, isSuperSuperAdmin } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 const JAWAD_EMAIL = "jawad@vita-fresh.ma"
 
@@ -183,7 +184,8 @@ export default function BOFinanceControlGestion({ user }: { user: User }) {
   const numInp = inp + " text-right font-mono"
 
   const handleSend = async () => {
-    if (!hasPermission(user.role, "envoyer_rapports")) return
+    if (!hasPermission(user.role, "envoyer_rapports")) { logAction(user, "envoyer_rapports", "denied", { type: "rapport_journalier" }); return }
+    logAction(user, "envoyer_rapports", "success", { type: "rapport_journalier", label: rapportEmail })
     setSending(true)
     const { ok, error } = await sendDailyReport(rapportEmail)
     setSentOk(ok)

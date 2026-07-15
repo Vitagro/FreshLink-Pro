@@ -2362,7 +2362,10 @@ const DEFAULT_EMAIL_CONFIG: EmailConfig = {
 // HELPERS
 // ============================================================
 
-function getLS<T>(key: string, def: T): T {
+// Exportées pour les modules satellites (lib/permissions.ts, lib/auditLog.ts...)
+// qui ont besoin du même cache localStorage + synchro write-through Supabase
+// sans dupliquer la logique ni introduire de dépendance circulaire vers store.ts.
+export function getLS<T>(key: string, def: T): T {
   if (typeof window === "undefined") return def
   try {
     const v = localStorage.getItem(key)
@@ -2377,7 +2380,7 @@ function getLS<T>(key: string, def: T): T {
   try { return JSON.parse(JSON.stringify(def)) } catch { return def }
 }
 
-function setLS<T>(key: string, val: T): void {
+export function setLS<T>(key: string, val: T): void {
   if (typeof window === "undefined") return
   const raw = JSON.stringify(val)
   localStorage.setItem(key, raw)

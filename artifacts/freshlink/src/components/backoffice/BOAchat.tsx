@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { store, type BonAchat, type Article, type Fournisseur, type ChargeArticle, paDeviationConfirmMessage } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
@@ -205,7 +206,9 @@ export default function BOAchat() {
   }
 
   const handleValidateBon = async (bon: BonAchat) => {
-    if (!hasPermission(store.getSession()?.role, "valider_achat")) return
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "valider_achat")) { logAction(session, "valider_achat", "denied", { type: "bon_achat", id: bon.id }); return }
+    logAction(session, "valider_achat", "success", { type: "bon_achat", id: bon.id, label: String(bon.id) })
     store.updateBonAchat(bon.id, { statut: "validé" })
     await sendEmail({
       to_email: bon.emailDestinataire || emailConfig,
@@ -221,9 +224,11 @@ export default function BOAchat() {
   }
 
   const handleSubmitBon = async () => {
-    if (!hasPermission(store.getSession()?.role, "creer_bon_achat")) return
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "creer_bon_achat")) { logAction(session, "creer_bon_achat", "denied"); return }
     const fournisseur = fournisseurs.find(f => f.id === formFournisseurId)
     if (!fournisseur) return
+    logAction(session, "creer_bon_achat", "success", { type: "fournisseur", label: fournisseur.nom })
     // Garde-fou anti-faute-de-frappe (FR + AR) avant d'écraser le PA catalogue
     for (const l of formLignes) {
       const pa = computePALigne(l)

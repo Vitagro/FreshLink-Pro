@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { store, type BonLivraison, type User, DEFAULT_CAISSE_PRICING, type CaissePricing, DEFAULT_FRAIS_BL, type FraisBlConfig, canEditRecord } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { printBL, printFacture as printFactureLib } from "@/lib/print"
 
 // ── FMT ──────────────────────────────────────────────────────────────────
@@ -409,13 +410,14 @@ export default function BOCash({ user }: { user: User }) {
   }
 
   const handleEncaisser = (id: string) => {
-    if (!hasPermission(user.role, "valider_cash")) return
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "bon_livraison", id }); return }
     const all = store.getBonsLivraison()
     const idx = all.findIndex(b => b.id === id)
     if (idx < 0) return
     const bl = all[idx]
     // Guard: don't double-encaiss
     if (bl.statut === "encaissé") return
+    logAction(user, "valider_cash", "success", { type: "bon_livraison", id })
     all[idx] = { ...bl, statut: "encaissé" }
     store.saveBonsLivraison(all)
     // Auto-create a CaisseEntry so the amount appears in the cash register

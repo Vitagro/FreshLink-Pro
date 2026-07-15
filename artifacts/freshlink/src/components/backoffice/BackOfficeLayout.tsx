@@ -145,6 +145,7 @@ const BOMarketplace          = React.lazy(() => import("./BOMarketplace"))
 const BODocuments            = React.lazy(() => import("./BODocuments"))
 const BOCategoryPricing      = React.lazy(() => import("./BOCategoryPricing"))
 const BOEchelonsClient       = React.lazy(() => import("./BOEchelonsClient"))
+const BOJournalActivite      = React.lazy(() => import("./BOJournalActivite"))
 const BOExternalLinks        = React.lazy(() => import("./BOExternalLinks"))
 const BODeviceAccess         = React.lazy(() => import("./BODeviceAccess"))
 const BOMobileGestion        = React.lazy(() => import("./BOMobileGestion"))
@@ -181,7 +182,7 @@ export type Tab =
   | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
   | "loyalty" | "performance_incentives" | "template_editor"
   | "investissement" | "sourcing" | "pricing" | "pricing_concurrent" | "finance_cdg"
-  | "demandes_comptes" | "web_integration" | "permissions_matrix"
+  | "demandes_comptes" | "web_integration" | "permissions_matrix" | "journal_activite"
   | "marketplace"
   | "documents"
   | "category_pricing"
@@ -404,6 +405,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
       { id: "users",             label: "Utilisateurs",          labelAr: "المستخدمون",        permKey: "canViewDatabase", icon: <Icon d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /> },
       { id: "roles_permissions", label: "Roles & Permissions",   labelAr: "الأدوار والصلاحيات", permKey: "canViewDatabase", icon: <Icon d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /> },
       { id: "permissions_matrix",label: "Matrice des Permissions",labelAr: "مصفوفة الصلاحيات",  permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
+      { id: "journal_activite",  label: "Journal d'Activité",     labelAr: "سجل النشاط",        permKey: "canViewDatabase", icon: <Icon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /> },
       { id: "device_access",     label: "Acces Appareils",       labelAr: "أجهزة الوصول",     permKey: "canViewDatabase", icon: <Icon d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
       { id: "mobile_gestion",    label: "Gestion Mobile",        labelAr: "إدارة الموبايل",   permKey: "canViewDatabase", icon: <Icon d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /> },
       { id: "depots",            label: "Multi-Depots",          labelAr: "المستودعات",        permKey: "canViewDatabase", icon: <Icon d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /> },
@@ -448,7 +450,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
   { label: "Finance & Contrôle de Gestion", labelAr: "المالية ومراقبة التسيير", ids: ["finance", "fiscalite", "cash", "caisse_acheteur", "analyse_credit", "finance_cdg", "performance_incentives", "investissement"] },
   { label: "Ressources Humaines",         labelAr: "الموارد البشرية",      ids: ["rh_productivite", "rh_comptabilite", "hr_documents", "template_editor", "agents_ia"] },
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "permissions_matrix", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "permissions_matrix", "journal_activite", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -500,6 +502,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   demandes_comptes:  (u) => <BODemandesComptes user={u} />,
   web_integration:   (u) => <BOWebIntegration user={u} />,
   permissions_matrix:(_u) => <BOPermissionsMatrix />,
+  journal_activite:  (u) => <BOJournalActivite user={u} />,
   settings:          (u) => <BOSettings user={u} />,
   gsheets:           (u) => <BOGoogleSheets user={u} />,
   comptes_externes:  (u) => <BOComptesExternes user={u} />,

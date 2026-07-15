@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { store, type User } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import type { FichePayroll } from "./BOResources"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -204,7 +205,9 @@ function FicheDetail({ fiche, onSave, onClose, benefNetEntreprise, caisseSolde }
   const resteEnCaisse     = actionnaire ? caisseSolde - totalActionnaire : null
 
   const handleValidate = () => {
-    if (!hasPermission(store.getSession()?.role, "gerer_salaires")) return
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "gerer_salaires")) { logAction(session, "gerer_salaires", "denied", { type: "fiche_paie", id: fiche.id }); return }
+    logAction(session, "gerer_salaires", "success", { type: "fiche_paie", id: fiche.id })
     const updated: FichePayroll = {
       ...fiche,
       benefEntreprise:  actionnaire ? benefNetEntreprise : undefined,

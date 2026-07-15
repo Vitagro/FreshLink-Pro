@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { store, type Article, type HistoriquePrixAchat, FAMILLE_GROUPES, getAllFamilles, addCustomFamille, paDeviationConfirmMessage } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { resolveArticlePhoto } from "@/lib/articlePhotoHelper"
 import { getArticlePhoto } from "@/lib/articlePhotos"
 import { deleteArticle } from "@/lib/supabase/db"
@@ -286,7 +287,9 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
 
   const handleSave = () => {
     if (!form.nom) return
-    if (!hasPermission(store.getSession()?.role, "modifier_article")) return
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "modifier_article")) { logAction(session, "modifier_article", "denied", { type: "article", label: form.nom }); return }
+    logAction(session, "modifier_article", "success", { type: "article", id: editArt?.id, label: form.nom })
     // Garde-fou anti-faute-de-frappe (FR + AR) sur modification manuelle du PA
     if (editArt && form.prixAchat !== editArt.prixAchat) {
       const deviation = store.checkPaDeviationSuspecte(editArt.id, form.prixAchat)
@@ -311,16 +314,22 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   }
 
   const handleDelete = (id: string) => {
-    if (!hasPermission(store.getSession()?.role, "supprimer_article")) return
+    const session = store.getSession()
+    const art = store.getArticles().find(a => a.id === id)
+    if (!hasPermission(session?.role, "supprimer_article")) { logAction(session, "supprimer_article", "denied", { type: "article", id, label: art?.nom }); return }
     if (!window.confirm("Supprimer définitivement cet article ? Cette action est irréversible.")) return
+    logAction(session, "supprimer_article", "success", { type: "article", id, label: art?.nom })
     deleteArticle(id).catch(e => console.error("[BOArticles] delete sync error:", e))
     setArticles(store.getArticles().filter(a => a.id !== id))
   }
 
   const handleToggleActif = (id: string) => {
+    const session = store.getSession()
     const target = store.getArticles().find(a => a.id === id)
     const willActivate = !(target?.actif ?? true)
-    if (!hasPermission(store.getSession()?.role, willActivate ? "activer_article" : "desactiver_article")) return
+    const permKey = willActivate ? "activer_article" : "desactiver_article"
+    if (!hasPermission(session?.role, permKey)) { logAction(session, permKey, "denied", { type: "article", id, label: target?.nom }); return }
+    logAction(session, permKey, "success", { type: "article", id, label: target?.nom })
     const all = store.getArticles().map(a => a.id === id ? { ...a, actif: !(a.actif ?? true) } : a)
     store.saveArticles(all)
     const updated = all.find(a => a.id === id)
@@ -329,7 +338,9 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   }
 
   const handleToggleCatalogue = (id: string) => {
-    if (!hasPermission(store.getSession()?.role, "catalogue_toggle")) return
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "catalogue_toggle")) { logAction(session, "catalogue_toggle", "denied", { type: "article", id }); return }
+    logAction(session, "catalogue_toggle", "success", { type: "article", id })
     const all = store.getArticles().map(a => a.id === id ? { ...a, catalogueVisible: !(a.catalogueVisible ?? true) } : a)
     store.saveArticles(all)
     const updated = all.find(a => a.id === id)
