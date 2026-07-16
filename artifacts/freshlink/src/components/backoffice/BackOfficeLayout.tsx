@@ -109,7 +109,7 @@ const BOShopAnalytics        = React.lazy(() => import("./BOShopAnalytics"))
 const BOPromoCodes           = React.lazy(() => import("./BOPromoCodes"))
 const AnalyseCaisseAcheteur  = React.lazy(() => import("./AnalyseCaisseAcheteur"))
 const BOAnalyseCredit        = React.lazy(() => import("./BOAnalyseCredit"))
-const BORolesPermissions     = React.lazy(() => import("./BORolesPermissions"))
+const BORolesPermissionsHub  = React.lazy(() => import("./BORolesPermissionsHub"))
 const BORapportMarche        = React.lazy(() => import("./BORapportMarche"))
 const AnalyseReceptionPanel  = React.lazy(() => import("./AnalyseReceptionPanel"))
 const ShelfLifePanel         = React.lazy(() => import("./ShelfLifePanel"))
@@ -140,7 +140,6 @@ const BOSourcing             = React.lazy(() => import("./BOSourcing"))
 const BOPricing              = React.lazy(() => import("./BOPricing"))
 const BODemandesComptes      = React.lazy(() => import("./BODemandesComptes"))
 const BOWebIntegration       = React.lazy(() => import("./BOWebIntegration"))
-const BOPermissionsMatrix    = React.lazy(() => import("./BOPermissionsMatrix"))
 const BOMarketplace          = React.lazy(() => import("./BOMarketplace"))
 const BODocuments            = React.lazy(() => import("./BODocuments"))
 const BOCategoryPricing      = React.lazy(() => import("./BOCategoryPricing"))
@@ -182,7 +181,7 @@ export type Tab =
   | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
   | "loyalty" | "performance_incentives" | "template_editor"
   | "investissement" | "sourcing" | "pricing" | "pricing_concurrent" | "finance_cdg"
-  | "demandes_comptes" | "web_integration" | "permissions_matrix" | "journal_activite"
+  | "demandes_comptes" | "web_integration" | "journal_activite"
   | "marketplace"
   | "documents"
   | "category_pricing"
@@ -229,7 +228,6 @@ const NAV_I18N_KEYS: Partial<Record<string, keyof typeof T>> = {
   agents_ia: "nav.agents_ia", gps_tracker: "nav.gps", feedback: "nav.feedback",
   users: "nav.users", settings: "nav.settings_tab", database: "nav.settings_tab",
   demandes_comptes: "nav.demandes", web_integration: "nav.web_int",
-  permissions_matrix: "nav.permissions",
 }
 
 const NAV_GROUP_I18N: Record<string, { fr: string; ar: string; en: string }> = {
@@ -404,7 +402,6 @@ const NAV_GROUPS_RAW: NavGroup[] = [
     items: [
       { id: "users",             label: "Utilisateurs",          labelAr: "المستخدمون",        permKey: "canViewDatabase", icon: <Icon d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /> },
       { id: "roles_permissions", label: "Roles & Permissions",   labelAr: "الأدوار والصلاحيات", permKey: "canViewDatabase", icon: <Icon d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /> },
-      { id: "permissions_matrix",label: "Matrice des Permissions",labelAr: "مصفوفة الصلاحيات",  permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
       { id: "journal_activite",  label: "Journal d'Activité",     labelAr: "سجل النشاط",        permKey: "canViewDatabase", icon: <Icon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /> },
       { id: "device_access",     label: "Acces Appareils",       labelAr: "أجهزة الوصول",     permKey: "canViewDatabase", icon: <Icon d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
       { id: "mobile_gestion",    label: "Gestion Mobile",        labelAr: "إدارة الموبايل",   permKey: "canViewDatabase", icon: <Icon d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /> },
@@ -450,7 +447,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
   { label: "Finance & Contrôle de Gestion", labelAr: "المالية ومراقبة التسيير", ids: ["finance", "fiscalite", "cash", "caisse_acheteur", "analyse_credit", "finance_cdg", "performance_incentives", "investissement"] },
   { label: "Ressources Humaines",         labelAr: "الموارد البشرية",      ids: ["rh_productivite", "rh_comptabilite", "hr_documents", "template_editor", "agents_ia"] },
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "permissions_matrix", "journal_activite", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "journal_activite", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -501,7 +498,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   liens_externes:    (u)  => <BOExternalLinks user={u} />,
   demandes_comptes:  (u) => <BODemandesComptes user={u} />,
   web_integration:   (u) => <BOWebIntegration user={u} />,
-  permissions_matrix:(_u) => <BOPermissionsMatrix />,
   journal_activite:  (u) => <BOJournalActivite user={u} />,
   settings:          (u) => <BOSettings user={u} />,
   gsheets:           (u) => <BOGoogleSheets user={u} />,
@@ -522,7 +518,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   promo_codes:         (_u) => <BOPromoCodes />,
   caisse_acheteur:     (_u) => <AnalyseCaisseAcheteur />,
   analyse_credit:      (_u) => <BOAnalyseCredit />,
-  roles_permissions:   (_u) => <BORolesPermissions />,
+  roles_permissions:   (u) => <BORolesPermissionsHub user={u} />,
   rapport_marche:      (_u) => <BORapportMarche />,
   analyse_reception:   (_u) => <AnalyseReceptionPanel />,
   shelf_life:          (_u) => <ShelfLifePanel />,
@@ -1026,25 +1022,35 @@ function SidebarContent({
   const BG2 = "#1a4f2a"
   const ACTIVE = "#22c55e"
 
-  // Groupes (grandes rubriques) repliés — liste déroulable, persistée.
-  // Par défaut sur mobile (drawer hamburger) : tous repliés au 1er affichage
-  // pour ne pas noyer l'utilisateur sous la liste complète des rubriques —
-  // sur desktop le comportement historique (tout déplié) est conservé.
+  // Groupes (grandes rubriques) repliés — liste déroulable, persistée pour
+  // la session courante (remise à zéro — tout replié — à chaque reconnexion,
+  // voir store.logout()). Comportement accordéon : ouvrir une rubrique (ou
+  // naviguer vers l'un de ses éléments) replie automatiquement les autres.
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set()
     try {
       const saved = localStorage.getItem("fl_nav_collapsed")
       if (saved != null) return new Set(JSON.parse(saved) as string[])
     } catch { /* noop */ }
-    if (window.innerWidth < 1024) return new Set(filteredGroups.map(g => g.label))
-    return new Set()
+    return new Set(filteredGroups.map(g => g.label))
   })
+  const persistCollapsed = (next: Set<string>) => {
+    try { localStorage.setItem("fl_nav_collapsed", JSON.stringify([...next])) } catch { /* noop */ }
+  }
   const toggleGroup = (label: string) => setCollapsedGroups(prev => {
-    const next = new Set(prev)
-    if (next.has(label)) next.delete(label); else next.add(label)
-    try { localStorage.setItem("fl_nav_collapsed", JSON.stringify([...next])) } catch { /* */ }
+    const isCollapsing = !prev.has(label)
+    // Ouvrir `label` replie les autres ; le replier n'affecte que lui-même.
+    const next = isCollapsing
+      ? new Set(prev).add(label)
+      : new Set(filteredGroups.map(g => g.label).filter(l => l !== label))
+    persistCollapsed(next)
     return next
   })
+  const collapseAllExcept = (label: string) => {
+    const next = new Set(filteredGroups.map(g => g.label).filter(l => l !== label))
+    persistCollapsed(next)
+    setCollapsedGroups(next)
+  }
 
   return (
     <aside className="flex flex-col h-full" style={{ background: BG, color: "#d1fae5" }}>
@@ -1115,7 +1121,7 @@ function SidebarContent({
               return (
                 <button
                   key={item.id}
-                  onClick={() => { navigate(item.id); setNavSearch("") }}
+                  onClick={() => { navigate(item.id); setNavSearch(""); collapseAllExcept(group.label) }}
                   title={sidebarCollapsed ? itemLabel : undefined}
                   className={[
                     "w-full flex items-center gap-3 rounded-xl text-sm transition-all duration-150 group mb-0.5",

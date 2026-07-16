@@ -2634,7 +2634,12 @@ export const store = {
   // --- Session ---
   getSession: (): User | null => getLS("fl_session", null),
   setSession: (u: User | null) => setLS("fl_session", u),
-  logout: () => setLS("fl_session", null),
+  logout: () => {
+    setLS("fl_session", null)
+    // Repli du menu au prochain login — évite de retrouver toutes les
+    // rubriques dépliées après une reconnexion.
+    try { localStorage.removeItem("fl_nav_collapsed") } catch { /* noop */ }
+  },
 
   // --- Read-only guard ---
   // Returns true if the current session is a demo account (writes should be blocked)
