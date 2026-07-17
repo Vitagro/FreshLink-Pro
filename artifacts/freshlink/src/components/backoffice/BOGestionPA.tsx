@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef } from "react"
-import * as XLSX from "xlsx"
 import { store, type User, type Article, paDeviationConfirmMessage } from "@/lib/store"
 
 // ── Cycle "commande" (confirmé par le client) ────────────────────────────────
@@ -82,10 +81,11 @@ export default function BOGestionPA({ user }: { user: User }) {
     import("@/lib/supabase/db").then(db => db.upsertArticle(all[i]).catch(() => {}))
   }
 
-  const doExport = () => {
+  const doExport = async () => {
     const src = scope === "ordered" ? articles.filter(a => orderedIds.has(a.id)) : articles
     if (!src.length) { flash(false, scope === "ordered" ? "Aucun article commandé sur cette période." : "Aucun article."); return }
     const rows = src.map(a => ({ ref: a.id, nom: a.nom, nom_ar: a.nomAr ?? "", famille: a.famille ?? "", unite: a.unite ?? "", PA_actuel: Number(a.prixAchat) || 0 }))
+    const XLSX = await import("xlsx")
     const ws = XLSX.utils.json_to_sheet(rows); const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "PA")
     XLSX.writeFile(wb, `PA_${scope === "ordered" ? "commandes" : "tous"}_${new Date().toISOString().slice(0, 10)}.xlsx`)
@@ -96,6 +96,7 @@ export default function BOGestionPA({ user }: { user: User }) {
     setImporting(true)
     try {
       const buf = await file.arrayBuffer()
+      const XLSX = await import("xlsx")
       const wb = XLSX.read(buf, { type: "array" })
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" })

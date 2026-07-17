@@ -1,6 +1,5 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
-import * as XLSX from "xlsx"
 import { store } from "@/lib/store"
 import type { Article, Client, EchelonClient, User } from "@/lib/store"
 import { hasPermission, type PermKey } from "@/lib/permissions"
@@ -44,7 +43,8 @@ function exportJSON(articles: Article[]) {
   downloadBlob(new Blob([JSON.stringify(articles.map(articleToObj), null, 2)], { type: "application/json" }), `tarifs_${stamp()}.json`)
 }
 
-function exportExcel(articles: Article[]) {
+async function exportExcel(articles: Article[]) {
+  const XLSX = await import("xlsx")
   const ws = XLSX.utils.json_to_sheet(articles.map(articleToObj), { header: [...EXPORT_FIELDS] })
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, "Tarifs")
@@ -161,7 +161,7 @@ export default function BOCategoryPricing({ user }: { user: User }) {
     const isJSON = name.endsWith(".json")
     const fmt = isExcel ? "Excel" : isJSON ? "JSON" : "CSV"
     const reader = new FileReader()
-    reader.onload = ev => {
+    reader.onload = async ev => {
       try {
         let rawRows: Record<string, unknown>[] = []
         if (isJSON) {
@@ -169,6 +169,7 @@ export default function BOCategoryPricing({ user }: { user: User }) {
           const arr = Array.isArray(parsed) ? parsed : (parsed as { articles?: unknown[] })?.articles
           rawRows = (Array.isArray(arr) ? arr : []) as Record<string, unknown>[]
         } else if (isExcel) {
+          const XLSX = await import("xlsx")
           const wb = XLSX.read(ev.target?.result as ArrayBuffer, { type: "array" })
           const ws = wb.Sheets[wb.SheetNames[0]]
           rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" })

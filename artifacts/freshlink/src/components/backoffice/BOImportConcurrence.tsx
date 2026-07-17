@@ -16,7 +16,6 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useRef } from "react"
-import * as XLSX from "xlsx"
 
 // ─── Storage ────────────────────────────────────────────────────────────────
 const LS_PRIX   = "fl_intel_prix"     // CompetitorEntry[] (PA concurrent) — partagé
@@ -61,7 +60,8 @@ function toISO(v: unknown): string {
 function fmtMad(n: number) { return `${(n || 0).toLocaleString("fr-MA", { maximumFractionDigits: 0 })} DH` }
 
 // Lit le 1er onglet (ou un onglet nommé) en tableau de lignes + index par entête
-function readSheet(buf: ArrayBuffer, sheetMatch?: string) {
+async function readSheet(buf: ArrayBuffer, sheetMatch?: string) {
+  const XLSX = await import("xlsx")
   const wb = XLSX.read(buf, { type: "array", cellDates: true })
   const name = sheetMatch
     ? (wb.SheetNames.find(n => n.toLowerCase().includes(sheetMatch.toLowerCase())) ?? wb.SheetNames[0])
@@ -110,7 +110,7 @@ export default function BOImportConcurrence() {
   const importPV = async (file: File) => {
     setBusy(true)
     try {
-      const { rows, idx } = readSheet(await file.arrayBuffer(), "prix")
+      const { rows, idx } = await readSheet(await file.arrayBuffer(), "prix")
       const iRef = idx("Référence") >= 0 ? idx("Référence") : idx("Reference")
       const iLib = idx("Libellé") >= 0 ? idx("Libellé") : idx("Libelle")
       const iUni = idx("Unité") >= 0 ? idx("Unité") : idx("Unite")
@@ -146,7 +146,7 @@ export default function BOImportConcurrence() {
   const importFacturation = async (file: File) => {
     setBusy(true)
     try {
-      const { rows, idx } = readSheet(await file.arrayBuffer(), "factur")
+      const { rows, idx } = await readSheet(await file.arrayBuffer(), "factur")
       const c = {
         type: idx("Type"), comm: idx("Prévendeur/Livreur") >= 0 ? idx("Prévendeur/Livreur") : idx("Prevendeur/Livreur"),
         client: idx("Client"), secteur: idx("Secteur"), code: idx("CodeClient"), doc: idx("Document"),
@@ -188,7 +188,7 @@ export default function BOImportConcurrence() {
   const importSynthese = async (file: File) => {
     setBusy(true)
     try {
-      const { rows, idx } = readSheet(await file.arrayBuffer(), "synth")
+      const { rows, idx } = await readSheet(await file.arrayBuffer(), "synth")
       const c = {
         ach: idx("Acheteur"), art: idx("Article"), fam: idx("Famille"),
         qte: idx("Qté Achetée") >= 0 ? idx("Qté Achetée") : idx("Qte Achetee"),

@@ -1133,6 +1133,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                       </td>
                       <td className="px-4 py-2">
                         <img src={resolveArticlePhoto(a)} alt={`${a.nom} produit frais`}
+                          loading="lazy" decoding="async"
                           className="w-10 h-10 rounded-xl object-cover border border-border"
                           onError={e => { e.currentTarget.src = DEFAULT_PHOTO }} />
                       </td>

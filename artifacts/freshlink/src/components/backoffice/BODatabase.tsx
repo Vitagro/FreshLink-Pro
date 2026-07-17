@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import * as XLSX from "xlsx"
 import { store, type Client } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
@@ -308,6 +307,7 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
     if (isExcel) {
       try {
         const buffer = await file.arrayBuffer()
+        const XLSX = await import("xlsx")
         const wb = XLSX.read(buffer, { type: "array" })
         const ws = wb.Sheets[wb.SheetNames[0]]
         rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" })
@@ -647,8 +647,9 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
           </button>
           {/* Export this table as Excel — ALL rows */}
           <button
-            onClick={() => {
+            onClick={async () => {
               if (data.length === 0) return
+              const XLSX = await import("xlsx")
               const ws = XLSX.utils.json_to_sheet(data)
               const wb = XLSX.utils.book_new()
               XLSX.utils.book_append_sheet(wb, ws, section.slice(0, 31))
