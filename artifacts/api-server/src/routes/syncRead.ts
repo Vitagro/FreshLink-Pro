@@ -48,9 +48,18 @@ router.get("/", async (req: Request, res: Response) => {
     res.status(403).json({ ok: false, error: `Table non autorisée: ${table}` });
     return;
   }
+  // updatedSince est optionnel et n'affecte aucun appelant existant qui ne le
+  // passe pas — filtre côté Postgres (updated_at=gte...) plutôt que de tout
+  // rapatrier pour filtrer côté client. Ne couvre PAS les suppressions
+  // survenues pendant qu'un appareil était hors-ligne (une lecture delta ne
+  // peut pas signaler une ligne disparue) : ne pas l'utiliser pour un sync
+  // qui doit rester correct face aux deletes sans un mécanisme de
+  // tombstone/resync périodique complémentaire.
+  const updatedSince = req.query["updatedSince"] as string | undefined;
   try {
+    const filter = updatedSince ? `&updated_at=gte.${encodeURIComponent(updatedSince)}` : "";
     const r = await fetch(
-      `${SB_URL}/rest/v1/${table}?select=id,payload,updated_at&limit=20000`,
+      `${SB_URL}/rest/v1/${table}?select=id,payload,updated_at&limit=20000${filter}`,
       { headers: { apikey: SB_SERVICE_KEY, Authorization: `Bearer ${SB_SERVICE_KEY}` } },
     );
     if (!r.ok) {
