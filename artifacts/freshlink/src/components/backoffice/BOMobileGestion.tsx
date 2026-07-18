@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { store, isMobileRole, type User } from "@/lib/store"
+import { useState, useEffect, useCallback, useMemo } from "react"
+import { store, isMobileRole, effectiveGroupId, isSuperSuperAdmin, type User } from "@/lib/store"
 
 interface Props { user: User }
 
@@ -27,8 +27,29 @@ const DATA_GROUPS: { key: string; label: string; icon: string; desc: string; tab
   { key: "commandes", label: "Commandes clients",           icon: "🧾", desc: "Commandes prises par les prévendeurs sur mobile uniquement — jamais les commandes back-office ou site web.", tables: ["fl_commandes"] },
 ]
 
+// ── Droits de suppression par équipe ────────────────────────────────────────
+// Un Super Super Administrateur (top admin) peut cibler « Toutes les équipes »
+// ou une équipe précise. Un Super Administrateur standard (ou admin) est
+// toujours restreint à sa propre équipe (effectiveGroupId), sans sélecteur.
+// Aucune des 3 tables mobiles ne porte de `groupeId` propre : on résout
+// l'équipe propriétaire via le champ créateur existant de chaque table
+// (jamais de nouveau champ requis, jamais de modification des flux mobile).
+const OWNER_FIELD: Record<string, string> = {
+  fl_purchase_orders: "createdBy",
+  fl_bons_achat: "acheteurId",
+  fl_commandes: "commercialId",
+}
+const SCOPE_ALL = "__all__"
+
+function resolveOwnerGroup(table: string, payload: Record<string, unknown> | undefined, usersById: Map<string, User>): string | undefined {
+  const field = OWNER_FIELD[table]
+  const uid = field && payload ? (payload[field] as string | undefined) : undefined
+  const owner = uid ? usersById.get(uid) : undefined
+  return owner ? effectiveGroupId(owner) : undefined
+}
+
 export default function BOMobileGestion({ user }: Props) {
-  const [users, setUsers]         = useState<User[]>([])
+  const [allUsers, setAllUsers]   = useState<User[]>([])
   const [search, setSearch]       = useState("")
   const [msg, setMsg]             = useState<{ ok: boolean; text: string } | null>(null)
   const [confirmUser, setConfirmUser] = useState<User | null>(null)
@@ -37,10 +58,32 @@ export default function BOMobileGestion({ user }: Props) {
   const [restartLoading, setRestartLoading] = useState(false)
   const [restartMsg, setRestartMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  const isTop = isSuperSuperAdmin(user)
+  const myGroup = effectiveGroupId(user)
+  const [scope, setScope] = useState<string>(SCOPE_ALL)   // top admin uniquement
+
   const load = useCallback(() => {
-    setUsers(store.getUsers().filter(u => isMobileRole(u.role)))
+    setAllUsers(store.getUsers())
   }, [])
   useEffect(() => { load() }, [load])
+
+  // Équipes = comptes admin racine (leur propre groupeId), pour le sélecteur top admin.
+  const teams = useMemo(() => (
+    allUsers
+      .filter(u => ["super_super_admin", "super_admin", "admin"].includes(u.role) && effectiveGroupId(u) === u.id)
+      .map(u => ({ id: u.id, label: u.name }))
+  ), [allUsers])
+
+  // Portée effective de cette session : top admin = ce qu'il a choisi (ou tout) ;
+  // super admin / admin standard = toujours sa propre équipe, jamais les autres.
+  const effectiveScope = isTop ? scope : myGroup
+  const scopeLabel = effectiveScope === SCOPE_ALL ? "toutes les équipes" : (teams.find(t => t.id === effectiveScope)?.label ?? "équipe inconnue")
+
+  const users = useMemo(() => {
+    const mobiles = allUsers.filter(u => isMobileRole(u.role))
+    if (effectiveScope === SCOPE_ALL) return mobiles
+    return mobiles.filter(u => effectiveGroupId(u) === effectiveScope)
+  }, [allUsers, effectiveScope])
 
   if (!canAccess(user)) {
     return (
@@ -61,6 +104,14 @@ export default function BOMobileGestion({ user }: Props) {
 
   async function deleteProfile(u: User) {
     setConfirmUser(null)
+    // Garde-fou : un super admin/admin standard ne peut jamais supprimer un
+    // profil d'une autre équipe, même par appel direct — seul le top admin
+    // (super_super_admin) n'est pas restreint.
+    if (!isTop && effectiveGroupId(u) !== myGroup) {
+      setMsg({ ok: false, text: `⛔ Ce profil appartient à une autre équipe — suppression refusée.` })
+      setTimeout(() => setMsg(null), 4000)
+      return
+    }
     store.saveUsers(store.getUsers().filter(x => x.id !== u.id))
     try {
       await fetch("/api/sync-write", {
@@ -75,8 +126,10 @@ export default function BOMobileGestion({ user }: Props) {
 
   async function clearGroup(group: typeof DATA_GROUPS[number]) {
     setBusyGroup(group.key); setConfirmGroup(null)
+    const usersById = new Map(allUsers.map(u => [u.id, u]))
     try {
       let totalDeleted = 0
+      let totalSkippedAutreEquipe = 0
       let sbErrors = 0
       for (const table of group.tables) {
         // Ne jamais faire un clearAll — on ne supprime QUE les lignes dont le
@@ -85,7 +138,18 @@ export default function BOMobileGestion({ user }: Props) {
         const readRes = await fetch(`/api/sync-read?table=${table}`, { cache: "no-store" })
         const readData = await readRes.json()
         const rows: { id: string; payload?: Record<string, unknown> }[] = readData?.ok ? (readData.data ?? []) : []
-        const mobileIds = rows.filter(r => r.payload?.createdVia === "mobile").map(r => r.id)
+        const mobileRows = rows.filter(r => r.payload?.createdVia === "mobile")
+        // Portée équipe : un top admin sur "toutes les équipes" supprime tout ;
+        // sinon (top admin sur une équipe précise, ou super admin/admin standard
+        // toujours restreint à la sienne) on ne garde que les lignes dont le
+        // créateur résolu appartient à cette équipe — un créateur introuvable
+        // (compte supprimé, ancien enregistrement) n'est JAMAIS supprimé par un
+        // admin non-top, par prudence.
+        const eligible = effectiveScope === SCOPE_ALL
+          ? mobileRows
+          : mobileRows.filter(r => resolveOwnerGroup(table, r.payload, usersById) === effectiveScope)
+        totalSkippedAutreEquipe += mobileRows.length - eligible.length
+        const mobileIds = eligible.map(r => r.id)
         if (mobileIds.length === 0) continue
         const writeRes = await fetch("/api/sync-write", {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -99,9 +163,10 @@ export default function BOMobileGestion({ user }: Props) {
           localStorage.setItem(table, JSON.stringify(local.filter(r => !mobileIds.includes(r.id))))
         } catch { /* local cache best-effort */ }
       }
+      const restriction = totalSkippedAutreEquipe > 0 ? ` (${totalSkippedAutreEquipe} enregistrement(s) d'autres équipes préservé(s))` : ""
       setMsg(sbErrors > 0
         ? { ok: false, text: `Effacement partiel — ${sbErrors} table(s) Supabase non effacée(s).` }
-        : { ok: true, text: `✅ ${totalDeleted} enregistrement(s) mobile effacé(s) dans ${group.label} (back-office et web non touchés).` })
+        : { ok: true, text: `✅ ${totalDeleted} enregistrement(s) mobile effacé(s) dans ${group.label} — ${scopeLabel}${restriction}.` })
     } catch {
       setMsg({ ok: false, text: `Erreur lors de l'effacement de ${group.label}.` })
     }
@@ -145,6 +210,27 @@ export default function BOMobileGestion({ user }: Props) {
           {msg.text}
         </div>
       )}
+
+      {/* Portée équipe — top admin choisit, super admin/admin standard est restreint */}
+      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/40 px-5 py-3.5 flex items-center gap-3 flex-wrap">
+        <span className="text-lg">🛡️</span>
+        {isTop ? (
+          <>
+            <label className="text-xs font-bold text-indigo-900">Portée des suppressions (Top Admin) :</label>
+            <select
+              value={scope} onChange={e => setScope(e.target.value)}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold border border-indigo-300 bg-white outline-none focus:border-indigo-500">
+              <option value={SCOPE_ALL}>🌐 Toutes les équipes (global)</option>
+              {teams.map(t => <option key={t.id} value={t.id}>👥 {t.label}</option>)}
+            </select>
+            <span className="text-[11px] text-indigo-700">Vous seul pouvez cibler une autre équipe que la vôtre, ou toutes à la fois.</span>
+          </>
+        ) : (
+          <span className="text-xs font-semibold text-indigo-900">
+            Restreint à votre équipe (<strong>{scopeLabel}</strong>) — impossible de voir ou supprimer les données des autres équipes.
+          </span>
+        )}
+      </div>
 
       {/* Redémarrer les mobiles */}
       <div className="rounded-2xl border border-red-200 overflow-hidden">

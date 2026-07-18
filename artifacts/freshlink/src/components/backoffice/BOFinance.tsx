@@ -9,6 +9,7 @@ import {
   type StatutSalarie, type TypeContrat,
   type Client, type BonLivraison, type UserRole,
   CATEGORIE_CHARGE_LABELS, DELAI_RECOUVREMENT_LABELS,
+  computeFichePaie,
 } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
@@ -365,11 +366,28 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
     setSalForm(EMPTY_SAL); setEditSalId(null); setShowSalForm(false); refresh(); toast("Salarie sauvegarde")
   }
 
+  // Fiche de paie complète (SMIG/CNSS/AMO/IR + absences non payées + retenue
+  // caisse) du salarié/mois sélectionné dans le formulaire de versement.
+  const paiFicheCalc = useMemo(() => {
+    const sal = salaries.find(s => s.id === paiSalarieId)
+    if (!sal || !paiMois) return null
+    const joursAbsenceNonPayee = store.joursAbsenceNonPayeeMois(sal.id, paiMois)
+    const retenue = store.getRetenuesCaisse().find(r => r.mois === paiMois && r.acheteurNom === `${sal.prenom} ${sal.nom}`)
+    return {
+      calc: computeFichePaie({
+        salaireBrut: sal.salaireBrut, avance: paiAvance, retenueCaisse: retenue?.montant ?? 0,
+        joursAbsenceNonPayee, fiscal: store.getFiscalConfig(),
+      }),
+      joursAbsenceNonPayee, retenueCaisse: retenue?.montant ?? 0,
+    }
+  }, [salaries, paiSalarieId, paiMois, paiAvance])
+
   const payerSalaire = () => {
     if (isReadOnly) { toast("Compte demo : lecture seule"); return }
     const sal = salaries.find(s => s.id === paiSalarieId)
-    if (!sal || !paiMois) return
-    const salaireNet = sal.salaireBrut - paiAvance
+    if (!sal || !paiMois || !paiFicheCalc) return
+    const { calc, joursAbsenceNonPayee, retenueCaisse } = paiFicheCalc
+    const salaireNet = calc.salaireNet
     if (store.getCaisseSolde() - salaireNet < 0) {
       toast(`Solde caisse insuffisant (${store.getCaisseSolde().toFixed(2)} DH) pour ce salaire de ${salaireNet.toFixed(2)} DH.`)
       return
@@ -378,8 +396,20 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
       id: store.genId(), salarieId: sal.id, salarieNom: `${sal.prenom} ${sal.nom}`,
       mois: paiMois, salaireBrut: sal.salaireBrut, avance: paiAvance, salaireNet,
       datePaiement: store.today(), createdBy: user.id,
+      joursTravailles: store.joursTravaillesMois(sal.id, paiMois),
+      joursAbsenceNonPayee, salaireBrutAjuste: calc.salaireBrutAjuste,
+      cnssSalarial: calc.cnssSalarial, amoSalarial: calc.amoSalarial, irRetenue: calc.irRetenue,
+      retenueCaisse, cnssPatronal: calc.cnssPatronal, amoPatronal: calc.amoPatronal,
+      prestationsFamilialesPatronal: calc.prestationsFamilialesPatronal,
+      formationProfessionnellePatronal: calc.formationProfessionnellePatronal,
+      chargesPatronalesTotal: calc.chargesPatronalesTotal, coutTotalEmployeur: calc.coutTotalEmployeur,
+      sousSmig: calc.sousSmig,
     }
     store.addPaiementSalaire(p)
+    if (retenueCaisse > 0) {
+      const ref = store.getRetenuesCaisse().find(r => r.mois === paiMois && r.acheteurNom === `${sal.prenom} ${sal.nom}`)?.ref
+      if (ref) store.removeRetenueCaisse(ref)
+    }
     // Auto caisse sortie
     store.addCaisseEntry({
       id: store.genId(), date: store.today(), libelle: `Salaire ${sal.prenom} ${sal.nom} - ${fmtMois(paiMois)}`,
@@ -1123,13 +1153,46 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
                     className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
                 <div className="flex flex-col gap-1 justify-end">
-                  {paiSalarieId && (
+                  {paiSalarieId && paiFicheCalc && (
                     <div className="px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold font-mono text-sm">
-                      Net: {fmt((salaries.find(s => s.id === paiSalarieId)?.salaireBrut || 0) - paiAvance)} DH
+                      Net: {fmt(paiFicheCalc.calc.salaireNet)} DH
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Fiche de paie détaillée — SMIG / CNSS / AMO / IR, calculée en temps réel */}
+              {paiSalarieId && paiFicheCalc && (
+                <div className="mt-4 rounded-2xl border border-border overflow-hidden">
+                  <div className="px-4 py-2.5 bg-muted/40 border-b border-border flex items-center justify-between flex-wrap gap-2">
+                    <p className="text-xs font-bold text-foreground">Aperçu fiche de paie — {fmtMois(paiMois)}</p>
+                    {paiFicheCalc.calc.sousSmig && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700 border border-red-300">
+                        ⚠️ Sous le SMIG ({fmt(store.getFiscalConfig().smigMensuelDH)} DH)
+                      </span>
+                    )}
+                  </div>
+                  <div className="p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                    <div><p className="text-muted-foreground">Salaire brut</p><p className="font-bold font-mono">{fmt(paiFicheCalc.calc.salaireBrut)} DH</p></div>
+                    <div><p className="text-muted-foreground">Absences non payées</p><p className="font-bold font-mono">{paiFicheCalc.joursAbsenceNonPayee} j</p></div>
+                    <div><p className="text-muted-foreground">Brut ajusté</p><p className="font-bold font-mono">{fmt(paiFicheCalc.calc.salaireBrutAjuste)} DH</p></div>
+                    <div><p className="text-muted-foreground">CNSS salariale</p><p className="font-bold font-mono text-red-600">-{fmt(paiFicheCalc.calc.cnssSalarial)} DH</p></div>
+                    <div><p className="text-muted-foreground">AMO salariale</p><p className="font-bold font-mono text-red-600">-{fmt(paiFicheCalc.calc.amoSalarial)} DH</p></div>
+                    <div><p className="text-muted-foreground">IR (retenue à la source)</p><p className="font-bold font-mono text-red-600">-{fmt(paiFicheCalc.calc.irRetenue)} DH</p></div>
+                    {paiFicheCalc.retenueCaisse > 0 && (
+                      <div><p className="text-muted-foreground">Retenue caisse (écart)</p><p className="font-bold font-mono text-red-600">-{fmt(paiFicheCalc.retenueCaisse)} DH</p></div>
+                    )}
+                    <div><p className="text-muted-foreground">Net à payer</p><p className="font-bold font-mono text-emerald-700">{fmt(paiFicheCalc.calc.salaireNet)} DH</p></div>
+                  </div>
+                  <div className="px-4 pb-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs border-t border-border pt-3">
+                    <div><p className="text-muted-foreground">CNSS patronale</p><p className="font-bold font-mono">{fmt(paiFicheCalc.calc.cnssPatronal)} DH</p></div>
+                    <div><p className="text-muted-foreground">AMO patronale</p><p className="font-bold font-mono">{fmt(paiFicheCalc.calc.amoPatronal)} DH</p></div>
+                    <div><p className="text-muted-foreground">Charges patronales totales</p><p className="font-bold font-mono">{fmt(paiFicheCalc.calc.chargesPatronalesTotal)} DH</p></div>
+                    <div><p className="text-muted-foreground">Coût total employeur</p><p className="font-bold font-mono">{fmt(paiFicheCalc.calc.coutTotalEmployeur)} DH</p></div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 mt-4">
                 <button onClick={payerSalaire} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white" style={{ background: "oklch(0.38 0.18 310)" }}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>

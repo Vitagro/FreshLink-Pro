@@ -220,11 +220,71 @@ export default function BOFiscalite({ user }: Props) {
           ] as [keyof FiscalConfig, string][]).map(([key, label]) => (
             <div key={key} className="flex flex-col gap-1">
               <label className="text-[11px] font-semibold text-slate-500">{label}</label>
-              <input type="number" step="0.01" value={cfg[key]}
+              <input type="number" step="0.01" value={cfg[key] as number}
                 onChange={e => setCfg(c => ({ ...c, [key]: Number(e.target.value) || 0 }))}
                 className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm" />
             </div>
           ))}
+
+          <div className="col-span-2 md:col-span-5 border-t border-slate-100 pt-3 mt-1">
+            <p className="text-xs font-bold text-slate-700 mb-2">SMIG / CNSS / AMO — calcul fiche de paie (RH)</p>
+          </div>
+          {([
+            ["smigHoraireDH", "SMIG horaire (DH/heure)"],
+            ["smigMensuelDH", "SMIG mensuel de référence (DH)"],
+            ["heuresMensuellesReference", "Heures / mois de référence"],
+            ["tauxCnssSalarial", "CNSS salariale (% du brut, plafonné)"],
+            ["tauxCnssPatronal", "CNSS patronale (% du brut, plafonné)"],
+            ["plafondCnssMensuelDH", "Plafond CNSS mensuel (DH)"],
+            ["tauxAmoSalarial", "AMO salariale (% du brut)"],
+            ["tauxAmoPatronal", "AMO patronale (% du brut)"],
+            ["tauxPrestationsFamilialesPatronal", "Prestations familiales patronales (%)"],
+            ["tauxFormationProfessionnellePatronal", "Formation professionnelle patronale (%)"],
+            ["fraisProfessionnelsTauxIR", "Abattement frais professionnels IR (%)"],
+            ["fraisProfessionnelsPlafondIR", "Plafond abattement frais pro. (DH)"],
+          ] as [keyof FiscalConfig, string][]).map(([key, label]) => (
+            <div key={key} className="flex flex-col gap-1">
+              <label className="text-[11px] font-semibold text-slate-500">{label}</label>
+              <input type="number" step="0.01" value={cfg[key] as number}
+                onChange={e => setCfg(c => ({ ...c, [key]: Number(e.target.value) || 0 }))}
+                className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-sm" />
+            </div>
+          ))}
+
+          <div className="col-span-2 md:col-span-5 border-t border-slate-100 pt-3 mt-1">
+            <p className="text-xs font-bold text-slate-700 mb-2">Barème IR mensuel (retenue à la source)</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead><tr className="text-left text-slate-400 border-b border-slate-100">
+                  <th className="py-1 pr-3">Plafond tranche (DH)</th><th className="py-1 pr-3">Taux (%)</th><th className="py-1 pr-3">Somme à déduire (DH)</th>
+                </tr></thead>
+                <tbody>
+                  {cfg.baremeIR.map((t, i) => (
+                    <tr key={t.id} className="border-b border-slate-50">
+                      <td className="py-1 pr-3">
+                        {t.plafondMensuel == null ? <span className="text-slate-400 italic">au-delà</span> : (
+                          <input type="number" value={t.plafondMensuel}
+                            onChange={e => setCfg(c => ({ ...c, baremeIR: c.baremeIR.map((x, j) => j === i ? { ...x, plafondMensuel: Number(e.target.value) || 0 } : x) }))}
+                            className="w-24 px-2 py-1 rounded border border-slate-200" />
+                        )}
+                      </td>
+                      <td className="py-1 pr-3">
+                        <input type="number" step="0.01" value={t.taux}
+                          onChange={e => setCfg(c => ({ ...c, baremeIR: c.baremeIR.map((x, j) => j === i ? { ...x, taux: Number(e.target.value) || 0 } : x) }))}
+                          className="w-20 px-2 py-1 rounded border border-slate-200" />
+                      </td>
+                      <td className="py-1 pr-3">
+                        <input type="number" step="0.01" value={t.sommeADeduire}
+                          onChange={e => setCfg(c => ({ ...c, baremeIR: c.baremeIR.map((x, j) => j === i ? { ...x, sommeADeduire: Number(e.target.value) || 0 } : x) }))}
+                          className="w-24 px-2 py-1 rounded border border-slate-200" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div className="col-span-2 md:col-span-5 flex items-center gap-2">
             <button onClick={() => { store.saveFiscalConfig(cfg); setSaved(true); setTimeout(() => setSaved(false), 2000) }}
               className="px-4 py-2 rounded-xl bg-emerald-700 text-white text-xs font-bold hover:bg-emerald-800">

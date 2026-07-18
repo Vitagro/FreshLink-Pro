@@ -21,7 +21,8 @@ const SYNCED_KEYS = new Set<string>([
   "fl_users", "fl_clients", "fl_articles", "fl_fournisseurs", "fl_commandes",
   "fl_bons_achat", "fl_purchase_orders", "fl_receptions", "fl_bons_livraison",
   "fl_retours", "fl_trips", "fl_bons_preparation", "fl_messages", "fl_notices",
-  "fl_visites", "fl_demandes_achat", "fl_non_achats", "fl_caisse",
+  "fl_visites", "fl_demandes_achat", "fl_non_achats", "fl_caisse", "fl_caisse_references",
+  "fl_pointages", "fl_absences", "fl_relances_fournisseur",
   // fl_loyalty_transactions / fl_primes_nouveaux_clients : jamais synchronisés
   // avant (même bug que fl_caisse/fl_company) — chaque appareil aurait
   // calculé l'éligibilité "Prime nouveau client" indépendamment, risque de

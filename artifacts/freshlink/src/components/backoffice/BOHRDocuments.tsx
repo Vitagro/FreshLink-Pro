@@ -10,8 +10,12 @@ import {
   type StatutSalarie,
   type TypeContrat,
   type RHNotification,
+  type Pointage,
+  type Absence,
+  type TypeAbsence,
   STATUT_SALARIE_LABELS,
   TYPE_CONTRAT_LABELS,
+  TYPES_ABSENCE_LABELS,
 } from "@/lib/store"
 import {
   printHRDoc,
@@ -546,8 +550,59 @@ const DOC_MODELS: DocModel[] = [
 ]
 
 export default function BOHRDocuments({ user }: { user: User }) {
-  type TabType = "notifs" | "salaries" | "docs" | "paie" | "calculator" | "modeles"
+  type TabType = "notifs" | "salaries" | "docs" | "paie" | "calculator" | "modeles" | "pointage" | "absences"
   const [tab, setTab] = useState<TabType>("notifs")
+
+  // ── Jours de travail (pointage) ──────────────────────────────────────────
+  const todayISO = store.today()
+  const [pointages, setPointages] = useState<Pointage[]>(() => store.getPointages())
+  const reloadPointages = () => setPointages(store.getPointages())
+  const [ptgSalarieId, setPtgSalarieId] = useState("")
+  const [ptgDate, setPtgDate] = useState(todayISO)
+  const [ptgPresent, setPtgPresent] = useState(true)
+  const [ptgHeures, setPtgHeures] = useState<number | "">("")
+
+  const addPointageRow = () => {
+    const sal = salaries.find(s => s.id === ptgSalarieId)
+    if (!sal || !ptgDate) return
+    store.addPointage({
+      id: store.genId(), salarieId: sal.id, salarieNom: `${sal.prenom} ${sal.nom}`,
+      date: ptgDate, present: ptgPresent, heuresTravaillees: ptgHeures === "" ? undefined : Number(ptgHeures),
+      createdBy: user.id, createdAt: new Date().toISOString(),
+    })
+    setPtgHeures(""); reloadPointages()
+  }
+  const removePointageRow = (id: string) => { store.deletePointage(id); reloadPointages() }
+
+  // ── Absences ──────────────────────────────────────────────────────────────
+  const [absences, setAbsences] = useState<Absence[]>(() => store.getAbsences())
+  const reloadAbsences = () => setAbsences(store.getAbsences())
+  const [absSalarieId, setAbsSalarieId] = useState("")
+  const [absType, setAbsType] = useState<TypeAbsence>("conge_paye")
+  const [absDebut, setAbsDebut] = useState(todayISO)
+  const [absFin, setAbsFin] = useState(todayISO)
+  const [absMotif, setAbsMotif] = useState("")
+  const [absJustif, setAbsJustif] = useState("")
+
+  const joursCalendaires = (debut: string, fin: string): number => {
+    const d1 = new Date(debut).getTime(), d2 = new Date(fin).getTime()
+    if (isNaN(d1) || isNaN(d2) || d2 < d1) return 0
+    return Math.round((d2 - d1) / 86400000) + 1
+  }
+
+  const addAbsenceRow = () => {
+    const sal = salaries.find(s => s.id === absSalarieId)
+    if (!sal || !absDebut || !absFin) return
+    store.addAbsence({
+      id: store.genId(), salarieId: sal.id, salarieNom: `${sal.prenom} ${sal.nom}`,
+      type: absType, dateDebut: absDebut, dateFin: absFin,
+      joursDecompte: joursCalendaires(absDebut, absFin),
+      justificatif: absJustif || undefined, motif: absMotif || undefined,
+      createdBy: user.id, createdAt: new Date().toISOString(),
+    })
+    setAbsMotif(""); setAbsJustif(""); reloadAbsences()
+  }
+  const removeAbsenceRow = (id: string) => { store.deleteAbsence(id); reloadAbsences() }
 
   const [docs,      setDocs]      = useState<HRDoc[]>(getDocs)
   const [paiements, setPaiements] = useState<PaiementCycle[]>(getPaie)
@@ -985,6 +1040,8 @@ export default function BOHRDocuments({ user }: { user: User }) {
           {([
             ["notifs",     `Notifications${unreadCount > 0 ? ` (${unreadCount})` : ""}`],
             ["salaries",   `Salaries (${salaries.length})`],
+            ["pointage",   "Jours de Travail"],
+            ["absences",   `Absences${absences.length > 0 ? ` (${absences.length})` : ""}`],
             ["docs",       "Documents RH"],
             ["paie",       "Cycles de Paiement"],
             ["calculator", "Simulateur Paie"],
@@ -1739,6 +1796,149 @@ export default function BOHRDocuments({ user }: { user: User }) {
         )}
 
         {/* ── TAB: CALCULATOR ──────────────────────────────────────────────── */}
+        {/* ── TAB: JOURS DE TRAVAIL (POINTAGE) ─────────────────────────────── */}
+        {tab === "pointage" && (
+          <div className="flex flex-col gap-5 max-w-4xl">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+              <h3 className="font-bold text-slate-800 mb-4">Saisir un jour de travail</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 items-end">
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">Salarié</label>
+                  <select value={ptgSalarieId} onChange={e => setPtgSalarieId(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                    <option value="">-- Choisir --</option>
+                    {salaries.map(s => <option key={s.id} value={s.id}>{s.prenom} {s.nom}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-slate-600">Date</label>
+                  <input type="date" value={ptgDate} onChange={e => setPtgDate(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-slate-600">Présence</label>
+                  <select value={ptgPresent ? "1" : "0"} onChange={e => setPtgPresent(e.target.value === "1")}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                    <option value="1">Présent</option>
+                    <option value="0">Absent</option>
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-slate-600">Heures (optionnel)</label>
+                  <input type="number" min={0} step={0.5} value={ptgHeures}
+                    onChange={e => setPtgHeures(e.target.value === "" ? "" : Number(e.target.value))}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+              </div>
+              <button onClick={addPointageRow} disabled={!ptgSalarieId || !ptgDate}
+                className="mt-4 px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40">
+                Enregistrer
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <p className="text-sm font-bold text-slate-800">Historique des pointages ({pointages.length})</p>
+              </div>
+              <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
+                {pointages.length === 0 && <p className="text-center py-8 text-sm text-slate-400">Aucun pointage enregistré.</p>}
+                {[...pointages].sort((a, b) => b.date.localeCompare(a.date)).map(p => (
+                  <div key={p.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-slate-800">{p.salarieNom}</span>
+                      <span className="text-slate-400 ml-2">{p.date}</span>
+                      {p.heuresTravaillees != null && <span className="text-slate-400 ml-2">{p.heuresTravaillees}h</span>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${p.present ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                        {p.present ? "Présent" : "Absent"}
+                      </span>
+                      <button onClick={() => removePointageRow(p.id)} className="text-slate-300 hover:text-red-500 text-xs">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── TAB: ABSENCES ─────────────────────────────────────────────────── */}
+        {tab === "absences" && (
+          <div className="flex flex-col gap-5 max-w-4xl">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5">
+              <h3 className="font-bold text-slate-800 mb-4">Déclarer une absence</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">Salarié</label>
+                  <select value={absSalarieId} onChange={e => setAbsSalarieId(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                    <option value="">-- Choisir --</option>
+                    {salaries.map(s => <option key={s.id} value={s.id}>{s.prenom} {s.nom}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">Type</label>
+                  <select value={absType} onChange={e => setAbsType(e.target.value as TypeAbsence)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                    {Object.entries(TYPES_ABSENCE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-slate-600">Du</label>
+                  <input type="date" value={absDebut} onChange={e => setAbsDebut(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-slate-600">Au</label>
+                  <input type="date" value={absFin} onChange={e => setAbsFin(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">Motif</label>
+                  <input value={absMotif} onChange={e => setAbsMotif(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1 sm:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">Justificatif (référence/texte)</label>
+                  <input value={absJustif} onChange={e => setAbsJustif(e.target.value)}
+                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 mt-4">
+                <button onClick={addAbsenceRow} disabled={!absSalarieId || !absDebut || !absFin}
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-40">
+                  Déclarer l&apos;absence
+                </button>
+                <span className="text-xs text-slate-400">{joursCalendaires(absDebut, absFin)} jour(s) — {TYPES_ABSENCE_LABELS[absType]}</span>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-3 bg-slate-50 border-b border-slate-200">
+                <p className="text-sm font-bold text-slate-800">Historique des absences ({absences.length})</p>
+              </div>
+              <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
+                {absences.length === 0 && <p className="text-center py-8 text-sm text-slate-400">Aucune absence déclarée.</p>}
+                {[...absences].sort((a, b) => b.dateDebut.localeCompare(a.dateDebut)).map(a => (
+                  <div key={a.id} className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm">
+                    <div className="min-w-0">
+                      <span className="font-semibold text-slate-800">{a.salarieNom}</span>
+                      <span className="text-slate-400 ml-2">{a.dateDebut} → {a.dateFin} ({a.joursDecompte}j)</span>
+                      {a.motif && <span className="text-slate-400 ml-2 italic">« {a.motif} »</span>}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {TYPES_ABSENCE_LABELS[a.type]}
+                      </span>
+                      <button onClick={() => removeAbsenceRow(a.id)} className="text-slate-300 hover:text-red-500 text-xs">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {tab === "calculator" && (
           <div className="max-w-2xl">
             <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">

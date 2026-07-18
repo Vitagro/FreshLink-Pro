@@ -9,6 +9,9 @@ import {
   type ShareholderDistribution,
   type Actionnaire,
   type BonusCriteria,
+  type Commande,
+  type Salarie,
+  computeSeuilRentabiliteCommercial,
 } from "@/lib/store"
 
 function Icon({ d, className = "w-5 h-5" }: { d: string; className?: string }) {
@@ -19,7 +22,10 @@ function Icon({ d, className = "w-5 h-5" }: { d: string; className?: string }) {
   )
 }
 
-type ITab = "livreurs" | "actionnaires" | "config"
+type ITab = "livreurs" | "actionnaires" | "config" | "commercial"
+
+const COMMERCIAL_COUNTED_STATUTS = new Set(["valide", "en_preparation", "charge", "en_transit", "livre"])
+function fmtDH(n: number) { return (Number(n) || 0).toLocaleString("fr-MA", { maximumFractionDigits: 0 }) + " DH" }
 
 interface Props { user: User }
 
@@ -47,6 +53,40 @@ export default function BOPerformanceIncentives({ user }: Props) {
     beneficeNet: 0,
     notes: "",
   })
+
+  // ── Seuil de rentabilité commerciale ─────────────────────────────────────
+  const [commMois, setCommMois] = useState(new Date().toISOString().slice(0, 7))
+  const commerciaux = useMemo(() => store.getUsers().filter(u => u.role === "prevendeur" || u.role === "resp_commercial"), [])
+  const [salaries, setSalaries] = useState<Salarie[]>(() => store.getSalaries())
+  const commandes = useMemo(() => store.getCommandes(), [])
+  const articles = useMemo(() => store.getArticles(), [])
+  const fiscalCfg = useMemo(() => store.getFiscalConfig(), [])
+  const articleById = useMemo(() => new Map(articles.map(a => [a.id, a])), [articles])
+  // Salarié lié à un commercial : par userId explicite si renseigné, sinon
+  // par correspondance nom complet (mêmes conventions que le reste du module RH).
+  const salarieOf = (u: User): Salarie | undefined =>
+    salaries.find(s => s.userId === u.id) ?? salaries.find(s => `${s.prenom} ${s.nom}` === u.name)
+
+  const rentabiliteCommerciaux = useMemo(() => {
+    return commerciaux.map(u => {
+      const sal = salarieOf(u)
+      const cmds: Commande[] = commandes.filter(c =>
+        c.commercialId === u.id && COMMERCIAL_COUNTED_STATUTS.has(c.statut) && c.date.startsWith(commMois))
+      let ca = 0, tonnage = 0, coutMarchandise = 0
+      for (const c of cmds) for (const l of c.lignes) {
+        ca += l.total
+        tonnage += l.quantite
+        coutMarchandise += l.quantite * (articleById.get(l.articleId)?.prixAchat ?? 0)
+      }
+      const margeBrute = ca - coutMarchandise
+      const salaireBrut = sal?.salaireBrut ?? 0
+      const chargesPatronales = salaireBrut * (fiscalCfg.tauxChargesPatronales / 100)
+      const fraisDivers = sal?.fraisMensuelsDH ?? 0
+      const coutTotal = salaireBrut + chargesPatronales + fraisDivers
+      const seuil = computeSeuilRentabiliteCommercial({ ca, tonnage, margeBrute, coutTotal })
+      return { user: u, salarie: sal, seuil, chargesPatronales, salaireBrut, fraisDivers }
+    })
+  }, [commerciaux, commandes, articleById, fiscalCfg, commMois, salaries])
 
   const flash = (msg: string) => { setSaveMsg(msg); setTimeout(() => setSaveMsg(""), 3200) }
 
@@ -162,6 +202,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
   const TABS = [
     { id: "livreurs" as ITab, label: "Primes Livreurs", icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" },
     { id: "actionnaires" as ITab, label: "Distribution Actionnaires", icon: "M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 11v-1m0-2c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+    { id: "commercial" as ITab, label: "Rentabilité Commerciale", icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" },
     { id: "config" as ITab, label: "Parametres primes", icon: "M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" },
   ]
 
@@ -445,6 +486,86 @@ export default function BOPerformanceIncentives({ user }: Props) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ══ RENTABILITÉ COMMERCIALE ═══════════════════════════════════════════════ */}
+      {tab === "commercial" && (
+        <div className="flex flex-col gap-5">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="font-bold text-foreground">Seuil de rentabilité par commercial</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Coût (salaire + charges patronales + frais) comparé à la marge brute générée par les ventes du mois. Statut Non profitable = objectif de tonnage/CA calculé automatiquement pour repasser au-dessus du seuil.
+              </p>
+            </div>
+            <input type="month" value={commMois} onChange={e => setCommMois(e.target.value)}
+              className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
+          </div>
+
+          {rentabiliteCommerciaux.length === 0 && (
+            <div className="text-center py-10 text-sm text-muted-foreground">Aucun commercial/prévendeur trouvé.</div>
+          )}
+
+          <div className="flex flex-col gap-3">
+            {rentabiliteCommerciaux.map(({ user: u, salarie: sal, seuil }) => (
+              <div key={u.id} className={`rounded-2xl border p-5 ${seuil.profitable ? "border-emerald-200 bg-emerald-50/30" : "border-red-200 bg-red-50/30"}`}>
+                <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+                  <div>
+                    <p className="font-bold text-foreground">{u.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {sal ? `Salaire brut: ${fmtDH(sal.salaireBrut)}` : "⚠️ Aucun dossier salarié lié — coût salarial = 0 DH (rattachez ce commercial dans RH pour un calcul exact)."}
+                    </p>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border ${seuil.profitable ? "bg-emerald-100 text-emerald-800 border-emerald-300" : "bg-red-100 text-red-800 border-red-300"}`}>
+                    {seuil.profitable ? "✓ Rentable" : "✗ Pas Profitable"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div><p className="text-muted-foreground">CA du mois</p><p className="font-bold text-sm">{fmtDH(seuil.ca)}</p></div>
+                  <div><p className="text-muted-foreground">Tonnage</p><p className="font-bold text-sm">{(seuil.tonnage / 1000).toFixed(2)} T</p></div>
+                  <div><p className="text-muted-foreground">Marge brute</p><p className="font-bold text-sm">{fmtDH(seuil.margeBrute)}</p></div>
+                  <div><p className="text-muted-foreground">Coût total (salaire+charges+frais)</p><p className="font-bold text-sm">{fmtDH(seuil.coutTotal)}</p></div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Résultat net (marge − coût)</p>
+                    <p className={`font-black text-lg ${seuil.resultatNet >= 0 ? "text-emerald-700" : "text-red-700"}`}>{fmtDH(seuil.resultatNet)}</p>
+                  </div>
+                  {!seuil.profitable && (
+                    <div className="flex gap-4">
+                      {seuil.manqueCA != null && (
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Objectif CA à atteindre</p>
+                          <p className="font-bold text-sm text-amber-700">+{fmtDH(seuil.manqueCA)} <span className="text-muted-foreground font-normal">(→ {fmtDH(seuil.caObjectif ?? 0)})</span></p>
+                        </div>
+                      )}
+                      {seuil.manqueTonnage != null && (
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Objectif tonnage à atteindre</p>
+                          <p className="font-bold text-sm text-amber-700">+{(seuil.manqueTonnage / 1000).toFixed(2)} T <span className="text-muted-foreground font-normal">(→ {((seuil.tonnageObjectif ?? 0) / 1000).toFixed(2)} T)</span></p>
+                        </div>
+                      )}
+                      {seuil.manqueCA == null && seuil.manqueTonnage == null && (
+                        <p className="text-xs text-red-600 font-semibold max-w-xs text-right">Marge nulle/négative sur la période — objectif non calculable, vérifiez les prix d&apos;achat des articles vendus.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-3 flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Frais divers mensuels (DH)</label>
+                  <input type="number" min={0} defaultValue={sal?.fraisMensuelsDH ?? 0}
+                    onBlur={e => { if (sal) { store.updateSalarie(sal.id, { fraisMensuelsDH: Number(e.target.value) || 0 }); setSalaries(store.getSalaries()) } }}
+                    className="w-28 px-2 py-1 rounded-lg border border-border bg-background text-xs font-mono"
+                    disabled={!sal} />
+                  {!sal && <span className="text-[11px] text-muted-foreground">(rattachez un dossier salarié pour éditer)</span>}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
