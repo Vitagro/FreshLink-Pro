@@ -442,6 +442,83 @@ export interface CaisseVideMouvement {
   operateurId: string
   operateurNom: string
   notes?: string
+  // ── Caisses par référence + origine locale/étranger ─────────────────────
+  // Champs additifs (jamais requis) : les mouvements existants restent
+  // valides sans eux et sont traités comme "locale" par défaut dans les
+  // calculs de solde (computeCaisseSoldes ci-dessous).
+  referenceId?: string        // référence spécifique (ex: "Référence 226 Petit") — cf CaisseReference
+  quantite?: number           // nb de caisses de cette référence pour ce mouvement (utilisé avec referenceId)
+  origine?: CaisseOrigine     // "locale" (défaut si absent) | "etranger_achat" | "etranger_expedition"
+}
+
+// ── Caisses par référence (ex: "226 Petit", "226 Grand") ────────────────────
+// Origine distingue les 3 flux demandés : achats à l'étranger, expéditions
+// export vers l'étranger, et le marché local (toute caisse sans origine
+// explicite est considérée locale).
+export type CaisseTaille = "petit" | "grand"
+export type CaisseOrigine = "locale" | "etranger_achat" | "etranger_expedition"
+
+export const CAISSE_ORIGINE_LABELS: Record<CaisseOrigine, string> = {
+  locale: "Locale (marché national)",
+  etranger_achat: "Étranger — Achat",
+  etranger_expedition: "Étranger — Expédition",
+}
+
+export interface CaisseReference {
+  id: string
+  code: string              // ex: "226"
+  taille: CaisseTaille      // "petit" | "grand"
+  label: string             // ex: "Référence 226 Petit"
+  origine: CaisseOrigine    // classification par défaut de cette référence
+  actif: boolean
+  notes?: string
+}
+
+export const DEFAULT_CAISSE_REFERENCES: CaisseReference[] = [
+  { id: "ref_226_petit", code: "226", taille: "petit", label: "Référence 226 Petit", origine: "locale", actif: true },
+  { id: "ref_226_grand", code: "226", taille: "grand", label: "Référence 226 Grand", origine: "locale", actif: true },
+]
+
+// Solde de caisses agrégé par référence + origine — utilisé par le panneau
+// Caisses pour afficher les indicateurs (solde par type/taille/référence).
+export interface CaisseSoldeLigne {
+  referenceId: string          // id de CaisseReference, ou "__legacy_grand__"/"__legacy_petit__" pour les
+                                // mouvements antérieurs à cette fonctionnalité (sans referenceId)
+  referenceLabel: string
+  taille: CaisseTaille
+  origine: CaisseOrigine
+  entree: number
+  sortie: number
+  solde: number                // entree - sortie (nb de caisses actuellement détenues pour cette ligne)
+}
+
+export function computeCaisseSoldes(mouvements: CaisseVideMouvement[], references: CaisseReference[]): CaisseSoldeLigne[] {
+  const refsById = new Map(references.map(r => [r.id, r]))
+  const lignes = new Map<string, CaisseSoldeLigne>()
+
+  const bump = (key: string, referenceLabel: string, taille: CaisseTaille, origine: CaisseOrigine, sens: "entree" | "sortie", nb: number) => {
+    if (nb <= 0) return
+    let l = lignes.get(key)
+    if (!l) { l = { referenceId: key, referenceLabel, taille, origine, entree: 0, sortie: 0, solde: 0 }; lignes.set(key, l) }
+    if (sens === "entree") l.entree += nb; else l.sortie += nb
+    l.solde = l.entree - l.sortie
+  }
+
+  for (const m of mouvements) {
+    const origine: CaisseOrigine = m.origine ?? "locale"
+    if (m.referenceId) {
+      const ref = refsById.get(m.referenceId)
+      bump(m.referenceId, ref?.label ?? m.referenceId, ref?.taille ?? "grand", origine, m.sens, m.quantite ?? 0)
+      continue
+    }
+    // Mouvements historiques (avant cette fonctionnalité) : pas de référence
+    // précise, on ventile par taille via les compteurs gros/demi existants,
+    // toujours "locale" (l'axe étranger/local n'existait pas avant).
+    bump("__legacy_grand__", "Sans référence — Grand (historique)", "grand", "locale", m.sens, m.nbCaisseGros)
+    bump("__legacy_petit__", "Sans référence — Petit (historique)", "petit", "locale", m.sens, m.nbCaisseDemi)
+  }
+
+  return [...lignes.values()].sort((a, b) => a.referenceLabel.localeCompare(b.referenceLabel))
 }
 
 export const SPECIALITES_FRUITS_LEGUMES = [
@@ -656,6 +733,76 @@ export interface Reception {
   statut: "en_attente" | "stand_by" | "partielle" | "validée"
   operateurId: string
   notes?: string
+}
+
+// ── Rapprochement Supply Chain — Commande vs Achat vs Réception ────────────
+// Vue de contrôle de gestion : pour chaque ligne de réception, retrouve la
+// quantité initialement COMMANDÉE (PO d'origine si la réception en provient),
+// la quantité réellement ACHETÉE (ligne du bon d'achat marché si applicable),
+// et la quantité RÉCEPTIONNÉE (déjà sur la ligne de réception). Quand une
+// étape est absente du flux (ex: réception directe depuis un PO sans passage
+// par un bon d'achat marché), on retombe sur `quantiteCommandee` de la ligne
+// de réception — jamais de valeur inventée.
+export interface ReconciliationLigne {
+  receptionId: string
+  date: string
+  articleId: string
+  articleNom: string
+  fournisseurNom?: string
+  source: "bon_achat" | "purchase_order" | "manuel"
+  quantiteCommandee: number
+  quantiteAchetee: number
+  quantiteRecue: number
+  ecartAchatCommande: number    // achetée − commandée (négatif = achat insuffisant au marché)
+  ecartReceptionAchat: number   // reçue − achetée (négatif = perte/manquant transport-réception)
+  manquant: number              // max(0, commandée − reçue) = reliquat non encore reçu
+  statut: "ok" | "manquant" | "surplus"
+  motifReliquat?: string
+}
+
+export function computeSupplyChainRecon(
+  receptions: Reception[], purchaseOrders: PurchaseOrder[], bonsAchat: BonAchat[]
+): ReconciliationLigne[] {
+  const poById = new Map(purchaseOrders.map(p => [p.id, p]))
+  const baById = new Map(bonsAchat.map(b => [b.id, b]))
+  const rows: ReconciliationLigne[] = []
+  for (const r of receptions) {
+    const po = r.source === "purchase_order" && r.purchaseOrderId ? poById.get(r.purchaseOrderId) : undefined
+    const ba = r.source === "bon_achat" && r.bonAchatId ? baById.get(r.bonAchatId) : undefined
+    for (const l of r.lignes) {
+      const quantiteCommandee = po && po.articleId === l.articleId ? po.quantite : l.quantiteCommandee
+      const ligneBa = ba?.lignes.find(x => x.articleId === l.articleId)
+      const quantiteAchetee = ligneBa ? ligneBa.quantite : l.quantiteCommandee
+      const quantiteRecue = l.quantiteRecue
+      const manquant = Math.max(0, quantiteCommandee - quantiteRecue)
+      const surplus = quantiteRecue - quantiteCommandee
+      rows.push({
+        receptionId: r.id, date: r.date, articleId: l.articleId, articleNom: l.articleNom,
+        fournisseurNom: r.fournisseurNom, source: r.source,
+        quantiteCommandee, quantiteAchetee, quantiteRecue,
+        ecartAchatCommande: quantiteAchetee - quantiteCommandee,
+        ecartReceptionAchat: quantiteRecue - quantiteAchetee,
+        manquant,
+        statut: manquant > 0.01 ? "manquant" : (surplus > 0.01 ? "surplus" : "ok"),
+        motifReliquat: l.motifReliquat,
+      })
+    }
+  }
+  return rows.sort((a, b) => b.date.localeCompare(a.date))
+}
+
+// ── Relances fournisseurs (manquants / reliquats non reçus) ────────────────
+export interface RelanceFournisseur {
+  id: string
+  receptionId: string
+  articleId: string
+  articleNom: string
+  fournisseurNom?: string
+  quantiteManquante: number
+  date: string
+  statut: "en_attente" | "relance_envoyee" | "resolu"
+  notes?: string
+  createdBy: string
 }
 
 export interface Trip {
@@ -1120,6 +1267,12 @@ export interface Salarie {
   updatedAt?: string
   // Dossier administratif complet (RH doit remplir apres creation par admin)
   dossierComplet?: boolean
+  // Lien vers l'utilisateur ERP (commercial/prévendeur) — pour le calcul du
+  // seuil de rentabilité (rapproche ce salarié de ses commandes via Commande.commercialId)
+  userId?: string
+  // Frais divers mensuels (carburant, téléphone, per diem...) hors salaire —
+  // additionnés au coût salarial dans le calcul du seuil de rentabilité commerciale
+  fraisMensuelsDH?: number
 }
 
 // ── RH Notification — admin cree un user, RH doit completer le dossier ─────
@@ -1149,6 +1302,22 @@ export interface PaiementSalaire {
   salaireNet: number
   datePaiement: string
   createdBy: string
+  // ── Détail du calcul (fiche de paie SMIG/CNSS/AMO/IR) — additif, jamais
+  // requis : les paiements historiques restent valides sans ces champs.
+  joursTravailles?: number
+  joursAbsenceNonPayee?: number
+  salaireBrutAjuste?: number
+  cnssSalarial?: number
+  amoSalarial?: number
+  irRetenue?: number
+  retenueCaisse?: number
+  cnssPatronal?: number
+  amoPatronal?: number
+  prestationsFamilialesPatronal?: number
+  formationProfessionnellePatronal?: number
+  chargesPatronalesTotal?: number
+  coutTotalEmployeur?: number
+  sousSmig?: boolean
 }
 
 // ── Retenue Caisse Acheteur → RH ──────────────────────────────────────────────
@@ -1160,6 +1329,180 @@ export interface RetenueCaisse {
   montant: number            // DH à déduire (écart positif)
   date: string               // date de transmission RH
   ref: string                // clé unique de la ligne caisse (anti-doublon)
+}
+
+// ── Jours de travail (pointage) & Absences ──────────────────────────────────
+export interface Pointage {
+  id: string
+  salarieId: string
+  salarieNom: string
+  date: string              // "2026-07-15" — jour concerné
+  present: boolean
+  heuresTravaillees?: number
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
+export type TypeAbsence = "maladie" | "conge_paye" | "conge_sans_solde" | "conge_maternite" | "evenement_familial" | "injustifiee" | "autre"
+
+export const TYPES_ABSENCE_LABELS: Record<TypeAbsence, string> = {
+  maladie: "Maladie (justifiée)",
+  conge_paye: "Congé payé",
+  conge_sans_solde: "Congé sans solde",
+  conge_maternite: "Congé maternité / paternité",
+  evenement_familial: "Événement familial",
+  injustifiee: "Absence injustifiée",
+  autre: "Autre",
+}
+
+// Types d'absence payés (n'impactent pas le brut) — le reste (sans solde,
+// injustifiée) est déduit du salaire brut au prorata dans computeFichePaie.
+export const TYPES_ABSENCE_PAYEES = new Set<TypeAbsence>(["maladie", "conge_paye", "conge_maternite", "evenement_familial"])
+
+export interface Absence {
+  id: string
+  salarieId: string
+  salarieNom: string
+  type: TypeAbsence
+  dateDebut: string
+  dateFin: string            // inclusive
+  joursDecompte: number      // nb jours décomptés (calendaires, saisi/ajustable)
+  justificatif?: string
+  motif?: string
+  createdBy: string
+  createdAt: string
+}
+
+// ── Calcul fiche de paie (SMIG / CNSS / AMO / IR) ───────────────────────────
+// Méthode standard de la paie marocaine : cotisations salariales plafonnées
+// (CNSS) ou non (AMO) déduites du brut ajusté → base imposable après
+// abattement frais professionnels → IR par barème progressif (taux + somme à
+// déduire) → net à payer après avance et retenue caisse. Les charges
+// patronales (non déduites du net) sont calculées en parallèle pour le coût
+// total employeur.
+//
+// NOTE : les taux par défaut (FiscalConfig) sont indicatifs — à valider par
+// le comptable / DGI avant tout usage en paie réelle ; tout est éditable
+// dans le panneau Contrôle de Gestion.
+export interface FichePaieCalc {
+  salaireBrut: number
+  joursAbsenceNonPayee: number
+  salaireBrutAjuste: number       // brut - (brut/joursOuvresParMois × absences non payées)
+  cnssSalarial: number
+  amoSalarial: number
+  baseImposable: number           // brut ajusté - cotisations salariales - frais professionnels
+  fraisProfessionnels: number
+  irRetenue: number
+  avance: number
+  retenueCaisse: number
+  salaireNet: number              // net à payer
+  cnssPatronal: number
+  amoPatronal: number
+  prestationsFamilialesPatronal: number
+  formationProfessionnellePatronal: number
+  chargesPatronalesTotal: number
+  coutTotalEmployeur: number      // brut ajusté + charges patronales
+  sousSmig: boolean               // salaireBrut < smigMensuelDH (proratisé si temps partiel non géré ici)
+}
+
+export function computeIR(revenuNetImposable: number, bareme: BaremeIRTranche[]): number {
+  const base = Math.max(0, revenuNetImposable)
+  const sorted = [...bareme].sort((a, b) => (a.plafondMensuel ?? Infinity) - (b.plafondMensuel ?? Infinity))
+  const tranche = sorted.find(t => t.plafondMensuel == null || base <= t.plafondMensuel) ?? sorted[sorted.length - 1]
+  if (!tranche) return 0
+  return Math.max(0, base * tranche.taux / 100 - tranche.sommeADeduire)
+}
+
+export function computeFichePaie(opts: {
+  salaireBrut: number
+  avance?: number
+  retenueCaisse?: number
+  joursAbsenceNonPayee?: number
+  fiscal: FiscalConfig
+}): FichePaieCalc {
+  const { salaireBrut, fiscal } = opts
+  const avance = opts.avance ?? 0
+  const retenueCaisse = opts.retenueCaisse ?? 0
+  const joursAbsenceNonPayee = opts.joursAbsenceNonPayee ?? 0
+
+  const salaireBrutAjuste = Math.max(0, salaireBrut - (salaireBrut / fiscal.joursOuvresParMois) * joursAbsenceNonPayee)
+
+  const baseCnss = Math.min(salaireBrutAjuste, fiscal.plafondCnssMensuelDH)
+  const cnssSalarial = baseCnss * fiscal.tauxCnssSalarial / 100
+  const amoSalarial = salaireBrutAjuste * fiscal.tauxAmoSalarial / 100
+
+  // Abattement frais professionnels calculé sur le brut (pas le brut net de
+  // cotisations) — aligné sur calcPayroll (BOHRDocuments.tsx) : abattProf =
+  // min(brut × taux%, plafond), pour produire le même IR à brut égal.
+  const brutImposable = salaireBrutAjuste - cnssSalarial - amoSalarial
+  const fraisProfessionnels = Math.min(salaireBrutAjuste * fiscal.fraisProfessionnelsTauxIR / 100, fiscal.fraisProfessionnelsPlafondIR)
+  const baseImposable = Math.max(0, brutImposable - fraisProfessionnels)
+  const irRetenue = computeIR(baseImposable, fiscal.baremeIR)
+
+  const salaireNet = Math.max(0, brutImposable - irRetenue - avance - retenueCaisse)
+
+  const cnssPatronal = baseCnss * fiscal.tauxCnssPatronal / 100
+  const amoPatronal = salaireBrutAjuste * fiscal.tauxAmoPatronal / 100
+  const prestationsFamilialesPatronal = salaireBrutAjuste * fiscal.tauxPrestationsFamilialesPatronal / 100
+  const formationProfessionnellePatronal = salaireBrutAjuste * fiscal.tauxFormationProfessionnellePatronal / 100
+  const chargesPatronalesTotal = cnssPatronal + amoPatronal + prestationsFamilialesPatronal + formationProfessionnellePatronal
+
+  return {
+    salaireBrut, joursAbsenceNonPayee, salaireBrutAjuste,
+    cnssSalarial, amoSalarial, baseImposable, fraisProfessionnels, irRetenue,
+    avance, retenueCaisse, salaireNet,
+    cnssPatronal, amoPatronal, prestationsFamilialesPatronal, formationProfessionnellePatronal,
+    chargesPatronalesTotal, coutTotalEmployeur: salaireBrutAjuste + chargesPatronalesTotal,
+    sousSmig: salaireBrut < fiscal.smigMensuelDH,
+  }
+}
+
+// ── Seuil de rentabilité commercial ─────────────────────────────────────────
+// Compare la marge brute générée par les ventes d'un commercial sur une
+// période à son coût total (salaire + charges patronales + frais divers).
+// Si non rentable, calcule dynamiquement l'objectif de CA et/ou de tonnage à
+// atteindre pour repasser au-dessus du seuil, en extrapolant le ratio marge/CA
+// et la marge par tonne déjà observés sur la période — jamais de valeur
+// inventée : si la marge est nulle/négative sur la période, aucun objectif
+// n'est projeté (on ne peut pas extrapoler un ratio qui n'existe pas).
+export interface SeuilRentabiliteResult {
+  ca: number
+  tonnage: number
+  margeBrute: number
+  margeRatio: number        // margeBrute / ca (0 si ca=0)
+  coutTotal: number         // salaire + charges patronales + frais divers
+  resultatNet: number       // margeBrute - coutTotal
+  profitable: boolean
+  caObjectif?: number       // CA nécessaire pour couvrir coutTotal, au ratio marge actuel
+  tonnageObjectif?: number  // tonnage nécessaire pour couvrir coutTotal, à la marge/tonne actuelle
+  manqueCA?: number         // max(0, caObjectif - ca)
+  manqueTonnage?: number    // max(0, tonnageObjectif - tonnage)
+}
+
+export function computeSeuilRentabiliteCommercial(opts: {
+  ca: number
+  tonnage: number
+  margeBrute: number
+  coutTotal: number
+}): SeuilRentabiliteResult {
+  const { ca, tonnage, margeBrute, coutTotal } = opts
+  const margeRatio = ca > 0 ? margeBrute / ca : 0
+  const resultatNet = margeBrute - coutTotal
+  const profitable = resultatNet >= 0
+  const result: SeuilRentabiliteResult = { ca, tonnage, margeBrute, margeRatio, coutTotal, resultatNet, profitable }
+  if (!profitable) {
+    if (margeRatio > 0.0001) {
+      result.caObjectif = coutTotal / margeRatio
+      result.manqueCA = Math.max(0, result.caObjectif - ca)
+    }
+    if (margeBrute > 0.0001 && tonnage > 0) {
+      const margeParTonne = margeBrute / tonnage
+      result.tonnageObjectif = coutTotal / margeParTonne
+      result.manqueTonnage = Math.max(0, result.tonnageObjectif - tonnage)
+    }
+  }
+  return result
 }
 
 // ── Transport Company ─────────────────────────────────────────────────────────
@@ -1360,15 +1703,53 @@ export const DEFAULT_PROCESS_CONFIG: ProcessConfig = {
 // ── Fiscalité & Fiduciaire (Maroc) — taux configurables, à valider avec le
 // fiduciaire avant toute déclaration réelle. Le module BOFiscalite les
 // applique aux données réelles de l'ERP (CA, tonnage, masse salariale).
+// ── Barème IR (retenue à la source) — méthode "taux + somme à déduire" ─────
+// Alignées sur le barème mensuel 2026 déjà utilisé en production dans
+// BOHRDocuments.tsx (calcPayroll) — même source de vérité, pour que le
+// calculateur "fiche de paie" (avec absences/charges patronales) et l'aperçu
+// fiche de paie existant restent cohérents. Éditable depuis le panneau
+// Contrôle de Gestion si la loi de finances fait évoluer les tranches.
+export interface BaremeIRTranche {
+  id: string
+  plafondMensuel: number | null   // borne sup. de la tranche (DH) — null = tranche la plus haute
+  taux: number                    // %
+  sommeADeduire: number           // DH
+}
+
+export const DEFAULT_BAREME_IR: BaremeIRTranche[] = [
+  { id: "t1", plafondMensuel: 2500,  taux: 0,  sommeADeduire: 0 },
+  { id: "t2", plafondMensuel: 4166,  taux: 10, sommeADeduire: 250.00 },
+  { id: "t3", plafondMensuel: 5000,  taux: 20, sommeADeduire: 666.60 },
+  { id: "t4", plafondMensuel: 6666,  taux: 30, sommeADeduire: 1166.60 },
+  { id: "t5", plafondMensuel: 15000, taux: 34, sommeADeduire: 1433.24 },
+  { id: "t6", plafondMensuel: null,  taux: 38, sommeADeduire: 2033.24 },
+]
+
 export interface FiscalConfig {
   tauxTVA: number                    // % — 0 par défaut : fruits/légumes frais non transformés = hors champ TVA (CGI Maroc)
   tauxCotisationMinimale: number     // % du CA HT — plancher IS (~0.25 à 0.5%)
-  tauxChargesPatronales: number      // % du brut — CNSS+AMO+formation patronales (~20-21%)
+  tauxChargesPatronales: number      // % du brut — CNSS+AMO+formation patronales (~20-21%) — conservé pour compat (vues globales existantes), le détail par cotisation ci-dessous est utilisé par le calcul fiche de paie
   seuilAlerteMasseSalariale: number  // % — ratio masse salariale/CA au-delà duquel on alerte
   joursOuvresParMois: number         // pour l'extrapolation CA/tonnage
   tauxDroitTimbre: number            // % du TTC — droit de timbre 0,25% sur règlement espèces (CGI Maroc)
   plafondCashAchatJour: number       // DH/jour/fournisseur — seuil de déductibilité fiscale des achats espèces
   plafondCashVenteFacture: number    // DH/facture/client — plafond légal cash sur les ventes
+  // ── SMIG / CNSS / AMO / IR — calcul fiche de paie (feature RH) ──────────
+  // Tous éditables (panneau Contrôle de Gestion) : valeurs par défaut
+  // indicatives, à aligner sur la réglementation en vigueur par le comptable.
+  smigHoraireDH: number                          // SMIG horaire en vigueur (DH/heure)
+  smigMensuelDH: number                          // SMIG mensuel de référence (base 191h/mois)
+  heuresMensuellesReference: number              // nb heures/mois de référence pour le SMIG légal
+  tauxCnssSalarial: number                       // % — part salariale CNSS (prestations sociales), plafonné
+  tauxCnssPatronal: number                       // % — part patronale CNSS (prestations sociales), plafonné
+  plafondCnssMensuelDH: number                   // DH — plafond mensuel de brut cotisable CNSS
+  tauxPrestationsFamilialesPatronal: number      // % — patronal, non plafonné
+  tauxFormationProfessionnellePatronal: number   // % — patronal, non plafonné
+  tauxAmoSalarial: number                        // % — part salariale AMO, non plafonné
+  tauxAmoPatronal: number                        // % — part patronale AMO, non plafonné
+  baremeIR: BaremeIRTranche[]                    // barème progressif de l'IR mensuel (retenue à la source)
+  fraisProfessionnelsTauxIR: number              // % — abattement forfaitaire frais professionnels avant IR
+  fraisProfessionnelsPlafondIR: number           // DH/mois — plafond de cet abattement
 }
 
 export const DEFAULT_FISCAL_CONFIG: FiscalConfig = {
@@ -1380,6 +1761,22 @@ export const DEFAULT_FISCAL_CONFIG: FiscalConfig = {
   tauxDroitTimbre: 0.25,
   plafondCashAchatJour: 5000,
   plafondCashVenteFacture: 10000,
+  smigHoraireDH: 17.05,
+  smigMensuelDH: 3111,
+  heuresMensuellesReference: 191,
+  // CNSS/AMO salariales alignées sur calcPayroll (BOHRDocuments.tsx) — même
+  // barème 2026 déjà en production. Les taux patronaux n'ont pas d'équivalent
+  // existant dans le code : valeurs indicatives usuelles, éditables ici.
+  tauxCnssSalarial: 6.74,
+  tauxCnssPatronal: 8.98,
+  plafondCnssMensuelDH: 6000,
+  tauxPrestationsFamilialesPatronal: 6.4,
+  tauxFormationProfessionnellePatronal: 1.6,
+  tauxAmoSalarial: 4.52,
+  tauxAmoPatronal: 4.11,
+  baremeIR: DEFAULT_BAREME_IR,
+  fraisProfessionnelsTauxIR: 20,
+  fraisProfessionnelsPlafondIR: 2500,
 }
 
 export const DEFAULT_WORKFLOW_STEPS: WorkflowStep[] = [
@@ -3024,6 +3421,37 @@ export const store = {
     setLS("fl_retenues_caisse", store.getRetenuesCaisse().filter(x => x.ref !== ref))
   },
 
+  // --- Pointage (jours de travail effectifs) ---
+  getPointages: (): Pointage[] => getLS("fl_pointages", []),
+  savePointages: (p: Pointage[]) => setLS("fl_pointages", p),
+  addPointage: (p: Pointage) => { const arr = store.getPointages(); arr.push(p); store.savePointages(arr) },
+  updatePointage: (id: string, updates: Partial<Pointage>) => {
+    const arr = store.getPointages()
+    const idx = arr.findIndex(p => p.id === id)
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.savePointages(arr) }
+  },
+  deletePointage: (id: string) => { store.savePointages(store.getPointages().filter(p => p.id !== id)); deleteSynced("fl_pointages", [id]) },
+  // Jours travaillés (present=true) d'un salarié sur un mois "YYYY-MM"
+  joursTravaillesMois: (salarieId: string, mois: string): number =>
+    store.getPointages().filter(p => p.salarieId === salarieId && p.date.startsWith(mois) && p.present).length,
+
+  // --- Absences ---
+  getAbsences: (): Absence[] => getLS("fl_absences", []),
+  saveAbsences: (a: Absence[]) => setLS("fl_absences", a),
+  addAbsence: (a: Absence) => { const arr = store.getAbsences(); arr.push(a); store.saveAbsences(arr) },
+  updateAbsence: (id: string, updates: Partial<Absence>) => {
+    const arr = store.getAbsences()
+    const idx = arr.findIndex(a => a.id === id)
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.saveAbsences(arr) }
+  },
+  deleteAbsence: (id: string) => { store.saveAbsences(store.getAbsences().filter(a => a.id !== id)); deleteSynced("fl_absences", [id]) },
+  // Jours d'absence NON payés d'un salarié sur un mois "YYYY-MM" (sans_solde + injustifiee),
+  // utilisés par computeFichePaie pour ajuster le brut au prorata.
+  joursAbsenceNonPayeeMois: (salarieId: string, mois: string): number =>
+    store.getAbsences()
+      .filter(a => a.salarieId === salarieId && !TYPES_ABSENCE_PAYEES.has(a.type) && a.dateDebut.startsWith(mois))
+      .reduce((s, a) => s + a.joursDecompte, 0),
+
   // --- Caisse Pricing ---
   getCaissePricing: (): CaissePricing => getLS("fl_caisse_pricing", DEFAULT_CAISSE_PRICING),
   saveCaissePricing: (p: CaissePricing) => setLS("fl_caisse_pricing", p),
@@ -3098,6 +3526,17 @@ export const store = {
       store.saveCaissesVides(arr)
     }
   },
+
+  // --- Caisses par référence (locale / étranger achat / étranger expédition) ---
+  getCaisseReferences: (): CaisseReference[] => getLS("fl_caisse_references", DEFAULT_CAISSE_REFERENCES),
+  saveCaisseReferences: (r: CaisseReference[]) => setLS("fl_caisse_references", r),
+  addCaisseReference: (r: CaisseReference) => { const arr = store.getCaisseReferences(); arr.push(r); store.saveCaisseReferences(arr) },
+  updateCaisseReference: (id: string, updates: Partial<CaisseReference>) => {
+    const arr = store.getCaisseReferences()
+    const idx = arr.findIndex(r => r.id === id)
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.saveCaisseReferences(arr) }
+  },
+  deleteCaisseReference: (id: string) => { store.saveCaisseReferences(store.getCaisseReferences().filter(r => r.id !== id)); deleteSynced("fl_caisse_references", [id]) },
 
   // --- Company config ---
   getCompanyConfig: (): CompanyConfig => getLS("fl_company", {
@@ -3277,6 +3716,17 @@ export const store = {
     const idx = recs.findIndex(r => r.id === id)
     if (idx >= 0) { recs[idx] = { ...recs[idx], ...updates }; store.saveReceptions(recs) }
   },
+
+  // --- Relances fournisseurs (rapprochement supply chain) ---
+  getRelancesFournisseur: (): RelanceFournisseur[] => getLS("fl_relances_fournisseur", []),
+  saveRelancesFournisseur: (r: RelanceFournisseur[]) => setLS("fl_relances_fournisseur", r),
+  addRelanceFournisseur: (r: RelanceFournisseur) => { const arr = store.getRelancesFournisseur(); arr.unshift(r); store.saveRelancesFournisseur(arr) },
+  updateRelanceFournisseur: (id: string, updates: Partial<RelanceFournisseur>) => {
+    const arr = store.getRelancesFournisseur()
+    const idx = arr.findIndex(r => r.id === id)
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.saveRelancesFournisseur(arr) }
+  },
+  deleteRelanceFournisseur: (id: string) => { store.saveRelancesFournisseur(store.getRelancesFournisseur().filter(r => r.id !== id)); deleteSynced("fl_relances_fournisseur", [id]) },
 
   // --- Trips ---
   getTrips: (): Trip[] => getLS("fl_trips", []),

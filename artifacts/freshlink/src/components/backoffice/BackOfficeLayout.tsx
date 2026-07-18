@@ -84,6 +84,7 @@ const BOCash                 = React.lazy(() => import("./BOCash"))
 const BORetour               = React.lazy(() => import("./BORetour"))
 const BORecap                = React.lazy(() => import("./BORecap"))
 const BOPurchaseOrders       = React.lazy(() => import("./BOPurchaseOrders"))
+const BOSupplyChainRecon     = React.lazy(() => import("./BOSupplyChainRecon"))
 const BOUsers                = React.lazy(() => import("./BOUsers"))
 const BOSettings             = React.lazy(() => import("./BOSettings"))
 const BOFinance              = React.lazy(() => import("./BOFinance"))
@@ -197,6 +198,7 @@ export type Tab =
   | "moteur_commercial" | "gifts_v3" | "loterie" | "pa_historique" | "gestion_pa" | "cutoffs_v3" | "feedbacks_v3"
   | "import_externe"
   | "messagerie"
+  | "supply_chain_recon"
 
 interface NavItem {
   id: Tab
@@ -301,6 +303,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
       { id: "analyse_achat",     label: "Analyse Achat",          labelAr: "تحليل المشتريات",    permKey: "canViewAchat", icon: <Icon d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /> },
       { id: "temps_achat",       label: "Temps Achat",            labelAr: "وقت الشراء",          permKey: "canViewAchat", icon: <Icon d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /> },
       { id: "analyse_reception", label: "Analyse Reception",      labelAr: "تحليل الاستلام",     permKey: "canViewAchat", icon: <Icon d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
+      { id: "supply_chain_recon", label: "Rapprochement Cmd/Achat/Récep.", labelAr: "مطابقة الطلب والشراء والاستلام", permKey: "canViewAchat", icon: <Icon d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /> },
     ],
   },
   // ── 3. COMMERCIAL & VENTES ───────────────────────────────────────────────
@@ -441,7 +444,7 @@ const NAV_ITEM_MAP: Record<string, NavItem> =
 const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Vue d'ensemble",              labelAr: "نظرة عامة",            ids: ["dashboard", "recap", "rapport_livraison"] },
   { label: "Communication",               labelAr: "التواصل",              ids: ["messagerie", "whatsapp", "feedback"] },
-  { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["achat", "po", "reception", "fournisseurs", "credit_fournisseur", "sourcing", "pa_historique", "gestion_pa", "rapport_marche", "analyse_achat", "analyse_reception", "temps_achat"] },
+  { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["achat", "po", "reception", "fournisseurs", "credit_fournisseur", "sourcing", "pa_historique", "gestion_pa", "rapport_marche", "analyse_achat", "analyse_reception", "temps_achat", "supply_chain_recon"] },
   { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["articles", "familles", "stock", "shelf_life", "forecast", "caisses_vides"] },
   { label: "Commercial & Ventes",         labelAr: "التجاري والمبيعات",    ids: ["commandes_unifiees", "affectation", "zones_secteurs", "alertes_clients", "documents", "prospection", "moteur_commercial"] },
   { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "category_pricing", "echelons_client", "pricing_concurrent", "intelligence_prix", "concurrence"] },
@@ -464,6 +467,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   achat:             (_u) => <BOAchat />,
   reception:         (u) => <BOReception user={u} />,
   po:                (_u) => <BOPurchaseOrders />,
+  supply_chain_recon:(u) => <BOSupplyChainRecon user={u} />,
   commercial:        (u) => <BOCommercial user={u} />,
   affectation:       (u) => <BOAffectationCommerciale user={u} />,
   zones_secteurs:    (u) => <BOZonesSecteurs user={u} />,
