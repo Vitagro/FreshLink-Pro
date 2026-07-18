@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm run build",
+  "buildCommand": "pnpm run typecheck && pnpm --filter \"./artifacts/freshlink\" --filter \"./artifacts/api-server\" run build",
   "installCommand": "pnpm install",
   "outputDirectory": "artifacts/freshlink/dist/public",
   "functions": {
