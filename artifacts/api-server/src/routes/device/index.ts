@@ -38,10 +38,8 @@ router.post("/check-and-token", async (req: Request, res: Response) => {
       return;
     }
 
-    if (!process.env.DEVICE_SECRET) {
-      res.status(503).json({ error: "DEVICE_SECRET non configuré" });
-      return;
-    }
+    // DEVICE_SECRET est optionnel depuis lib/deviceGuard.ts (secret de repli
+    // si absent) — l'appairage ne doit plus jamais échouer pour ce motif.
 
     if (!SB_URL || !SB_SRV) {
       const token = signDeviceToken(fingerprint);

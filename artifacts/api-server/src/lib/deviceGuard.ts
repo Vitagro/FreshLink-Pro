@@ -1,9 +1,20 @@
-import { createHmac } from "crypto";
+import { createHmac, randomBytes } from "crypto";
+
+// DEVICE_SECRET est optionnel : le verrou appareil (BO → Accès Appareils,
+// fl_site_access.__config.enforce) est lui-même opt-in et désactivé par
+// défaut — voir routes/device/index.ts. Sans DEVICE_SECRET configuré, on
+// génère un secret aléatoire UNE FOIS au démarrage du process (jamais
+// prévisible/committé, contrairement à une valeur codée en dur) plutôt que
+// de faire planter tout appairage (503) et bloquer TOUS les appareils, y
+// compris quand l'admin n'a jamais activé l'enforcement. Limite : ce secret
+// ne survit pas à un redémarrage du process (les jetons émis avant un
+// restart deviennent invalides — acceptable, ils sont réémis au prochain
+// appairage). Définir DEVICE_SECRET reste recommandé en production pour un
+// verrou stable si enforce=true est un jour activé.
+const RUNTIME_FALLBACK_DEVICE_SECRET = randomBytes(32).toString("hex");
 
 function getDeviceSecret(): string {
-  const s = process.env.DEVICE_SECRET;
-  if (!s) throw new Error("DEVICE_SECRET environment variable is required");
-  return s;
+  return process.env.DEVICE_SECRET || RUNTIME_FALLBACK_DEVICE_SECRET;
 }
 
 export const DEVICE_COOKIE = "fl_device_token";
