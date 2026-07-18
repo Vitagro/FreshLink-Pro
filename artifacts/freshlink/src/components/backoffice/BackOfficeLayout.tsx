@@ -1030,25 +1030,23 @@ function SidebarContent({
   const BG2 = "#1a4f2a"
   const ACTIVE = "#22c55e"
 
-  // Groupes (grandes rubriques) repliés — liste déroulable, persistée.
-  // Par défaut sur mobile (drawer hamburger) : tous repliés au 1er affichage
-  // pour ne pas noyer l'utilisateur sous la liste complète des rubriques —
-  // sur desktop le comportement historique (tout déplié) est conservé.
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set()
+  // Groupes (grandes rubriques) — accordéon strict : un seul groupe ouvert à
+  // la fois, sur mobile ET desktop. Par défaut, tout est replié sauf le
+  // groupe qui contient l'onglet actif (pour ne pas cacher où on se trouve).
+  // Sélectionner un nouveau groupe referme automatiquement le précédent.
+  const [openGroup, setOpenGroup] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null
     try {
-      const saved = localStorage.getItem("fl_nav_collapsed")
-      if (saved != null) return new Set(JSON.parse(saved) as string[])
+      const saved = localStorage.getItem("fl_nav_open_group")
+      if (saved != null) return JSON.parse(saved) as string | null
     } catch { /* noop */ }
-    if (window.innerWidth < 1024) return new Set(filteredGroups.map(g => g.label))
-    return new Set()
+    return filteredGroups.find(g => g.items.some(i => i.id === activeTab))?.label ?? null
   })
-  const toggleGroup = (label: string) => setCollapsedGroups(prev => {
-    const next = new Set(prev)
-    if (next.has(label)) next.delete(label); else next.add(label)
-    try { localStorage.setItem("fl_nav_collapsed", JSON.stringify([...next])) } catch { /* */ }
-    return next
-  })
+  const toggleGroup = (label: string) => {
+    const next = openGroup === label ? null : label
+    setOpenGroup(next)
+    try { localStorage.setItem("fl_nav_open_group", JSON.stringify(next)) } catch { /* */ }
+  }
 
   return (
     <aside className="flex flex-col h-full" style={{ background: BG, color: "#d1fae5" }}>
@@ -1097,7 +1095,7 @@ function SidebarContent({
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2 thin-scroll" style={{ scrollbarColor: "#1a4f2a transparent" }}>
         {filteredGroups.map(group => {
-          const isGroupCollapsed = collapsedGroups.has(group.label) && !searchQ
+          const isGroupCollapsed = openGroup !== group.label && !searchQ
           return (
           <div key={group.label} className="mb-2">
             {!sidebarCollapsed && !searchQ && (
