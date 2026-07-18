@@ -77,9 +77,8 @@ jobs:
 
       - name: Set up SSH
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
           for i in 1 2 3 4 5; do
             ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null && break
             echo "ssh-keyscan attempt $i failed, retrying..."
@@ -87,25 +86,31 @@ jobs:
           done
 
       - name: Upload new releases (does not touch the live app yet)
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "mkdir -p '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_API_RELEASE_DIR }}'"
-          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
+          sshpass -e scp -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz"
-          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
+          sshpass -e scp -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz"
           $SSH "tar -xzf '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz' -C '${{ env.REMOTE_SPA_RELEASE_DIR }}' && rm '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz'"
           $SSH "tar -xzf '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz' -C '${{ env.REMOTE_API_RELEASE_DIR }}' && rm '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz'"
 
       - name: Swap into place (backup current releases first)
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "rm -rf '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_DIR }}' '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
           $SSH "rm -rf '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_DIR }}' '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_RELEASE_DIR }}' '${{ env.REMOTE_API_DIR }}' && mkdir -p '${{ env.REMOTE_API_DIR }}/tmp'"
 
       - name: Write .htaccess (Passenger config + secrets) and restart
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           cat > erp.htaccess <<EOF
           PassengerAppRoot ${{ env.REMOTE_API_DIR }}
           PassengerAppType node
@@ -136,7 +141,7 @@ jobs:
           RewriteCond %{REQUEST_FILENAME} !-d
           RewriteRule ^ /index.html [L]
           EOF
-          scp -i ~/.ssh/deploy_key -P "${{ secrets.SSH_PORT }}" erp.htaccess \
+          sshpass -e scp -P "${{ secrets.SSH_PORT }}" erp.htaccess \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_DIR }}/.htaccess"
           $SSH "touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
 
@@ -157,12 +162,10 @@ jobs:
 
       - name: Rollback on failed health check
         if: failure() && steps.health.outputs.unhealthy == 'true'
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "rm -rf '${{ env.REMOTE_SPA_DIR }}' && mv '${{ env.REMOTE_SPA_BACKUP_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
           $SSH "rm -rf '${{ env.REMOTE_API_DIR }}' && mv '${{ env.REMOTE_API_BACKUP_DIR }}' '${{ env.REMOTE_API_DIR }}' && touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
           echo "::error::Deploy failed health check — rolled back to previous release."
-
-      - name: Clean up SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
