@@ -809,8 +809,13 @@ export interface Trip {
   id: string           // auto-number: T001, T002…
   numero?: string      // display number e.g. "T001"
   date: string
-  livreurId: string
+  livreurId: string    // conducteur — toujours le livreur actuel (compte appli, seul type pouvant se connecter)
   livreurNom: string
+  // Solo (un seul conducteur) ou avec un second livreur (aide/co-équipier —
+  // n'a jamais son propre compte appli, seul le conducteur principal se connecte).
+  modeConduite?: "solo" | "avec_livreur"   // défaut: "solo" si absent (trips existants)
+  coLivreurId?: string
+  coLivreurNom?: string
   vehicule: string
   commandeIds: string[]
   statut: "planifié" | "en_cours" | "terminé"
