@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, TYPES_CAISSE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
+import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { CameraQualiteIA, ComparatifFournisseurs, NouveauFournisseurModal } from "@/components/mobile/AchatIAModules"
@@ -285,7 +285,7 @@ export default function MobileAchat({ user }: Props) {
     agriculteurNom: "",
     agriculteurCIN: "",
     // Caisses vides échangées avec le fournisseur à cet achat
-    caissesFournisseur: [] as { type: TypeCaisse; quantite: string; sens: "donnee" | "recue" }[],
+    caissesFournisseur: [] as { type: TypeCaisse; quantite: string; sens: "donnee" | "recue"; code: string }[],
   })
   const [chargesArticle, setChargesArticle] = useState(store.getChargesArticle())
   const [poSaving, setPoSaving] = useState(false)
@@ -295,11 +295,15 @@ export default function MobileAchat({ user }: Props) {
   const setChargeRow = (idx: number, id: string) => setPoDetail(p => {
     const next = [...p.chargeIds]; next[idx] = id; return { ...p, chargeIds: next }
   })
-  // Caisses fournisseur — même pattern que les lignes de charge (add/update/remove)
+  // Caisses fournisseur — même pattern que les lignes de charge (add/update/remove).
+  // Quantité pré-remplie automatiquement depuis "Nombre d'unités" (nbUnites) déjà
+  // saisi pour cet achat — 1 caisse par UM étant le cas normal — mais reste un
+  // champ libre : l'acheteur peut la rectifier si le nombre réel de caisses
+  // physiques diffère (regroupement, casse, caisses partagées…).
   const addCaisseRow = () => setPoDetail(p => ({
-    ...p, caissesFournisseur: [...p.caissesFournisseur, { type: "gros" as TypeCaisse, quantite: "", sens: "recue" as const }],
+    ...p, caissesFournisseur: [...p.caissesFournisseur, { type: "gros" as TypeCaisse, quantite: p.nbUnites || "", sens: "recue" as const, code: "" }],
   }))
-  const setCaisseRow = (idx: number, patch: Partial<{ type: TypeCaisse; quantite: string; sens: "donnee" | "recue" }>) =>
+  const setCaisseRow = (idx: number, patch: Partial<{ type: TypeCaisse; quantite: string; sens: "donnee" | "recue"; code: string }>) =>
     setPoDetail(p => {
       const next = [...p.caissesFournisseur]
       next[idx] = { ...next[idx], ...patch }
@@ -435,7 +439,7 @@ export default function MobileAchat({ user }: Props) {
       photoAchat: poDetail.photoAchat || undefined,
       caissesFournisseur: poDetail.caissesFournisseur
         .filter(c => Number(c.quantite) > 0)
-        .map(c => ({ type: c.type, quantite: Number(c.quantite), sens: c.sens })),
+        .map(c => ({ type: c.type, quantite: Number(c.quantite), sens: c.sens, code: c.code.trim() || undefined })),
     })
     // store.updatePurchaseOrder est LOCAL-ONLY (localStorage) — sans cet appel,
     // le PO confirmé (et notamment les caisses fournisseur / photo qu'on vient
@@ -445,6 +449,33 @@ export default function MobileAchat({ user }: Props) {
     const updatedPo = store.getPurchaseOrders().find(p => p.id === poModalId)
     if (updatedPo) {
       import("@/lib/supabase/db").then(db => db.upsertPurchaseOrder(updatedPo)).catch(e => console.error("[MobileAchat] sync PO error:", e))
+    }
+
+    // ── Caisses étrangères — alimente le suivi de cycle de vie (BO > Gestion
+    // des caisses > Caisses étrangères) : une caisse "reçue" entre en stock
+    // chez nous ; une caisse "donnée" à l'achat (restitution immédiate, pas
+    // liée à une sortie en livraison antérieure) est directement classée
+    // retournée.
+    if (poDetail.caissesFournisseur.some(c => Number(c.quantite) > 0)) {
+      const today = store.today()
+      const nouvellesCaisses: CaisseEtrangere[] = poDetail.caissesFournisseur
+        .filter(c => Number(c.quantite) > 0)
+        .map(c => ({
+          id: store.genId(),
+          type: c.type,
+          quantite: Number(c.quantite),
+          code: c.code.trim() || undefined,
+          fournisseurId: poDetail.fournisseurId,
+          fournisseurNom: fourNom,
+          statut: c.sens === "recue" ? "en_stock" : "retournee",
+          poId: poModalId,
+          dateReception: today,
+          dateRetour: c.sens === "donnee" ? today : undefined,
+        }))
+      nouvellesCaisses.forEach(c => store.addCaisseEtrangere(c))
+      import("@/lib/supabase/db").then(db => {
+        nouvellesCaisses.forEach(c => db.upsertCaisseEtrangere(c).catch(e => console.error("[MobileAchat] sync caisse etrangere error:", e)))
+      })
     }
 
     // Auto-create credit fournisseur si paiement impaye ou partiel
@@ -1838,29 +1869,45 @@ export default function MobileAchat({ user }: Props) {
                     <button type="button" onClick={addCaisseRow} className="text-[11px] font-bold text-green-600 underline">+ Ajouter</button>
                   </div>
                   {poDetail.caissesFournisseur.length > 0 && (
-                    <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-2.5">
                       {poDetail.caissesFournisseur.map((c, idx) => (
-                        <div key={idx} className="flex items-center gap-2">
-                          <select
-                            value={c.type}
-                            onChange={e => setCaisseRow(idx, { type: e.target.value as TypeCaisse })}
-                            className="flex-1 px-2 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
-                            {(Object.keys(TYPES_CAISSE_LABELS) as TypeCaisse[]).map(t => (
-                              <option key={t} value={t}>{TYPES_CAISSE_LABELS[t]}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={c.sens}
-                            onChange={e => setCaisseRow(idx, { sens: e.target.value as "donnee" | "recue" })}
-                            className="px-2 py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
-                            <option value="recue">Reçue du fournisseur</option>
-                            <option value="donnee">Donnée au fournisseur</option>
-                          </select>
-                          <input type="number" min="0" placeholder="Qté" className="w-16 px-2 py-2 rounded-lg border border-slate-200 bg-white text-right text-sm font-bold"
-                            value={c.quantite}
-                            onChange={e => setCaisseRow(idx, { quantite: e.target.value })} />
-                          <button type="button" onClick={() => removeCaisseRow(idx)} title="Retirer"
-                            className="shrink-0 w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-red-100 hover:text-red-600">×</button>
+                        <div key={idx} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-200 bg-slate-50">
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={c.type}
+                              onChange={e => setCaisseRow(idx, { type: e.target.value as TypeCaisse })}
+                              className="flex-1 px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                              {(Object.keys(TYPES_CAISSE_LABELS) as TypeCaisse[]).map(t => (
+                                <option key={t} value={t}>{TYPES_CAISSE_LABELS[t]}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={c.sens}
+                              onChange={e => setCaisseRow(idx, { sens: e.target.value as "donnee" | "recue" })}
+                              className="px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                              <option value="recue">Reçue du fournisseur</option>
+                              <option value="donnee">Donnée au fournisseur</option>
+                            </select>
+                            <button type="button" onClick={() => removeCaisseRow(idx)} title="Retirer"
+                              className="shrink-0 w-7 h-7 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-red-100 hover:text-red-600">×</button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 flex flex-col gap-0.5">
+                              <label className="text-[10px] text-slate-500">Code caisses (optionnel)</label>
+                              <input type="text" placeholder="ex: marquage / N° lot fournisseur" className="w-full px-2 py-2 rounded-lg border border-slate-200 bg-white text-sm"
+                                value={c.code}
+                                onChange={e => setCaisseRow(idx, { code: e.target.value })} />
+                            </div>
+                            <div className="w-20 flex flex-col gap-0.5">
+                              <label className="text-[10px] text-slate-500">Qté</label>
+                              <input type="number" min="0" placeholder="Qté" className="w-full px-2 py-2 rounded-lg border border-slate-200 bg-white text-right text-sm font-bold"
+                                value={c.quantite}
+                                onChange={e => setCaisseRow(idx, { quantite: e.target.value })} />
+                            </div>
+                          </div>
+                          {poDetail.nbUnites && c.quantite === poDetail.nbUnites && (
+                            <p className="text-[10px] text-slate-400">Pré-rempli depuis le nombre d&apos;unités — modifiable si le compte réel diffère.</p>
+                          )}
                         </div>
                       ))}
                     </div>

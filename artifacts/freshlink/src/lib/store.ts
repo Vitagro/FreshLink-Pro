@@ -404,6 +404,35 @@ export const TYPES_CAISSE_LABELS: Record<TypeCaisse, string> = {
   demi: "Demi caisse",
 }
 
+// ── Caisses étrangères (appartiennent aux fournisseurs, pas à nous) ─────────
+// Cycle de vie : reçue du fournisseur (en_stock) → sortie en livraison chez un
+// client (en_livraison) → retournée au fournisseur (retournee). Créée
+// automatiquement à la confirmation d'un achat (MobileAchat) quand une ligne
+// "Reçue du fournisseur" est saisie ; une ligne "Donnée au fournisseur" à
+// l'achat (restitution immédiate) crée directement une entrée "retournee".
+export type StatutCaisseEtrangere = "en_stock" | "en_livraison" | "retournee"
+
+export interface CaisseEtrangere {
+  id: string
+  type: TypeCaisse
+  quantite: number
+  code?: string              // marquage / n° lot inscrit sur les caisses
+  fournisseurId: string
+  fournisseurNom: string
+  statut: StatutCaisseEtrangere
+  poId?: string               // bon d'achat d'origine
+  dateReception: string
+  dateSortieLivraison?: string
+  dateRetour?: string
+  notes?: string
+}
+
+export const STATUT_CAISSE_ETRANGERE_LABELS: Record<StatutCaisseEtrangere, string> = {
+  en_stock: "En stock",
+  en_livraison: "Sortie en livraison",
+  retournee: "Retournée au fournisseur",
+}
+
 // ── Contenants / Tares configurables ──────────────────────────────────────────
 // Tout objet dont on soustrait le poids pour obtenir le poids net
 // Exemples: caisse plastique 2.8kg, petit caisse 2kg, chario 15kg, palette 20kg
@@ -849,7 +878,7 @@ export interface PurchaseOrder {
   // Caisses vides échangées avec le fournisseur à cet achat (données par
   // nous en échange de la marchandise, ou reçues/rendues) — alimente le
   // solde caisses par fournisseur (BOFournisseurDetail).
-  caissesFournisseur?: { type: TypeCaisse; quantite: number; sens: "donnee" | "recue" }[]
+  caissesFournisseur?: { type: TypeCaisse; quantite: number; sens: "donnee" | "recue"; code?: string }[]
 }
 
 // Demande d'Achat (DA) — created automatically when all acheteurs refuse a PO
@@ -3108,6 +3137,21 @@ export const store = {
       arr[idx].enCirculation = Math.max(0, arr[idx].enCirculation - retour)
       store.saveCaissesVides(arr)
     }
+  },
+
+  // ── Caisses étrangères (appartiennent aux fournisseurs) ────────────────────
+  getCaissesEtrangeres: (): CaisseEtrangere[] => getLS("fl_caisses_etrangeres", []),
+  saveCaissesEtrangeres: (c: CaisseEtrangere[]) => setLS("fl_caisses_etrangeres", c),
+  addCaisseEtrangere: (c: CaisseEtrangere) => {
+    const arr = store.getCaissesEtrangeres()
+    arr.unshift(c)
+    store.saveCaissesEtrangeres(arr)
+    return c
+  },
+  updateCaisseEtrangere: (id: string, updates: Partial<CaisseEtrangere>) => {
+    const arr = store.getCaissesEtrangeres()
+    const idx = arr.findIndex(c => c.id === id)
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.saveCaissesEtrangeres(arr) }
   },
 
   // --- Company config ---

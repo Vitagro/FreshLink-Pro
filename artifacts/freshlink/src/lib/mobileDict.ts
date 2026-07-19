@@ -279,6 +279,9 @@ export const MOBILE_DICT: Record<string, Tr> = {
   "Aucune caisse échangée à noter pour cet achat.": { ar: "ماكاين حتى صندوق تبادل فهاد الشرا.", en: "No crates exchanged to note for this purchase." },
   "Gros caisse": { ar: "صندوق كبير", en: "Large crate" },
   "Demi caisse": { ar: "نص صندوق", en: "Half crate" },
+  "Code caisses (optionnel)": { ar: "رمز الصناديق (اختياري)", en: "Crate code (optional)" },
+  "ex: marquage / N° lot fournisseur": { ar: "مثال: العلامة / رقم الدفعة ديال المزوّد", en: "e.g. marking / supplier lot number" },
+  "Pré-rempli depuis le nombre d'unités — modifiable si le compte réel diffère.": { ar: "متعمّر أوتوماتيك من عدد الوحدات — قادر تبدلو إلا العدد الحقيقي مختلف.", en: "Pre-filled from the number of units — editable if the actual count differs." },
 
   // ── Édition clients / fournisseurs (mobile) ─────────────────────────────────
   "Modifier les infos du client": { ar: "بدّل معلومات الزبون", en: "Edit client info" },

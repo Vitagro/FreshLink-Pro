@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { store, type Article, type HistoriquePrixAchat, FAMILLE_GROUPES, getAllFamilles, addCustomFamille, paDeviationConfirmMessage } from "@/lib/store"
+import { store, type Article, type HistoriquePrixAchat, type StatutCaisseEtrangere, type TypeCaisse, STATUT_CAISSE_ETRANGERE_LABELS, TYPES_CAISSE_LABELS, FAMILLE_GROUPES, getAllFamilles, addCustomFamille, paDeviationConfirmMessage } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import { resolveArticlePhoto } from "@/lib/articlePhotoHelper"
 import { getArticlePhoto } from "@/lib/articlePhotos"
-import { deleteArticle } from "@/lib/supabase/db"
+import { deleteArticle, upsertCaisseEtrangere } from "@/lib/supabase/db"
 
 const DH = (n: number) => `${n.toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`
 
@@ -79,6 +79,9 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   const [editArt, setEditArt] = useState<Article | null>(null)
   const [showHisto, setShowHisto] = useState<Article | null>(null)
   const [caisses, setCaisses] = useState(store.getCaissesVides())
+  const [caissesEtr, setCaissesEtr] = useState(store.getCaissesEtrangeres())
+  const [caissesEtrFilterStatut, setCaissesEtrFilterStatut] = useState<"" | StatutCaisseEtrangere>("")
+  const [caissesEtrFilterFournisseur, setCaissesEtrFilterFournisseur] = useState("")
   // Selection for bulk actions
   const [selectedArticleIds, setSelectedArticleIds] = useState<Set<string>>(new Set())
   // Confirm resets
@@ -425,6 +428,19 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
 
   const reloadCaisses = () => setCaisses(store.getCaissesVides())
 
+  const reloadCaissesEtr = () => setCaissesEtr(store.getCaissesEtrangeres())
+  // Transition de statut d'une caisse étrangère (reçue → sortie en livraison → retournée)
+  const setStatutCaisseEtr = (id: string, statut: StatutCaisseEtrangere) => {
+    const now = store.today()
+    const updates = statut === "en_livraison" ? { statut, dateSortieLivraison: now }
+      : statut === "retournee" ? { statut, dateRetour: now }
+      : { statut }
+    store.updateCaisseEtrangere(id, updates)
+    reloadCaissesEtr()
+    const updated = store.getCaissesEtrangeres().find(c => c.id === id)
+    if (updated) upsertCaisseEtrangere(updated).catch(e => console.error("[BOArticles] sync caisse etrangere error:", e))
+  }
+
   // Réassigne en masse les articles sélectionnés à une famille (refonte d'assignation)
   const bulkReassignFamille = (fam: string) => {
     if (!fam || selectedArticleIds.size === 0) return
@@ -571,6 +587,99 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* ════ CAISSES ÉTRANGÈRES — appartiennent aux fournisseurs ════ */}
+          <div className="flex flex-col gap-4 pt-6 border-t border-border">
+            <div>
+              <h3 className="font-bold text-foreground text-lg">Caisses étrangères / الصناديق ديال الموردين</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Caisses appartenant aux fournisseurs : reçues à l&apos;achat, sorties en livraison chez un client, puis retournées au fournisseur.
+              </p>
+            </div>
+
+            {/* KPIs par statut */}
+            <div className="grid grid-cols-3 gap-3">
+              {(["en_stock", "en_livraison", "retournee"] as StatutCaisseEtrangere[]).map(st => {
+                const count = caissesEtr.filter(c => c.statut === st).reduce((s, c) => s + c.quantite, 0)
+                const cls = st === "en_stock" ? "bg-blue-50 border-blue-200 text-blue-700"
+                  : st === "en_livraison" ? "bg-amber-50 border-amber-200 text-amber-700"
+                  : "bg-green-50 border-green-200 text-green-700"
+                return (
+                  <div key={st} className={`rounded-2xl border p-4 ${cls}`}>
+                    <p className="text-xs font-bold uppercase tracking-wide opacity-80">{STATUT_CAISSE_ETRANGERE_LABELS[st]}</p>
+                    <p className="text-2xl font-extrabold mt-1">{count}</p>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Filtres */}
+            <div className="flex flex-wrap gap-2">
+              <select value={caissesEtrFilterStatut} onChange={e => setCaissesEtrFilterStatut(e.target.value as "" | StatutCaisseEtrangere)}
+                className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="">Tous les statuts</option>
+                {(["en_stock", "en_livraison", "retournee"] as StatutCaisseEtrangere[]).map(st => (
+                  <option key={st} value={st}>{STATUT_CAISSE_ETRANGERE_LABELS[st]}</option>
+                ))}
+              </select>
+              <input type="text" placeholder="Filtrer par fournisseur..." value={caissesEtrFilterFournisseur}
+                onChange={e => setCaissesEtrFilterFournisseur(e.target.value)}
+                className="flex-1 min-w-40 px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-[11px] text-muted-foreground uppercase tracking-wide border-b border-border">
+                    <th className="text-left py-2 pr-3 font-semibold">Fournisseur</th>
+                    <th className="text-left py-2 pr-3 font-semibold">Type</th>
+                    <th className="text-left py-2 pr-3 font-semibold">Code</th>
+                    <th className="text-right py-2 pr-3 font-semibold">Qté</th>
+                    <th className="text-left py-2 pr-3 font-semibold">Statut</th>
+                    <th className="text-left py-2 pr-3 font-semibold">Reçue le</th>
+                    <th className="text-right py-2 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {caissesEtr
+                    .filter(c => !caissesEtrFilterStatut || c.statut === caissesEtrFilterStatut)
+                    .filter(c => !caissesEtrFilterFournisseur.trim() || c.fournisseurNom.toLowerCase().includes(caissesEtrFilterFournisseur.trim().toLowerCase()))
+                    .map(c => (
+                      <tr key={c.id} className="border-b border-border/60">
+                        <td className="py-2 pr-3 font-medium text-foreground">{c.fournisseurNom}</td>
+                        <td className="py-2 pr-3">{TYPES_CAISSE_LABELS[c.type as TypeCaisse]}</td>
+                        <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{c.code || "—"}</td>
+                        <td className="py-2 pr-3 text-right font-semibold">{c.quantite}</td>
+                        <td className="py-2 pr-3">
+                          <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border ${
+                            c.statut === "en_stock" ? "bg-blue-50 text-blue-700 border-blue-200"
+                              : c.statut === "en_livraison" ? "bg-amber-50 text-amber-700 border-amber-200"
+                              : "bg-green-50 text-green-700 border-green-200"
+                          }`}>{STATUT_CAISSE_ETRANGERE_LABELS[c.statut]}</span>
+                        </td>
+                        <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">{c.dateReception}</td>
+                        <td className="py-2 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            {c.statut === "en_stock" && (
+                              <button onClick={() => setStatutCaisseEtr(c.id, "en_livraison")}
+                                className="px-2.5 py-1 rounded-lg bg-amber-500 text-white text-[11px] font-bold hover:bg-amber-600">Sortie livraison</button>
+                            )}
+                            {(c.statut === "en_stock" || c.statut === "en_livraison") && (
+                              <button onClick={() => setStatutCaisseEtr(c.id, "retournee")}
+                                className="px-2.5 py-1 rounded-lg bg-green-600 text-white text-[11px] font-bold hover:bg-green-700">Retour fournisseur</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  {caissesEtr.length === 0 && (
+                    <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Aucune caisse étrangère enregistrée pour l&apos;instant.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}

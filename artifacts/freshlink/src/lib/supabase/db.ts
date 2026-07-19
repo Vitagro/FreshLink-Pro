@@ -22,7 +22,7 @@ import type {
   Commande, Visite, BonAchat, PurchaseOrder, Reception,
   Trip, BonLivraison, Retour, BonPreparation,
   TransfertStock, Message, Notice, CaisseEntry,
-  LoyaltyTransaction, PrimeNouveauClient,
+  LoyaltyTransaction, PrimeNouveauClient, CaisseEtrangere,
 } from "@/lib/store"
 
 // ── Helpers JSONB ─────────────────────────────────────────────────────────────
@@ -373,6 +373,16 @@ export async function upsertPurchaseOrder(p: PurchaseOrder) {
   await apiUpsert("fl_purchase_orders", p as unknown as Record<string, unknown>)
 }
 
+// ── CAISSES ÉTRANGÈRES ────────────────────────────────────────────────────────
+
+export async function upsertCaisseEtrangere(c: CaisseEtrangere) {
+  const all = store.getCaissesEtrangeres()
+  const idx = all.findIndex(x => x.id === c.id)
+  if (idx >= 0) all[idx] = c; else all.unshift(c)
+  store.saveCaissesEtrangeres(all)
+  await apiUpsert("fl_caisses_etrangeres", c as unknown as Record<string, unknown>)
+}
+
 // ── RECEPTIONS ────────────────────────────────────────────────────────────────
 
 export async function upsertReception(r: Reception) {
@@ -508,6 +518,7 @@ export async function syncFromSupabase(): Promise<{ ok: boolean; tables: string[
     // directement de ces deux tables pour rester cohérente cross-device.
     ["fl_loyalty_transactions", (d) => store.saveLoyaltyTransactions(d as LoyaltyTransaction[]), () => store.getLoyaltyTransactions()],
     ["fl_primes_nouveaux_clients", (d) => store.savePrimesNouveauxClients(d as PrimeNouveauClient[]), () => store.getPrimesNouveauxClients()],
+    ["fl_caisses_etrangeres", (d) => store.saveCaissesEtrangeres(d as CaisseEtrangere[]), () => store.getCaissesEtrangeres()],
   ]
 
   // Requêtes parallèles — toutes les tables en même temps (x10 plus rapide)

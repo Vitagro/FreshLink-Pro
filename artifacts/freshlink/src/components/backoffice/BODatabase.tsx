@@ -117,6 +117,7 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
     fl_demandes_achat:   "fl_demandes_achat",
     fl_notices:          "fl_notices",
     fl_non_achats:       "fl_non_achats",
+    fl_caisses_etrangeres: "fl_caisses_etrangeres",
   }
 
   // ALL useEffects MUST be before any conditional return
