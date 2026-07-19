@@ -20,7 +20,12 @@ import { useEffect } from "react"
 import { useLang } from "@/lib/i18n"
 import { MOBILE_DICT, type Tr } from "@/lib/mobileDict"
 
-const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG", "PATH", "INPUT", "TEXTAREA", "SELECT", "OPTION"])
+// SELECT/OPTION ne sont PAS ici : un <option> affiche un texte au même titre
+// qu'un <button>, ce n'est pas un champ de saisie libre (contrairement à
+// INPUT/TEXTAREA) — il doit être traduit comme n'importe quel libellé, sinon
+// tous les menus déroulants (type d'achat, type de caisse…) restent bloqués
+// en français quel que soit l'onglet de langue choisi.
+const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG", "PATH", "INPUT", "TEXTAREA"])
 
 function pick(tr: Tr, lang: string): string { return lang === "ar" ? tr.ar : tr.en }
 

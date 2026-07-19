@@ -844,6 +844,12 @@ export interface PurchaseOrder {
   taxeCommunale?: number       // DH — 7% du total, marché de gros uniquement
   agriculteurNom?: string      // obligatoire si typeFlux = agriculteur_direct
   agriculteurCIN?: string      // obligatoire si typeFlux = agriculteur_direct
+  photoAchat?: string          // photo marchandise prise par l'acheteur (contrôle qualité)
+  // ── Caisses fournisseur ────────────────────────────────────────────────
+  // Caisses vides échangées avec le fournisseur à cet achat (données par
+  // nous en échange de la marchandise, ou reçues/rendues) — alimente le
+  // solde caisses par fournisseur (BOFournisseurDetail).
+  caissesFournisseur?: { type: TypeCaisse; quantite: number; sens: "donnee" | "recue" }[]
 }
 
 // Demande d'Achat (DA) — created automatically when all acheteurs refuse a PO

@@ -257,4 +257,26 @@ export const MOBILE_DICT: Record<string, Tr> = {
   "Confirmer le retour de cette livraison ?": { ar: "متأكّد بغيتي ترجّع هاد التوصيل؟", en: "Confirm return of this delivery?" },
   "BL validé avec succès !": { ar: "تصادق الوصل بنجاح!", en: "Delivery note validated!" },
   "Non validé BO": { ar: "ماشي متصادق فالباك أوفيس", en: "Not validated (BO)" },
+
+  // ── Prévendeur — affectation clients ────────────────────────────────────────
+  "Vous ne voyez que vos clients et ceux non encore affectés dans votre secteur.": { ar: "كتشوف غير الكليان ديالك ولي مازال ماتعطاوش فالسكتور ديالك.", en: "You only see your clients and those not yet assigned in your sector." },
+  "Aucun client ne vous est encore affecté : vous voyez tous les clients.": { ar: "مازال ماتعطاوليك حتى كليان : كتشوف گاع الكليان.", en: "No client assigned to you yet — you see all clients." },
+  "Aucun client n'existe encore dans le système.": { ar: "مازال ماكاين حتى كليان فالنظام.", en: "No client exists in the system yet." },
+  "Contactez votre responsable.": { ar: "تواصل مع المسؤول ديالك.", en: "Contact your manager." },
+
+  // ── Achat — type de flux, caisses fournisseur ───────────────────────────────
+  "Type d'achat *": { ar: "نوع الشرا *", en: "Purchase type *" },
+  "Marché de gros": { ar: "سوق الجملة", en: "Wholesale market" },
+  "Agriculteur direct": { ar: "الفلاح مباشرة", en: "Direct farmer" },
+  "Société structurée": { ar: "شركة منظمة", en: "Registered company" },
+  "Bordereau/carreau — taxe communale 7% en charge": { ar: "بوردورو/كارو — الضريبة الجماعية 7% فالمصاريف", en: "Market slip — 7% municipal tax as a charge" },
+  "Auto-facturation — TVA 0%, CIN obligatoire": { ar: "فاكتورة ذاتية — TVA 0%، البطاقة الوطنية واجبة", en: "Self-invoicing — 0% VAT, ID required" },
+  "Fournisseur avec ICE — TVA 0%": { ar: "مزوّد عندو ICE — TVA 0%", en: "Supplier with ICE — 0% VAT" },
+  "Caisses fournisseur": { ar: "الصناديق ديال المزوّد", en: "Supplier crates" },
+  "+ Ajouter": { ar: "+ زيد", en: "+ Add" },
+  "Reçue du fournisseur": { ar: "توصلات من المزوّد", en: "Received from supplier" },
+  "Donnée au fournisseur": { ar: "معطاة للمزوّد", en: "Given to supplier" },
+  "Aucune caisse échangée à noter pour cet achat.": { ar: "ماكاين حتى صندوق تبادل فهاد الشرا.", en: "No crates exchanged to note for this purchase." },
+  "Gros caisse": { ar: "صندوق كبير", en: "Large crate" },
+  "Demi caisse": { ar: "نص صندوق", en: "Half crate" },
 }

@@ -33,6 +33,40 @@ const FAMILLE_COLORS: Record<string, string> = {
 
 const DEFAULT_PHOTO = "https://placehold.co/120x120/e2e8f0/64748b?text=Article"
 
+// Détection de doublon FR/AR à la création d'un article. Le nom (FR) et le
+// nomAr (AR) sont censés être 2 champs du MÊME article, mais en pratique des
+// doublons sont créés en tapant les deux langues dans le même champ "nom"
+// séparées par "/" (ex: "ail" une fois, puis "ail/ثوم" une autre fois pour ce
+// qui est en réalité le même produit). On normalise (minuscule, accents,
+// espaces) puis on isole la partie latine et la partie arabe de chaque champ
+// (séparateur "/") pour comparer les deux articles partie par partie.
+function normArticleName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+function splitBilingual(s: string): { latin: string; arabic: string } {
+  let latin = "", arabic = ""
+  for (const part of (s || "").split("/").map(p => p.trim()).filter(Boolean)) {
+    if (/[؀-ۿ]/.test(part)) arabic = arabic ? `${arabic} ${part}` : part
+    else latin = latin ? `${latin} ${part}` : part
+  }
+  return { latin: normArticleName(latin), arabic: normArticleName(arabic) }
+}
+
+function findDuplicateArticle(all: Article[], nom: string, nomAr: string, excludeId?: string): Article | undefined {
+  const mine = { latin: splitBilingual(nom).latin, arabic: splitBilingual(nom).arabic || splitBilingual(nomAr).arabic }
+  return all.find(a => {
+    if (a.id === excludeId) return false
+    const other = { latin: splitBilingual(a.nom).latin, arabic: splitBilingual(a.nom).arabic || splitBilingual(a.nomAr).arabic }
+    return (mine.latin && other.latin && mine.latin === other.latin) ||
+      (mine.arabic && other.arabic && mine.arabic === other.arabic)
+  })
+}
+
 const UM_OPTIONS = ["Caisse", "Demi caisse", "Carton", "Palette", "Sac", "Plateau", "Botte", "Pièce"]
 
 export default function BOArticles({ user }: { user: { id: string; name: string } }) {
@@ -301,6 +335,13 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
       const idx = all.findIndex(a => a.id === editArt.id)
       if (idx >= 0) { all[idx] = { ...all[idx], ...form }; store.saveArticles(all); saved = all[idx] }
     } else {
+      const dup = findDuplicateArticle(all, form.nom, form.nomAr)
+      if (dup && !window.confirm(
+        `Un article "${dup.nom}"${dup.nomAr ? ` / "${dup.nomAr}"` : ""} existe déjà et semble être le même produit.\n\n` +
+        `Créer un doublon peut disperser stock et historique de prix sur deux fiches.\n` +
+        `Préférez plutôt "Modifier" cet article existant pour ajouter le nom manquant (FR ou AR).\n\n` +
+        `Créer quand même un nouvel article ?`
+      )) return
       const newArt: Article = { ...form, id: store.genId() }
       all.push(newArt)
       store.saveArticles(all)

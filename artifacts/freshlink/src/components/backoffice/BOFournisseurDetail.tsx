@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import {
   store, type Fournisseur, type PurchaseOrder, type Reception, type BonAchat,
+  type TypeCaisse, TYPES_CAISSE_LABELS,
   MODALITE_LABELS,
 } from "@/lib/store"
 
@@ -48,7 +49,7 @@ interface SupplierData {
   }
 }
 
-type Tab = "identite" | "commandes" | "receptions" | "paiements" | "prix"
+type Tab = "identite" | "commandes" | "receptions" | "paiements" | "prix" | "caisses"
 
 const PO_STATUT: Record<string, { label: string; cls: string; dot: string }> = {
   ouvert:      { label: "Ouvert",      cls: "bg-blue-50 text-blue-700 border-blue-200",   dot: "bg-blue-500" },
@@ -215,12 +216,23 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
   const stats = data?.stats
   const f = fournisseur
 
+  // Caisses fournisseur — solde net par type = reçues - données, sur tous les
+  // achats de ce fournisseur (positif = le fournisseur nous doit des caisses).
+  const caisseRows = (data?.purchaseOrders ?? []).flatMap(po => po.caissesFournisseur ?? [])
+  const caisseBalance = caisseRows.reduce((acc, c) => {
+    const delta = c.sens === "recue" ? c.quantite : -c.quantite
+    acc[c.type] = (acc[c.type] ?? 0) + delta
+    return acc
+  }, {} as Record<TypeCaisse, number>)
+  const caisseTypesPresents = (Object.keys(caisseBalance) as TypeCaisse[])
+
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: "identite",   label: "Identité & conditions" },
     { id: "commandes",  label: "Commandes (PO)", badge: data?.purchaseOrders.length },
     { id: "receptions", label: "Réceptions",     badge: data?.receptions.length },
     { id: "paiements",  label: "Paiements & solde" },
     { id: "prix",       label: "Historique PA",  badge: paHisto.length },
+    { id: "caisses",    label: "Caisses",        badge: caisseRows.length },
   ]
 
   return (
@@ -541,6 +553,61 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
                     </tbody>
                   </table>
                 </div>
+              )}
+            </div>
+          )}
+
+          {tab === "caisses" && (
+            <div className="flex flex-col gap-4">
+              {loading ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Chargement…</p>
+              ) : caisseRows.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">Aucune caisse échangée notée pour ce fournisseur.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {caisseTypesPresents.map(t => {
+                      const solde = caisseBalance[t]
+                      return (
+                        <div key={t} className="rounded-xl border border-border bg-card px-3 py-2.5">
+                          <p className={`text-lg font-black ${solde > 0 ? "text-amber-600" : solde < 0 ? "text-red-600" : "text-green-700"}`}>
+                            {solde > 0 ? `+${solde}` : solde}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">{TYPES_CAISSE_LABELS[t]} — solde</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground -mt-2">
+                    Solde positif = le fournisseur nous doit des caisses. Négatif = nous lui devons des caisses.
+                  </p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[11px] text-muted-foreground uppercase tracking-wide border-b border-border">
+                          <th className="text-left py-2 pr-3 font-semibold">Achat (PO)</th>
+                          <th className="text-left py-2 pr-3 font-semibold">Date</th>
+                          <th className="text-left py-2 pr-3 font-semibold">Type</th>
+                          <th className="text-left py-2 pr-3 font-semibold">Sens</th>
+                          <th className="text-right py-2 font-semibold">Quantité</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(data?.purchaseOrders ?? []).flatMap(po =>
+                          (po.caissesFournisseur ?? []).map((c, i) => (
+                            <tr key={`${po.id}-${i}`} className="border-b border-border/60">
+                              <td className="py-2 pr-3 font-mono text-xs text-muted-foreground">{po.id}</td>
+                              <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">{po.date || "—"}</td>
+                              <td className="py-2 pr-3 font-medium text-foreground">{TYPES_CAISSE_LABELS[c.type]}</td>
+                              <td className="py-2 pr-3">{c.sens === "recue" ? "Reçue" : "Donnée"}</td>
+                              <td className="py-2 text-right font-semibold">{c.quantite}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           )}

@@ -400,22 +400,27 @@ export default function MobileCommercial({ user }: Props) {
   }
 
   // ── Filter clients ────────────────────────────────────────────────────────
-  // Règles (validées 2026-06-18) :
+  // Règles (validées 2026-07-19) :
   //  - admin / team_leader / resp_commercial : voient TOUS les clients.
-  //  - prévendeur SANS secteur affecté : voit TOUS les clients (prévendeur "volant").
-  //  - prévendeur AVEC secteur :
-  //      • client affecté à un prévendeur → visible seulement par CE prévendeur ;
-  //      • client SANS secteur → visible par TOUS les prévendeurs ;
-  //      • sinon → visible si même secteur que le prévendeur.
+  //  - prévendeur SANS AUCUN client affecté (assignedCount === 0) : voit TOUS
+  //    les clients, qu'il ait un secteur ou non (prévendeur "volant" tant que
+  //    personne ne lui a explicitement affecté de client).
+  //  - prévendeur AVEC au moins un client affecté :
+  //      • prévendeur SANS secteur : voit TOUS les clients.
+  //      • prévendeur AVEC secteur :
+  //          - client affecté à un prévendeur → visible seulement par CE prévendeur ;
+  //          - client SANS secteur → visible par TOUS les prévendeurs ;
+  //          - sinon → visible si même secteur que le prévendeur.
   const isPrevendeur = user.role === "prevendeur"
+  const assignedCount = clients.filter(c => c.prevendeurId === user.id).length
   const myClients = clients.filter(c => {
     if (!isPrevendeur) return true            // admin / responsable : tout
+    if (assignedCount === 0) return true      // prévendeur sans aucun client affecté : voit tout
     if (!user.secteur) return true            // prévendeur sans secteur : voit tout
     if (c.prevendeurId) return c.prevendeurId === user.id  // client affecté : seulement le sien
     if (!c.secteur) return true               // client sans secteur : visible par tous
     return c.secteur === user.secteur         // sinon : même secteur
   })
-  const assignedCount = clients.filter(c => c.prevendeurId === user.id).length
 
   const filteredClients = myClients.filter(c => {
     if (filterKey === "nom") return c.nom.toLowerCase().includes(searchNom.toLowerCase())
@@ -888,7 +893,11 @@ export default function MobileCommercial({ user }: Props) {
               {assignedCount} client(s) affecté(s) à vous
               {user.secteur ? ` · Secteur : ${user.secteur}` : ""}
             </p>
-            <p className="text-[11px] text-indigo-600">Vous ne voyez que vos clients et ceux non encore affectés dans votre secteur.</p>
+            <p className="text-[11px] text-indigo-600">
+              {assignedCount === 0
+                ? "Aucun client ne vous est encore affecté : vous voyez tous les clients."
+                : "Vous ne voyez que vos clients et ceux non encore affectés dans votre secteur."}
+            </p>
           </div>
         </div>
       )}
@@ -982,8 +991,8 @@ export default function MobileCommercial({ user }: Props) {
               <p className="text-xs text-muted-foreground">Aucun client trouvé</p>
               {isPrevendeur && myClients.length === 0 && (
                 <p className="text-[11px] text-amber-600 mt-1">
-                  Vous n&apos;avez pas encore de clients affectés.
-                  Contactez votre responsable pour l&apos;affectation.
+                  Aucun client n&apos;existe encore dans le système.
+                  Contactez votre responsable.
                 </p>
               )}
             </div>
