@@ -279,4 +279,11 @@ export const MOBILE_DICT: Record<string, Tr> = {
   "Aucune caisse échangée à noter pour cet achat.": { ar: "ماكاين حتى صندوق تبادل فهاد الشرا.", en: "No crates exchanged to note for this purchase." },
   "Gros caisse": { ar: "صندوق كبير", en: "Large crate" },
   "Demi caisse": { ar: "نص صندوق", en: "Half crate" },
+
+  // ── Édition clients / fournisseurs (mobile) ─────────────────────────────────
+  "Modifier les infos du client": { ar: "بدّل معلومات الزبون", en: "Edit client info" },
+  "Le GPS ne change pas ici — utilisez \"Refaire le recensement\" dans la liste des clients.": { ar: "GPS ماكيتبدلش من هنا — استعمل \"عاود التسجيل\" فلائحة الزبناء.", en: "GPS doesn't change here — use \"Redo GPS capture\" in the client list." },
+  "Nouveau fournisseur": { ar: "مزوّد جديد", en: "New supplier" },
+  "Modifier fournisseur": { ar: "بدّل المزوّد", en: "Edit supplier" },
+  "✏️ Modifier": { ar: "✏️ بدّل", en: "✏️ Edit" },
 }

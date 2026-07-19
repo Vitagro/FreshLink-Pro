@@ -181,6 +181,7 @@ export default function MobileAchat({ user }: Props) {
   const [lignes, setLignes] = useState<LigneForm[]>([EMPTY_LIGNE()])
   const [fournisseurId, setFournisseurId] = useState("")
   const [showNewFournisseur, setShowNewFournisseur] = useState(false)
+  const [editingFournisseur, setEditingFournisseur] = useState<Fournisseur | null>(null)
   const [sending, setSending] = useState(false)
   const [success, setSuccess] = useState(false)
   const [emailDest, setEmailDest] = useState("")
@@ -1085,19 +1086,30 @@ export default function MobileAchat({ user }: Props) {
             <option key={f.id} value={f.id}>{f.nom}</option>
           ))}
         </select>
-        {fournisseur?.telephone && (
-          <p className="text-xs text-muted-foreground">Tel: {fournisseur.telephone}</p>
+        {fournisseur && (
+          <div className="flex items-center justify-between">
+            {fournisseur.telephone ? (
+              <p className="text-xs text-muted-foreground">Tel: {fournisseur.telephone}</p>
+            ) : <span />}
+            <button type="button" onClick={() => setEditingFournisseur(fournisseur)}
+              className="text-xs font-bold text-primary hover:underline">✏️ Modifier</button>
+          </div>
         )}
       </div>
 
-      {showNewFournisseur && (
+      {(showNewFournisseur || editingFournisseur) && (
         <NouveauFournisseurModal
           articles={articles}
-          onClose={() => setShowNewFournisseur(false)}
+          fournisseur={editingFournisseur ?? undefined}
+          onClose={() => { setShowNewFournisseur(false); setEditingFournisseur(null) }}
           onCreated={f => {
             setFournisseurs(prev => [...prev, f])
             setFournisseurId(f.id)
             setShowNewFournisseur(false)
+          }}
+          onUpdated={f => {
+            setFournisseurs(prev => prev.map(x => x.id === f.id ? f : x))
+            setEditingFournisseur(null)
           }}
         />
       )}

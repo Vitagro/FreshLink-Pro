@@ -68,6 +68,11 @@ export default function MobileCommercial({ user }: Props) {
   const zoneLabelOf = (secteur: string) => zonesCfg ? zoneOfSecteur(zonesCfg, secteur)?.label ?? null : null
   const [selectedClientId, setSelectedClientId] = useState("")
   const [heurelivraison, setHeureLivraison] = useState("")
+  // Une fois qu'un client a un horaire habituel enregistré, on masque le champ
+  // par défaut (le prévendeur n'a plus à le ressaisir à chaque commande) — un
+  // lien "Modifier" permet de le rouvrir si l'horaire doit exceptionnellement
+  // changer pour cette commande.
+  const [showHeureEdit, setShowHeureEdit] = useState(false)
   const [lignes, setLignes] = useState<LigneForm[]>([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
 
   // Vendeur selector — only admins / resp_commercial can pick a different vendeur
@@ -94,6 +99,20 @@ export default function MobileCommercial({ user }: Props) {
 
   // Add new client
   const [showAddClient, setShowAddClient] = useState(false)
+  // Modification d'un client existant — réutilise le formulaire "Nouveau
+  // client" pré-rempli ; null = mode création.
+  const [editingClientId, setEditingClientId] = useState<string | null>(null)
+  const openEditClient = (c: Client) => {
+    setEditingClientId(c.id)
+    setNewClient({
+      nom: c.nom, secteur: c.secteur || user.secteur || "", zone: c.zone || "Casablanca",
+      type: c.type, typeAutre: c.typeAutre || "",
+      taille: c.taille, typeProduits: c.typeProduits, rotation: c.rotation,
+      telephone: c.telephone || "", email: c.email || "", adresse: c.adresse || "",
+      categorie: c.categorie, heureLivraison: c.defaultHeureLivraison || c.heureLivraison || lastHeureLivraison(),
+    })
+    setShowAddClient(true)
+  }
   // Heure de livraison par défaut = la dernière choisie par CE prévendeur —
   // masquée par défaut dans le formulaire (pas de saisie supplémentaire à
   // faire à chaque client), affichable/modifiable au besoin.
@@ -331,6 +350,7 @@ export default function MobileCommercial({ user }: Props) {
     if (client?.defaultHeureLivraison) {
       setHeureLivraison(client.defaultHeureLivraison)
     }
+    setShowHeureEdit(false)
     setHabitudeSearch("")
   }, [selectedClientId, clients])
 
@@ -480,6 +500,34 @@ export default function MobileCommercial({ user }: Props) {
 
   const handleAddClient = () => {
     if (!newClient.nom.trim()) return
+
+    if (editingClientId) {
+      // Mode édition — garde l'id, la date/auteur de création et le GPS
+      // existants (le GPS se change via le bouton "Refaire le recensement"
+      // dédié dans la liste, pas depuis ce formulaire).
+      const existing = clients.find(c => c.id === editingClientId)
+      const updates: Partial<Client> = {
+        nom: newClient.nom, secteur: newClient.secteur, zone: newClient.zone,
+        type: newClient.type, typeAutre: newClient.typeAutre,
+        taille: newClient.taille, typeProduits: newClient.typeProduits, rotation: newClient.rotation,
+        telephone: newClient.telephone, email: newClient.email, adresse: newClient.adresse,
+        categorie: newClient.categorie,
+        heureLivraison: newClient.heureLivraison,
+        defaultHeureLivraison: newClient.heureLivraison,
+      }
+      store.updateClient(editingClientId, updates)
+      const merged = existing ? { ...existing, ...updates } : null
+      if (merged) import("@/lib/supabase/db").then(db => db.upsertClient(merged)).catch(e => console.error("[MobileCommercial] sync client error:", e))
+      setClients(store.getClients())
+      setEditingClientId(null)
+      setShowAddClient(false)
+      setShowHeureLivraison(false)
+      setNewClient({ nom: "", secteur: user.secteur || "", zone: "Casablanca", type: "marchand", typeAutre: "",
+        taille: "150-300kg", typeProduits: "moyenne", rotation: "journalier",
+        telephone: "", email: "", adresse: "", categorie: "marchand", heureLivraison: newClient.heureLivraison })
+      return
+    }
+
     const client: Client = {
       id: store.genId(),
       nom: newClient.nom,
@@ -1033,6 +1081,12 @@ export default function MobileCommercial({ user }: Props) {
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                     )}
                   </div>
+                  <div role="button" tabIndex={0} title="Modifier les infos du client"
+                    onClick={e => { e.stopPropagation(); openEditClient(c) }}
+                    onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); openEditClient(c) } }}
+                    className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 cursor-pointer select-none">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                  </div>
                 </div>
               </button>
             )
@@ -1068,10 +1122,12 @@ export default function MobileCommercial({ user }: Props) {
         )}
       </div>
 
-      {/* ADD NEW CLIENT FORM */}
+      {/* ADD/EDIT CLIENT FORM */}
       {showAddClient && (
         <div className="bg-card rounded-xl border border-border p-4 flex flex-col gap-3">
-          <h3 className="text-sm font-bold text-foreground">Nouveau client / زبون جديد</h3>
+          <h3 className="text-sm font-bold text-foreground">
+            {editingClientId ? "Modifier client / بدّل الزبون" : "Nouveau client / زبون جديد"}
+          </h3>
           <div className="grid grid-cols-2 gap-2">
             <div className="col-span-2 flex flex-col gap-1">
               <label className="text-xs font-semibold text-foreground">Nom *</label>
@@ -1220,41 +1276,61 @@ export default function MobileCommercial({ user }: Props) {
               </div>
             </div>
           </div>
-          {gpsLat && <p className="text-xs text-green-600">Position GPS actuelle sera associée au client</p>}
+          {!editingClientId && gpsLat && <p className="text-xs text-green-600">Position GPS actuelle sera associée au client</p>}
+          {editingClientId && (
+            <p className="text-[11px] text-muted-foreground">
+              Le GPS ne change pas ici — utilisez &quot;Refaire le recensement&quot; dans la liste des clients.
+            </p>
+          )}
           <div className="flex gap-2">
-            <button onClick={() => setShowAddClient(false)}
+            <button onClick={() => { setShowAddClient(false); setEditingClientId(null) }}
               className="flex-1 py-2.5 rounded-xl border border-border text-sm font-semibold text-foreground hover:bg-muted">Annuler</button>
             <button onClick={handleAddClient} disabled={!newClient.nom.trim()}
               className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50"
-              style={{ background: "oklch(0.38 0.2 260)" }}>Créer le client</button>
+              style={{ background: "oklch(0.38 0.2 260)" }}>{editingClientId ? "Enregistrer" : "Créer le client"}</button>
           </div>
         </div>
       )}
 
-      {/* Heure livraison */}
-      <div className="bg-card rounded-xl border border-border p-4 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-bold text-foreground">
-            Heure de livraison <span className="text-muted-foreground font-normal">/ وقت التسليم</span>
-          </label>
-          {(() => {
-            const cl = clients.find(c => c.id === selectedClientId)
-            if (cl?.defaultHeureLivraison && cl.defaultHeureLivraison === heurelivraison) {
-              return (
+      {/* Heure livraison — masquée si déjà renseignée pour ce client (horaire
+          habituel), un lien "Modifier" la rouvre au besoin. */}
+      {(() => {
+        const cl = clients.find(c => c.id === selectedClientId)
+        const dejaRenseignee = !!cl?.defaultHeureLivraison
+        if (dejaRenseignee && !showHeureEdit) {
+          return (
+            <div className="bg-card rounded-xl border border-border p-4 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-bold text-foreground">
+                  Heure de livraison <span className="text-muted-foreground font-normal">/ وقت التسليم</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">{heurelivraison} — Horaire habituel</p>
+              </div>
+              <button type="button" onClick={() => setShowHeureEdit(true)}
+                className="text-xs font-semibold text-primary underline shrink-0">Modifier</button>
+            </div>
+          )
+        }
+        return (
+          <div className="bg-card rounded-xl border border-border p-4 flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold text-foreground">
+                Heure de livraison <span className="text-muted-foreground font-normal">/ وقت التسليم</span>
+              </label>
+              {dejaRenseignee && cl?.defaultHeureLivraison === heurelivraison && (
                 <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
                   Horaire habituel
                 </span>
-              )
-            }
-            return null
-          })()}
-        </div>
-        <input type="time" value={heurelivraison} onChange={e => setHeureLivraison(e.target.value)}
-          className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
-        <p className="text-[11px] text-muted-foreground">
-          L&apos;horaire sera enregistre comme defaut pour ce client apres confirmation de la commande.
-        </p>
-      </div>
+              )}
+            </div>
+            <input type="time" value={heurelivraison} onChange={e => setHeureLivraison(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            <p className="text-[11px] text-muted-foreground">
+              L&apos;horaire sera enregistre comme defaut pour ce client apres confirmation de la commande.
+            </p>
+          </div>
+        )
+      })()}
 
       {/* GPS capture — coordinates hidden, only status indicator shown */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-card">

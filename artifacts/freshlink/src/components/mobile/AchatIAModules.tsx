@@ -1110,6 +1110,11 @@ interface NouveauFournisseurModalProps {
   articles: Article[]
   onClose: () => void
   onCreated: (f: Fournisseur) => void
+  // Mode édition — quand fourni, le formulaire est pré-rempli, l'étape "type"
+  // est sautée (accessible via "← Type" si besoin), et la sauvegarde met à
+  // jour ce fournisseur au lieu d'en créer un nouveau.
+  fournisseur?: Fournisseur
+  onUpdated?: (f: Fournisseur) => void
 }
 
 type NFStep = "type" | "form" | "confirm"
@@ -1117,14 +1122,15 @@ type SpecialiteMode = "famille" | "article"
 
 const FOURNISSEUR_TYPES = Object.entries(FOURNISSEUR_TYPE_LABELS) as [FournisseurType, string][]
 
-export function NouveauFournisseurModal({ articles, onClose, onCreated }: NouveauFournisseurModalProps) {
-  const [step, setStep] = useState<NFStep>("type")
-  const [type, setType] = useState<FournisseurType | null>(null)
-  const [nom, setNom] = useState("")
-  const [contact, setContact] = useState("")
-  const [telephone, setTelephone] = useState("")
-  const [ville, setVille] = useState("")
-  const [notes, setNotes] = useState("")
+export function NouveauFournisseurModal({ articles, onClose, onCreated, fournisseur, onUpdated }: NouveauFournisseurModalProps) {
+  const isEdit = !!fournisseur
+  const [step, setStep] = useState<NFStep>(isEdit ? "form" : "type")
+  const [type, setType] = useState<FournisseurType | null>(fournisseur?.type ?? null)
+  const [nom, setNom] = useState(fournisseur?.nom ?? "")
+  const [contact, setContact] = useState(fournisseur?.contact ?? "")
+  const [telephone, setTelephone] = useState(fournisseur?.telephone ?? "")
+  const [ville, setVille] = useState(fournisseur?.ville ?? "")
+  const [notes, setNotes] = useState(fournisseur?.notes ?? "")
   const [saving, setSaving] = useState(false)
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null)
   const [gpsStatus, setGpsStatus] = useState<"loading" | "granted" | "denied">("loading")
@@ -1132,7 +1138,7 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated }: Nouvea
   // Spécialités — soit par famille (catégories génériques), soit article par
   // article (produits précis) — aucune limite de sélection dans les deux cas.
   const [specialiteMode, setSpecialiteMode] = useState<SpecialiteMode>("famille")
-  const [specialites, setSpecialites] = useState<string[]>([])
+  const [specialites, setSpecialites] = useState<string[]>(fournisseur?.specialites ?? [])
   const [articleSearch, setArticleSearch] = useState("")
   const toggleSpecialite = (val: string) => {
     setSpecialites(prev => prev.includes(val) ? prev.filter(x => x !== val) : [...prev, val])
@@ -1159,7 +1165,33 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated }: Nouvea
 
   const finalize = async (presentSurPlace: boolean) => {
     setSaving(true)
-    const fournisseur: Fournisseur = {
+
+    if (isEdit && fournisseur) {
+      // Édition — on garde l'historique d'itinéraires existant ; si un nouveau
+      // point GPS a été capté sur place, on l'AJOUTE (ne remplace jamais tout
+      // l'historique, contrairement à la création où la liste est vide au départ).
+      const nouveauPoint = presentSurPlace && gps
+        ? [{ nom: nom.trim() || fournisseur.nom, lat: gps.lat, lng: gps.lng }]
+        : []
+      const updates: Partial<Fournisseur> = {
+        nom: nom.trim(), contact: contact.trim(), telephone: telephone.trim(),
+        ville: ville.trim() || undefined, type: type ?? fournisseur.type, specialites,
+        notes: notes.trim() || undefined,
+        itineraires: [...(fournisseur.itineraires ?? []), ...nouveauPoint],
+        gpsVerifie: fournisseur.gpsVerifie || (presentSurPlace && !!gps),
+      }
+      store.updateFournisseur(fournisseur.id, updates)
+      const merged = { ...fournisseur, ...updates }
+      try {
+        const db = await import("@/lib/supabase/db")
+        await db.upsertFournisseur(merged)
+      } catch { /* offline — reste en local, se synchronisera plus tard */ }
+      setSaving(false)
+      onUpdated?.(merged)
+      return
+    }
+
+    const created: Fournisseur = {
       id: store.genId(),
       nom: nom.trim(), contact: contact.trim(), telephone: telephone.trim(), email: "",
       ville: ville.trim() || undefined, type: type ?? "autre", specialites,
@@ -1169,20 +1201,20 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated }: Nouvea
       itineraires: gps ? [{ nom: nom.trim() || "Point de création", lat: gps.lat, lng: gps.lng }] : [],
       gpsVerifie: presentSurPlace && !!gps,
     }
-    store.addFournisseur(fournisseur)
+    store.addFournisseur(created)
     try {
       const db = await import("@/lib/supabase/db")
-      await db.upsertFournisseur(fournisseur)
+      await db.upsertFournisseur(created)
     } catch { /* offline — reste en local, se synchronisera plus tard */ }
     setSaving(false)
-    onCreated(fournisseur)
+    onCreated(created)
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-lg bg-white rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-green-50 shrink-0">
-          <p className="text-sm font-bold text-slate-800">Nouveau fournisseur</p>
+          <p className="text-sm font-bold text-slate-800">{isEdit ? "Modifier fournisseur" : "Nouveau fournisseur"}</p>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
         </div>
 
