@@ -1,4 +1,4 @@
-const CACHE_NAME = 'freshlink-v4'
+const CACHE_NAME = 'freshlink-v5'
 const OFFLINE_URL = '/'
 
 // Assets to precache on install
@@ -37,6 +37,15 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return
   if (!event.request.url.startsWith(self.location.origin)) return
+
+  // /api/* — jamais de cache, jamais de fallback : c'est du live business data
+  // (sync-read/sync-write, device pairing...), qui a déjà son propre repli
+  // localStorage côté app. Une réponse d'API mise en cache par erreur ici
+  // (ex: un 200 obtenu pendant une fenêtre de configuration cassée) resterait
+  // servie indéfiniment malgré un hard refresh, puisque le service worker
+  // survit à un rechargement normal de page — jamais acceptable pour des
+  // données qui doivent refléter l'état réel du serveur à chaque appel.
+  if (new URL(event.request.url).pathname.startsWith('/api/')) return
 
   // For navigation requests (HTML pages) — network first, fallback to cached /
   if (event.request.mode === 'navigate') {
