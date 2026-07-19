@@ -2,15 +2,21 @@
 
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
-// ── Supabase Project: bxdqkigoidwnscsjafwd ─────────────────────────────────
-// Get your keys at: https://supabase.com/dashboard/project/bxdqkigoidwnscsjafwd/settings/api
+// ── Supabase Project: pwhycjgrwxnokudaidmm ──────────────────────────────────
+// Get your keys at: https://supabase.com/dashboard/project/pwhycjgrwxnokudaidmm/settings/api
+// L'ancien projet (bxdqkigoidwnscsjafwd) a été supprimé le 2026-07-18 — ce
+// repli codé en dur pointait dessus et faisait échouer silencieusement TOUT
+// appel direct au client Supabase navigateur (ping "DB offline" du layout,
+// upload/suppression Storage) même quand VITE_SUPABASE_URL était censé être
+// injecté au build : deploy.yml ne le passait jamais à "Build SPA" (corrigé
+// séparément), donc ce repli était systématiquement utilisé en production.
 const SUPABASE_URL =
   import.meta.env.VITE_SUPABASE_URL ??
-  "https://bxdqkigoidwnscsjafwd.supabase.co"
+  "https://pwhycjgrwxnokudaidmm.supabase.co"
 
 const SUPABASE_ANON_KEY =
   import.meta.env.VITE_SUPABASE_ANON_KEY ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4ZHFraWdvaWR3bnNjc2phZndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MTgxOTYsImV4cCI6MjA5ODM5NDE5Nn0.c5dzNldPofCGGq1MzWF78mGjrhqw5vXxZw_t9f9rEYM"
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB3aHljamdyd3hub2t1ZGFpZG1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzODQ1NjUsImV4cCI6MjA5OTk2MDU2NX0.mQmp7lzEEHGRh1RvFz1nkhEUH6Rkejo-eCI1tlrioMs"
 
 if (!SUPABASE_ANON_KEY && typeof window !== "undefined") {
   console.warn("[FreshLink] NEXT_PUBLIC_SUPABASE_ANON_KEY not set — running offline mode")
