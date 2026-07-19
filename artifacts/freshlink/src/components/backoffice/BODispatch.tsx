@@ -83,6 +83,8 @@ export default function BODispatch({ user }: Props) {
   const [editingLivreur, setEditingLivreur] = useState<Livreur | null>(null)
   const [livreurForm, setLivreurForm] = useState<Omit<Livreur, "id">>(EMPTY_LIVREUR)
   const [selectedLivreurId, setSelectedLivreurId] = useState("")
+  const [modeConduite, setModeConduite] = useState<"solo" | "avec_livreur">("solo")
+  const [coLivreurId, setCoLivreurId] = useState("")
   const [livreurSearch, setLivreurSearch] = useState("")
   const [livreurSortMode, setLivreurSortMode] = useState<"recent" | "alpha">("alpha")
   const [vehicule, setVehicule] = useState("")
@@ -223,10 +225,12 @@ export default function BODispatch({ user }: Props) {
   const handleCreateTrip = () => {
     if (!hasPermission(user.role, "creer_trip")) { logAction(user, "creer_trip", "denied"); return }
     if (!selectedLivreurId || selectedCmds.length === 0) return
+    if (modeConduite === "avec_livreur" && !coLivreurId) return
     if (creatingTrip) return // anti double-clic — jamais deux tournées/doubles affectations
     setCreatingTrip(true)
     const livreur = livreurs.find(l => l.id === selectedLivreurId)
     if (!livreur) return
+    const coLivreur = modeConduite === "avec_livreur" ? livreurs.find(l => l.id === coLivreurId) : undefined
     logAction(user, "creer_trip", "success", { type: "livreur", id: livreur.id, label: `${livreur.prenom} ${livreur.nom}` })
     const cmds = commandes.filter(c => selectedCmds.includes(c.id))
     const itineraire = cmds
@@ -247,6 +251,9 @@ export default function BODispatch({ user }: Props) {
       date: store.today(),
       livreurId: livreur.id,
       livreurNom: `${livreur.prenom} ${livreur.nom}`,
+      modeConduite,
+      coLivreurId: coLivreur?.id,
+      coLivreurNom: coLivreur ? `${coLivreur.prenom} ${coLivreur.nom}` : undefined,
       vehicule: vehicule || livreur.matricule || "",
       commandeIds: selectedCmds,
       statut: "planifié",
@@ -259,6 +266,7 @@ export default function BODispatch({ user }: Props) {
     selectedCmds.forEach(id => store.updateCommande(id, { statut: "en_transit" }))
     setShowTripForm(false)
     setSelectedLivreurId(""); setVehicule(""); setSelectedCmds([])
+    setModeConduite("solo"); setCoLivreurId("")
     setCreatingTrip(false)
     refresh()
   }
@@ -551,16 +559,17 @@ export default function BODispatch({ user }: Props) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-foreground">Livreur *</label>
+                  <label className="text-xs font-semibold text-foreground">Conducteur (livreur) *</label>
                   <select value={selectedLivreurId} onChange={e => handleSelectLivreur(e.target.value)}
                     className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                    <option value="">-- Choisir un livreur --</option>
+                    <option value="">-- Choisir un conducteur --</option>
                     {activeLivreurs.map(l => (
                       <option key={l.id} value={l.id}>
                         {l.prenom} {l.nom} ({l.type === "interne" ? "Int." : "Ext."}{l.matricule ? ` — ${l.matricule}` : ""})
                       </option>
                     ))}
                   </select>
+                  <p className="text-[11px] text-muted-foreground">Le conducteur est toujours le livreur qui possède un compte — seul lui se connecte à l&apos;application.</p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-foreground">Véhicule / matricule</label>
@@ -568,6 +577,38 @@ export default function BODispatch({ user }: Props) {
                     placeholder="Ex: A-12345 MA"
                     className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
                 </div>
+              </div>
+
+              {/* Solo ou avec un second livreur (aide/co-équipier — jamais de compte propre) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-foreground">Type de conduite</label>
+                  <div className="flex gap-1 p-1 rounded-xl bg-muted/50 w-fit">
+                    <button type="button"
+                      onClick={() => { setModeConduite("solo"); setCoLivreurId("") }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${modeConduite === "solo" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>
+                      Solo
+                    </button>
+                    <button type="button"
+                      onClick={() => setModeConduite("avec_livreur")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${modeConduite === "avec_livreur" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>
+                      Avec livreur
+                    </button>
+                  </div>
+                </div>
+                {modeConduite === "avec_livreur" && (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-foreground">Second livreur *</label>
+                    <select value={coLivreurId} onChange={e => setCoLivreurId(e.target.value)}
+                      className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                      <option value="">-- Choisir un second livreur --</option>
+                      {livreurs.filter(l => l.id !== selectedLivreurId).map(l => (
+                        <option key={l.id} value={l.id}>{l.prenom} {l.nom}</option>
+                      ))}
+                    </select>
+                    <p className="text-[11px] text-muted-foreground">Aide/co-équipier — n&apos;a pas besoin d&apos;un compte pour utiliser l&apos;application.</p>
+                  </div>
+                )}
               </div>
 
               {/* Livreur info + capacite bar */}
@@ -708,7 +749,7 @@ export default function BODispatch({ user }: Props) {
                     Annuler
                   </button>
                   <button onClick={handleCreateTrip}
-                    disabled={creatingTrip || !selectedLivreurId || selectedCmds.length === 0}
+                    disabled={creatingTrip || !selectedLivreurId || selectedCmds.length === 0 || (modeConduite === "avec_livreur" && !coLivreurId)}
                     className="px-5 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
                     style={{ background: "oklch(0.38 0.2 260)" }}>
                     Créer ({selectedCmds.length})
@@ -732,6 +773,9 @@ export default function BODispatch({ user }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     <span className="font-bold text-foreground">{trip.livreurNom}</span>
+                    {trip.modeConduite === "avec_livreur" && trip.coLivreurNom && (
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold">+ {trip.coLivreurNom}</span>
+                    )}
                     {trip.vehicule && <span className="px-2 py-0.5 bg-muted rounded-lg text-xs text-muted-foreground">{trip.vehicule}</span>}
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${tripStatusColor[trip.statut] || "bg-gray-100 text-gray-800"}`}>{trip.statut}</span>
                   </div>
