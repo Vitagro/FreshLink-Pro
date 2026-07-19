@@ -36,6 +36,7 @@ import extPublicStatsRouter from "./ext/publicStats.js";
 import extPushRouter from "./ext/push.js";
 import extCallRouter from "./ext/call.js";
 import portalTrackingRouter from "./portal/tracking.js";
+import portalSupplierRouter from "./portal/supplier.js";
 import aiChatRouter from "./aiChat.js";
 import waGroupsRouter from "./waGroups.js";
 
@@ -79,6 +80,7 @@ router.use("/ext/shop-admin-auth", extShopAdminAuthRouter);
 router.use("/ext/shop-admin-password", extShopAdminPasswordRouter);
 router.use("/ext/web-integration-config", extWebIntegrationConfigRouter);
 router.use("/portal/tracking", portalTrackingRouter);
+router.use("/portal/supplier", portalSupplierRouter);
 router.use("/ai-chat", aiChatRouter);
 router.use("/wa-groups", waGroupsRouter);
 

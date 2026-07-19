@@ -437,6 +437,15 @@ export default function MobileAchat({ user }: Props) {
         .filter(c => Number(c.quantite) > 0)
         .map(c => ({ type: c.type, quantite: Number(c.quantite), sens: c.sens })),
     })
+    // store.updatePurchaseOrder est LOCAL-ONLY (localStorage) — sans cet appel,
+    // le PO confirmé (et notamment les caisses fournisseur / photo qu'on vient
+    // d'ajouter à cet écran) ne remontait jamais à Supabase, donc n'apparaissait
+    // jamais côté back-office (BOFournisseurDetail lit /api/portal/supplier via
+    // Supabase, pas le localStorage du téléphone de l'acheteur).
+    const updatedPo = store.getPurchaseOrders().find(p => p.id === poModalId)
+    if (updatedPo) {
+      import("@/lib/supabase/db").then(db => db.upsertPurchaseOrder(updatedPo)).catch(e => console.error("[MobileAchat] sync PO error:", e))
+    }
 
     // Auto-create credit fournisseur si paiement impaye ou partiel
     if (poDetail.statutPaiement !== "solde") {
