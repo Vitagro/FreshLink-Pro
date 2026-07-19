@@ -44,6 +44,8 @@ jobs:
 
       - name: Build SPA
         env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_GESTFLUX_URL: ${{ secrets.VITE_GESTFLUX_URL }}
           VITE_GESTFLUX_ANON_KEY: ${{ secrets.VITE_GESTFLUX_ANON_KEY }}
           VITE_IZIRY_URL: ${{ secrets.VITE_IZIRY_URL }}
