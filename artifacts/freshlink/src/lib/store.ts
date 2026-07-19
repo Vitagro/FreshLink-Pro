@@ -3317,6 +3317,21 @@ export const store = {
     store.saveCommandes(store.getCommandes().filter(c => c.id !== id))
     deleteSynced("fl_commandes", [id])   // sinon la commande « revient » au prochain fetch
   },
+  // "Suppression" par le commercial (mobile) — contrairement à deleteCommande,
+  // NE PAS effacer l'historique : passe juste la commande en statut "refuse"
+  // (comme une commande annulée/refusée côté workflow) afin qu'elle reste
+  // consultable, tout en libérant le besoin PO déjà réservé pour elle (même
+  // cascade que la suppression dure). Les indicateurs commerciaux (CA,
+  // tonnage, top article/client/commercial sur Tableau de bord et Synthèse
+  // & Récap) excluent déjà le statut "refuse" — voir commandesActives.
+  softDeleteCommande: (id: string, motif = "Supprimée par le commercial"): Commande | null => {
+    const cmd = store.getCommandes().find(c => c.id === id)
+    if (!cmd) return null
+    store.cascadePOAfterCommandeDelete(cmd)
+    const updated: Commande = { ...cmd, statut: "refuse", motifRefus: motif }
+    store.updateCommande(id, updated)
+    return updated
+  },
 
   // --- Visites prevendeur ---
   getVisites: (): Visite[] => getLS("fl_visites", []),

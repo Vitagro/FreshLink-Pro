@@ -779,9 +779,12 @@ export default function MobileCommercial({ user }: Props) {
     }
   }
 
+  // Soft-delete : la commande reste en historique (statut "refuse") au lieu
+  // d'être effacée — les stats commerciales (CA/tonnage/top X) l'excluent déjà.
   const handleDeleteCommande = (id: string) => {
-    store.deleteCommande(id)
+    const updated = store.softDeleteCommande(id)
     refreshMyCommandes()
+    if (updated) import("@/lib/supabase/db").then(db => db.upsertCommande(updated)).catch(e => console.error("[MobileCommercial] sync deleted commande error:", e))
   }
 
   // ── GPS blocking screens ──────────────────────────────────────────────────

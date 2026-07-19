@@ -43,7 +43,10 @@ interface BesoinRow extends BesoinLigneEmail {
 
 function computeStats(date: string): DailyStats {
   const bonsAchat   = store.getBonsAchat().filter(b => b.date === date)
-  const commandes   = store.getVisibleCommandes().filter(c => c.date === date)
+  // "refuse" = commande annulée ou supprimée par le commercial (soft-delete,
+  // cf. MobileCommercial.handleDeleteCommande) — gardée en historique mais
+  // exclue de tout indicatif commercial (CA du jour ici).
+  const commandes   = store.getVisibleCommandes().filter(c => c.date === date && c.statut !== "refuse")
   const bls         = store.getVisibleBonsLivraison().filter(b => b.date === date)
   const retours     = store.getRetours().filter(r => r.date === date)
   const articles    = store.getArticles()

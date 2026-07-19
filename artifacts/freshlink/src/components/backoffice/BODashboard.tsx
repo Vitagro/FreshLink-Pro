@@ -144,13 +144,20 @@ export default function BODashboard({ user }: Props) {
   const lastWeekRange = getWeekRange(yesterday)
   const monthRange = getMonthRange(today)
 
+  // Une commande annulée/refusée (statut "refuse", y compris une suppression
+  // par le commercial — MobileCommercial route désormais sa "Supprimer" vers
+  // ce même statut plutôt qu'un hard-delete) reste dans l'historique mais ne
+  // doit compter dans AUCUN indicatif commercial : CA, tonnage, top client,
+  // top article, top commercial. Base commune pour tous ces calculs.
+  const commandesActives = useMemo(() => commandes.filter(c => c.statut !== "refuse"), [commandes])
+
   // --- Commandes helpers ---
-  const cmdsToday    = useMemo(() => commandes.filter(c => c.date === today), [commandes, today])
-  const cmdsYday     = useMemo(() => commandes.filter(c => c.date === yesterday), [commandes, yesterday])
-  const cmdsLastWkDay= useMemo(() => commandes.filter(c => c.date === lastWeekSameDay), [commandes, lastWeekSameDay])
-  const cmdsWeek     = useMemo(() => commandes.filter(c => c.date >= weekRange.start && c.date <= weekRange.end), [commandes, weekRange])
-  const cmdsLastWeek = useMemo(() => commandes.filter(c => c.date >= lastWeekRange.start && c.date <= lastWeekRange.end), [commandes, lastWeekRange])
-  const cmdsMonth    = useMemo(() => commandes.filter(c => c.date >= monthRange.start && c.date <= monthRange.end), [commandes, monthRange])
+  const cmdsToday    = useMemo(() => commandesActives.filter(c => c.date === today), [commandesActives, today])
+  const cmdsYday     = useMemo(() => commandesActives.filter(c => c.date === yesterday), [commandesActives, yesterday])
+  const cmdsLastWkDay= useMemo(() => commandesActives.filter(c => c.date === lastWeekSameDay), [commandesActives, lastWeekSameDay])
+  const cmdsWeek     = useMemo(() => commandesActives.filter(c => c.date >= weekRange.start && c.date <= weekRange.end), [commandesActives, weekRange])
+  const cmdsLastWeek = useMemo(() => commandesActives.filter(c => c.date >= lastWeekRange.start && c.date <= lastWeekRange.end), [commandesActives, lastWeekRange])
+  const cmdsMonth    = useMemo(() => commandesActives.filter(c => c.date >= monthRange.start && c.date <= monthRange.end), [commandesActives, monthRange])
 
   const caOf   = (arr: typeof commandes) => arr.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite * l.prixVente, 0), 0)
   const tonnOf = (arr: typeof commandes) => arr.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
@@ -208,7 +215,7 @@ export default function BODashboard({ user }: Props) {
 
   // --- Top clients (CA) ---
   const clientsCA: Record<string, { nom: string; ca: number; cmds: number; tonnage: number }> = {}
-  commandes.forEach(c => {
+  commandesActives.forEach(c => {
     const ca = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
     if (!clientsCA[c.clientId]) clientsCA[c.clientId] = { nom: c.clientNom, ca: 0, cmds: 0, tonnage: 0 }
     clientsCA[c.clientId].ca += ca
@@ -270,9 +277,9 @@ export default function BODashboard({ user }: Props) {
   // --- Prevendeurs stats ---
   const prevendeurs = users.filter(u => u.role === "prevendeur" && u.actif)
   const getPrevendeurStats = (pv: User) => {
-    const cdJ = commandes.filter(c => c.commercialId === pv.id && c.date === today)
-    const cdW = commandes.filter(c => c.commercialId === pv.id && c.date >= weekRange.start && c.date <= weekRange.end)
-    const cdM = commandes.filter(c => c.commercialId === pv.id && c.date >= monthRange.start && c.date <= monthRange.end)
+    const cdJ = commandesActives.filter(c => c.commercialId === pv.id && c.date === today)
+    const cdW = commandesActives.filter(c => c.commercialId === pv.id && c.date >= weekRange.start && c.date <= weekRange.end)
+    const cdM = commandesActives.filter(c => c.commercialId === pv.id && c.date >= monthRange.start && c.date <= monthRange.end)
     return {
       caJ: caOf(cdJ), caW: caOf(cdW), caM: caOf(cdM),
       tonnageJ: tonnOf(cdJ), tonnageM: tonnOf(cdM),
@@ -288,7 +295,7 @@ export default function BODashboard({ user }: Props) {
   const last14Days = Array.from({ length: 14 }, (_, i) => {
     const d = dateOffset(today, -(13 - i))
     const dayStr = d.slice(5) // MM-DD
-    const dayCmds = commandes.filter(c => c.date === d)
+    const dayCmds = commandesActives.filter(c => c.date === d)
     return { date: dayStr, ca: Math.round(caOf(dayCmds)), tonnage: Math.round(tonnOf(dayCmds)) }
   })
 
@@ -300,7 +307,7 @@ export default function BODashboard({ user }: Props) {
 
   // Top articles sold (all time, by kg)
   const artSold: Record<string, { nom: string; kg: number }> = {}
-  commandes.forEach(c => c.lignes.forEach(l => {
+  commandesActives.forEach(c => c.lignes.forEach(l => {
     if (!artSold[l.articleNom]) artSold[l.articleNom] = { nom: l.articleNom, kg: 0 }
     artSold[l.articleNom].kg += l.quantite
   }))
@@ -309,7 +316,7 @@ export default function BODashboard({ user }: Props) {
 
   // CA per secteur
   const secteurCA: Record<string, number> = {}
-  commandes.forEach(c => {
+  commandesActives.forEach(c => {
     secteurCA[c.secteur] = (secteurCA[c.secteur] ?? 0) + caOf([c])
   })
   const secteurChartData = Object.entries(secteurCA).sort(([, a], [, b]) => b - a).slice(0, 8)
