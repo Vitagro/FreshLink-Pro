@@ -403,7 +403,7 @@ const ALL_ROLES: UserRole[] = [
   "super_super_admin","super_admin","admin","resp_commercial","team_leader",
   "cash_man","financier","comptable",
   "rh_manager",
-  "prevendeur","resp_logistique","magasinier","dispatcheur","livreur",
+  "prevendeur","resp_logistique","magasinier","dispatcheur","livreur","conducteur","preparateur",
   "acheteur","ctrl_achat","ctrl_prep",
   "client","fournisseur",
   "investisseur","qualite","it_admin","auditeur",
@@ -417,7 +417,7 @@ const USER_GRADE_CATEGORIES = [
   { id: "finance", label: "💰 Finance & Comptabilité", labelAr: "المالية", roles: ["financier", "cash_man", "comptable", "charge_recouvrement"] },
   { id: "rh", label: "👥 RH & Administration", labelAr: "الموارد البشرية", roles: ["rh_manager", "auditeur", "it_admin"] },
   { id: "qualite", label: "✅ Qualité", labelAr: "الجودة", roles: ["qualite", "chef_depot"] },
-  { id: "terrain", label: "🚛 Terrain & Opérations", labelAr: "الميدان", roles: ["prevendeur", "magasinier", "dispatcheur", "livreur", "acheteur", "ctrl_achat", "ctrl_prep", "suivi_commande"] },
+  { id: "terrain", label: "🚛 Terrain & Opérations", labelAr: "الميدان", roles: ["prevendeur", "magasinier", "dispatcheur", "livreur", "conducteur", "preparateur", "acheteur", "ctrl_achat", "ctrl_prep", "suivi_commande"] },
   { id: "investisseurs", label: "📈 Investisseurs", labelAr: "المستثمرون", roles: ["investisseur"] },
   { id: "clients_marche", label: "🏪 Clients — Marchands / CHR", labelAr: "الزبائن التجاريون", roles: ["client"] },
   { id: "fournisseurs_marche", label: "🌿 Fournisseurs — Marché / Ferme", labelAr: "موردو السوق والمزرعة", roles: ["fournisseur"] },
@@ -443,7 +443,7 @@ const ROLE_GROUPS: { label: string; labelAr: string; roles: UserRole[] }[] = [
   {
     label: "Mobile — Terrain",
     labelAr: "الميدان",
-    roles: ["prevendeur", "resp_logistique", "magasinier", "dispatcheur", "livreur"],
+    roles: ["prevendeur", "resp_logistique", "magasinier", "dispatcheur", "livreur", "conducteur", "preparateur"],
   },
   {
     label: "Direction & Accès spéciaux",
@@ -674,6 +674,8 @@ const DEFAULT_PERMS_BY_ROLE: Partial<Record<UserRole, PermFlags>> = {
   team_leader:       { ...ALL_OFF, canViewCommercial: true, canViewCash: true, canViewRecap: true },
   prevendeur:        { ...ALL_OFF, canViewCommercial: true, canViewCash: true },
   livreur:           { ...ALL_OFF, canViewLogistique: true, canViewCash: true },
+  conducteur:        { ...ALL_OFF, canViewLogistique: true, canViewCash: true },
+  preparateur:       { ...ALL_OFF, canViewStock: true, canViewLogistique: true },
   magasinier:        { ...ALL_OFF, canViewStock: true, canViewLogistique: true },
   dispatcheur:       { ...ALL_OFF, canViewLogistique: true, canViewStock: true },
   acheteur:          { ...ALL_OFF, canViewAchat: true, canViewStock: true },
@@ -1222,7 +1224,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
 
   const TEAM_LEADER_ALLOWED: Record<string, UserRole[]> = {
     resp_commercial: ["prevendeur", "team_leader"],
-    resp_logistique: ["magasinier", "dispatcheur", "livreur"],
+    resp_logistique: ["magasinier", "dispatcheur", "livreur", "conducteur", "preparateur"],
   }
   const isTeamLeader = currentUser.role === "resp_commercial" || currentUser.role === "resp_logistique"
   const teamAllowedRoles: UserRole[] = TEAM_LEADER_ALLOWED[currentUser.role] ?? []
@@ -2241,7 +2243,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                   </div>
 
                   {/* Depot assignment — visible for roles that need depot access */}
-                  {(form.role === "magasinier" || form.role === "acheteur" || form.role === "livreur" || form.role === "admin" || form.role === "super_admin") && (
+                  {(form.role === "magasinier" || form.role === "acheteur" || form.role === "livreur" || form.role === "conducteur" || form.role === "preparateur" || form.role === "admin" || form.role === "super_admin") && (
                     <div className="flex flex-col gap-1 sm:col-span-2">
                       <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2390,7 +2392,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                       </label>
                       <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-border bg-muted/30">
                         {([
-                          "prevendeur","acheteur","magasinier","livreur","dispatcheur","ctrl_achat","ctrl_prep","resp_logistique","resp_commercial","team_leader","cash_man","financier","comptable",
+                          "prevendeur","acheteur","magasinier","livreur","conducteur","preparateur","dispatcheur","ctrl_achat","ctrl_prep","resp_logistique","resp_commercial","team_leader","cash_man","financier","comptable",
                         ] as UserRole[])
                           .filter(r => r !== form.role && creatableRoles.includes(r))
                           .map(r => {

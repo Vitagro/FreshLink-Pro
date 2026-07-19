@@ -30,7 +30,7 @@ const GROUPES: { titre: string; roles: UserRole[] }[] = [
   { titre: "Direction & Admin", roles: ["super_super_admin", "super_admin", "admin", "it_admin", "auditeur"] },
   { titre: "Commercial",        roles: ["resp_commercial", "team_leader", "prevendeur", "suivi_commande", "charge_recouvrement"] },
   { titre: "Achats",            roles: ["resp_achat", "acheteur", "ctrl_achat"] },
-  { titre: "Logistique & Stock",roles: ["resp_logistique", "chef_depot", "magasinier", "dispatcheur", "livreur", "ctrl_prep", "qualite"] },
+  { titre: "Logistique & Stock",roles: ["resp_logistique", "chef_depot", "magasinier", "dispatcheur", "livreur", "conducteur", "preparateur", "ctrl_prep", "qualite"] },
   { titre: "Finance & RH",      roles: ["financier", "comptable", "cash_man", "rh_manager"] },
   { titre: "Externes",          roles: ["client", "client_proprietaire", "client_gerant", "fournisseur", "investisseur"] },
 ]

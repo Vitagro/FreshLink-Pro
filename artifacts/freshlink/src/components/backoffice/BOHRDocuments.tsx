@@ -614,7 +614,7 @@ export default function BOHRDocuments({ user }: { user: User }) {
   const generateMatricule = (poste: string): string => {
     const year = new Date().getFullYear().toString()
     const codeMap: Record<string, string> = {
-      "livreur": "LIV", "prévendeur": "PRV", "prevendeur": "PRV",
+      "livreur": "LIV", "conducteur": "CDT", "préparateur": "PRP", "preparateur": "PRP", "prévendeur": "PRV", "prevendeur": "PRV",
       "magasinier": "MAG", "acheteur": "ACH", "dispatcheur": "DIS",
       "resp. logistique": "LOG", "resp. commercial": "COM", "financier": "FIN",
       "caissier": "CAS", "rh": "RH", "comptable": "CPT", "qualité": "QUA",

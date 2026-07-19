@@ -189,6 +189,8 @@ export const DEFAULT_MATRIX: PermMatrix = {
   dispatcheur: cat(["voir_logistique", "creer_trip", "voir_gps"]),
   magasinier: cat(["voir_stock", "modifier_stock", "faire_inventaire", "ajuster_stock"]),
   livreur: cat(["voir_logistique", "valider_bl", "gerer_retour"]),
+  conducteur: cat(["voir_logistique", "valider_bl", "gerer_retour"]),
+  preparateur: cat(["voir_stock", "voir_logistique"]),
   chef_depot: cat(["voir_stock", "modifier_stock", "faire_inventaire", "ajuster_stock", "voir_logistique"]),
   qualite: cat(["voir_stock", "gerer_retour"]),
   resp_achat: cat(["voir_achats", "creer_bon_achat", "modifier_bon_achat", "valider_achat", "voir_stock", "approuver_compte_fournisseur", "rejeter_demande_compte", "modifier_article"]),

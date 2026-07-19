@@ -11,7 +11,7 @@ function canAccess(u: User) {
 
 const ROLE_LABELS: Record<string, string> = {
   prevendeur: "Prévendeur", resp_logistique: "Resp. Logistique", magasinier: "Magasinier",
-  dispatcheur: "Dispatcheur", livreur: "Livreur", acheteur: "Acheteur",
+  dispatcheur: "Dispatcheur", livreur: "Livreur", conducteur: "Conducteur", preparateur: "Préparateur", acheteur: "Acheteur",
   ctrl_achat: "Contrôle Achat", ctrl_prep: "Contrôle Préparation",
   chef_depot: "Chef Dépôt", suivi_commande: "Suivi Commande",
   client: "Client", fournisseur: "Fournisseur",

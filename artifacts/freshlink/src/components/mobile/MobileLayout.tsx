@@ -88,6 +88,8 @@ export default function MobileLayout({ user: initialUser, onLogout }: Props) {
     resp_logistique:  ["logistique", "preparation", "ctrl_prep", "ctrl_retour", "agent_ia", "avis"],
     dispatcheur:      ["logistique", "preparation", "ctrl_prep", "ctrl_retour", "agent_ia", "avis"],
     livreur:          ["bl_validation", "logistique", "ctrl_retour", "agent_ia", "avis"],
+    conducteur:       ["bl_validation", "logistique", "ctrl_retour", "agent_ia", "avis"],
+    preparateur:      ["preparation", "ctrl_prep", "agent_ia", "avis"],
     client:           ["client_portail",      "avis"],
     fournisseur:      ["fournisseur_portail", "avis"],
   }

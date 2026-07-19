@@ -101,6 +101,16 @@ const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     canViewLogistique: true,
     accessType: "mobile",
   },
+  // conducteur: même accès mobile que livreur — rôle/compte distinct uniquement
+  // (avec_livreur sur un trip peut être solo OU conducteur secondaire)
+  conducteur: {
+    canViewLogistique: true,
+    accessType: "mobile",
+  },
+  preparateur: {
+    canViewStock: true, canViewLogistique: true,
+    accessType: "mobile",
+  },
   chef_depot: {
     canViewStock: true, canViewLogistique: true, canViewRecap: true,
     accessType: "backoffice",
@@ -245,6 +255,8 @@ export const ROLE_LABELS_FR: Record<UserRole, string> = {
   magasinier:          "Magasinier",
   dispatcheur:         "Dispatcheur",
   livreur:             "Livreur",
+  conducteur:          "Conducteur",
+  preparateur:         "Préparateur",
   chef_depot:          "Chef de Dépôt",
   cash_man:            "Cash Manager",
   financier:           "Financier",

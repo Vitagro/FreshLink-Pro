@@ -11,6 +11,7 @@ export type UserRole =
   | "super_super_admin"
   | "super_admin" | "admin" | "resp_commercial" | "team_leader"
   | "prevendeur" | "resp_logistique" | "magasinier" | "dispatcheur" | "livreur"
+  | "conducteur" | "preparateur"
   | "acheteur" | "ctrl_achat" | "ctrl_prep"
   | "cash_man" | "financier"
   | "rh_manager" | "comptable"
@@ -1713,6 +1714,8 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   magasinier: "Magasinier",
   dispatcheur: "Dispatcheur",
   livreur: "Livreur",
+  conducteur: "Conducteur",
+  preparateur: "Préparateur",
   acheteur: "Acheteur",
   ctrl_achat: "Controleur Achat",
   ctrl_prep: "Controleur Prep",
@@ -1745,6 +1748,8 @@ export const ROLE_LABELS_AR: Record<UserRole, string> = {
   magasinier: "أمين المخزن",
   dispatcheur: "موزع الرحلات",
   livreur: "السائق",
+  conducteur: "السائق (مركبة)",
+  preparateur: "المُحضِّر",
   acheteur: "المشتري",
   ctrl_achat: "مراقب الشراء",
   ctrl_prep: "مراقب التحضير",
@@ -1777,6 +1782,8 @@ export const ROLE_COLORS: Record<UserRole, string> = {
   magasinier: "bg-amber-600",
   dispatcheur: "bg-rose-600",
   livreur: "bg-yellow-600",
+  conducteur: "bg-amber-700",
+  preparateur: "bg-teal-800",
   acheteur: "bg-lime-700",
   ctrl_achat: "bg-sky-700",
   ctrl_prep: "bg-violet-700",
@@ -1941,7 +1948,7 @@ export function canEditRecord(dateOrIso: string | undefined, user: User, windowM
 }
 
 export function isMobileRole(role: UserRole): boolean {
-  return ["prevendeur", "resp_logistique", "magasinier", "dispatcheur", "livreur", "acheteur", "ctrl_achat", "ctrl_prep", "client", "fournisseur", "chef_depot", "suivi_commande"].includes(role)
+  return ["prevendeur", "resp_logistique", "magasinier", "dispatcheur", "livreur", "conducteur", "preparateur", "acheteur", "ctrl_achat", "ctrl_prep", "client", "fournisseur", "chef_depot", "suivi_commande"].includes(role)
 }
 
 export const JAWAD_USER: User = {

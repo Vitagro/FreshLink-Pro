@@ -30,6 +30,8 @@ const ROLE_HEADERS: { role: UserRole; label: string; cls: string }[] = [
   { role: "dispatcheur",         label: "Dispatcheur",     cls: "bg-amber-100 text-amber-700" },
   { role: "magasinier",          label: "Magasinier",      cls: "bg-amber-100 text-amber-700" },
   { role: "livreur",             label: "Livreur",         cls: "bg-amber-100 text-amber-700" },
+  { role: "conducteur",          label: "Conducteur",      cls: "bg-amber-100 text-amber-700" },
+  { role: "preparateur",         label: "Préparateur",     cls: "bg-amber-100 text-amber-700" },
   { role: "chef_depot",          label: "Chef Dépôt",      cls: "bg-amber-100 text-amber-700" },
   { role: "qualite",             label: "Qualité",         cls: "bg-amber-100 text-amber-700" },
   { role: "resp_achat",          label: "Resp. Achat",     cls: "bg-orange-100 text-orange-700" },
