@@ -5,6 +5,7 @@ import { store, type Article, type User, type Client, type Commande, type Visite
 import { sendEmail, buildCommandeEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import SwipeToDelete from "@/components/ui/SwipeToDelete"
+import NavMenu from "@/components/ui/NavMenu"
 import { resolveArticlePhoto } from "@/lib/articlePhotoHelper"
 import { loadZonesConfig, zoneOfSecteur, type ZonesConfig } from "@/lib/commercial/zones"
 
@@ -460,24 +461,6 @@ export default function MobileCommercial({ user }: Props) {
   })
 
   const selectedClient = clients.find(c => c.id === selectedClientId)
-
-  const openGPSGuide = (c: Client) => {
-    if (!c.gpsLat || !c.gpsLng) return
-    const lat = c.gpsLat
-    const lng = c.gpsLng
-    // Use geo: URI for native apps (Android/iOS), fallback to google maps web
-    const isIOS = /iphone|ipad|ipod/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "")
-    const url = isIOS
-      ? `maps:0,0?q=${lat},${lng}`
-      : `https://maps.google.com/maps?q=${lat},${lng}`
-    const link = document.createElement("a")
-    link.href = url
-    link.target = "_blank"
-    link.rel = "noopener noreferrer"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
 
   // Refaire le recensement GPS d'un client déjà existant (adresse changée,
   // premier recensement imprécis, nouveau point de vente…).
@@ -1066,13 +1049,11 @@ export default function MobileCommercial({ user }: Props) {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {dist !== null && <span className="text-xs text-muted-foreground">{dist.toFixed(1)}km</span>}
-                  {c.gpsLat && (
-                    <div role="button" tabIndex={0}
-                      onClick={e => { e.stopPropagation(); openGPSGuide(c) }}
-                      onKeyDown={e => { if (e.key === "Enter") { e.stopPropagation(); openGPSGuide(c) }}}
-                      className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer select-none">
+                  {c.gpsLat && c.gpsLng && (
+                    <NavMenu lat={c.gpsLat} lng={c.gpsLng}
+                      triggerClassName="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer select-none">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
-                    </div>
+                    </NavMenu>
                   )}
                   <div role="button" tabIndex={0} title="Refaire le recensement GPS (position actuelle)"
                     onClick={e => { e.stopPropagation(); recenserClientGPS(c) }}
@@ -1105,13 +1086,13 @@ export default function MobileCommercial({ user }: Props) {
               <p className="text-sm font-bold text-foreground">{selectedClient.nom}</p>
               <p className="text-xs text-muted-foreground">{selectedClient.telephone} · {selectedClient.secteur}</p>
             </div>
-            {selectedClient.gpsLat && (
-              <button onClick={() => openGPSGuide(selectedClient)} title="Itinéraire"
-                className="p-2 rounded-xl text-white flex items-center gap-1 text-xs font-semibold"
-                style={{ background: "oklch(0.60 0.16 195)" }}>
+            {selectedClient.gpsLat && selectedClient.gpsLng && (
+              <NavMenu lat={selectedClient.gpsLat} lng={selectedClient.gpsLng} title="Itinéraire"
+                triggerClassName="p-2 rounded-xl text-white flex items-center gap-1 text-xs font-semibold"
+                triggerStyle={{ background: "oklch(0.60 0.16 195)" }}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
                 Guide
-              </button>
+              </NavMenu>
             )}
             {selectedClient.telephone && (
               <a href={`https://wa.me/${selectedClient.telephone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer"

@@ -998,6 +998,13 @@ export interface LignePreparation {
   // what was actually picked (validated on tablet)
   qtePrepared: number
   valide: boolean
+  // Caisses utilisées pour préparer cet article — déclarées par le
+  // préparateur/magasinier à la validation de la ligne. Purement informatif
+  // à ce stade (pas de répartition automatique par client, une caisse
+  // physique n'étant pas divisible) : le contrôle préparation (ctrl_prep,
+  // MobileControlPrep) reste la source de vérité pour les caisses par BL.
+  nbCaisseGros?: number
+  nbCaisseDemi?: number
 }
 
 export type SequenceModePrep = "horaire" | "itineraire"

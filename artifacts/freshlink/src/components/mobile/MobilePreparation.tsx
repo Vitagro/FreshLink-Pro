@@ -155,6 +155,10 @@ export default function MobilePreparation({ user }: Props) {
     if (lignIdx < 0) return
     arr[idx].lignes[lignIdx].qtePrepared = localQtys[articleId] ?? arr[idx].lignes[lignIdx].qteCommandee
     arr[idx].lignes[lignIdx].valide = true
+    const gros = Number(caisseGros[articleId]) || 0
+    const demi = Number(caisseDemi[articleId]) || 0
+    if (gros > 0) arr[idx].lignes[lignIdx].nbCaisseGros = gros
+    if (demi > 0) arr[idx].lignes[lignIdx].nbCaisseDemi = demi
     // auto-validate bon if all lignes done
     const allDone = arr[idx].lignes.every(l => l.valide)
     if (allDone) {
@@ -175,11 +179,17 @@ export default function MobilePreparation({ user }: Props) {
     const arr = store.getBonsPreparation()
     const idx = arr.findIndex(b => b.id === activeBon.id)
     if (idx < 0) { setValidating(false); return }
-    arr[idx].lignes = arr[idx].lignes.map(l => ({
-      ...l,
-      qtePrepared: localQtys[l.articleId] ?? l.qteCommandee,
-      valide: true,
-    }))
+    arr[idx].lignes = arr[idx].lignes.map(l => {
+      const gros = Number(caisseGros[l.articleId]) || 0
+      const demi = Number(caisseDemi[l.articleId]) || 0
+      return {
+        ...l,
+        qtePrepared: localQtys[l.articleId] ?? l.qteCommandee,
+        valide: true,
+        nbCaisseGros: gros > 0 ? gros : l.nbCaisseGros,
+        nbCaisseDemi: demi > 0 ? demi : l.nbCaisseDemi,
+      }
+    })
     arr[idx].statut = "valide"
     arr[idx].validatedAt = new Date().toISOString()
     arr[idx].validatedBy = user.id
@@ -324,6 +334,11 @@ export default function MobilePreparation({ user }: Props) {
                       {ligne.qtePrepared !== ligne.qteCommandee && (
                         <span className="text-amber-500 font-normal ml-2">
                           (ecart : {(ligne.qtePrepared - ligne.qteCommandee).toFixed(1)})
+                        </span>
+                      )}
+                      {((ligne.nbCaisseGros ?? 0) > 0 || (ligne.nbCaisseDemi ?? 0) > 0) && (
+                        <span className="block text-xs font-semibold text-blue-700 mt-0.5">
+                          🧺 {ligne.nbCaisseGros ?? 0} gros + {ligne.nbCaisseDemi ?? 0} demi
                         </span>
                       )}
                     </p>

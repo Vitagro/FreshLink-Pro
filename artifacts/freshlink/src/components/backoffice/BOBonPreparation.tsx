@@ -182,6 +182,11 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
   <span class="chip chip-gray">${bon.lignes.length} articles</span>
   <span class="chip chip-gray">${orderedClients.length} clients</span>
   <span class="chip chip-gray">${bon.lignes.reduce((s, l) => s + l.qteCommandee, 0).toFixed(1)} kg total</span>
+  ${(() => {
+    const totalGros = bon.lignes.reduce((s, l) => s + (l.nbCaisseGros ?? 0), 0)
+    const totalDemi = bon.lignes.reduce((s, l) => s + (l.nbCaisseDemi ?? 0), 0)
+    return (totalGros > 0 || totalDemi > 0) ? `<span class="chip chip-blue">🧺 ${totalGros} gros + ${totalDemi} demi</span>` : ""
+  })()}
 </div>
 
 <!-- SECTION 1 : TOTAUX PAR ARTICLE -->
@@ -194,6 +199,7 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
       <th class="r" style="width:90px">Total Cmd</th>
       <th class="r" style="width:80px">Unité</th>
       <th class="r" style="width:80px">Nb UM</th>
+      <th class="r" style="width:90px">🧺 Caisses</th>
       <th class="r" style="width:110px">Qté préparée</th>
     </tr>
   </thead>
@@ -205,6 +211,7 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
       <td class="r bold" style="color:#166534">${l.qteCommandee.toFixed(1)}</td>
       <td class="r" style="color:#6b7280">${l.unite}</td>
       <td class="r bold" style="color:#166534">${umLabelPrint(l.articleId, l.qteCommandee)}</td>
+      <td class="r" style="color:#1d4ed8">${(l.nbCaisseGros || l.nbCaisseDemi) ? `${l.nbCaisseGros ?? 0}G + ${l.nbCaisseDemi ?? 0}D` : "—"}</td>
       <td class="r"><span class="sign-box"></span>&nbsp;${l.unite}</td>
     </tr>`).join("")}
   </tbody>
@@ -214,6 +221,7 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
       <td class="r" style="padding:8px 10px;color:#166534">${bon.lignes.reduce((s, l) => s + l.qteCommandee, 0).toFixed(1)}</td>
       <td class="r" style="padding:8px 10px;color:#6b7280">kg</td>
       <td></td>
+      <td class="r" style="padding:8px 10px;color:#1d4ed8">${bon.lignes.reduce((s, l) => s + (l.nbCaisseGros ?? 0), 0)}G + ${bon.lignes.reduce((s, l) => s + (l.nbCaisseDemi ?? 0), 0)}D</td>
       <td></td>
     </tr>
   </tfoot>
@@ -523,7 +531,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     }
   }
 
-  const validateLigne = (bonId: string, articleId: string, qty: number) => {
+  const validateLigne = (bonId: string, articleId: string, qty: number, nbCaisseGros?: number, nbCaisseDemi?: number) => {
     const arr = store.getBonsPreparation()
     const idx = arr.findIndex(b => b.id === bonId)
     if (idx < 0) return
@@ -531,6 +539,8 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     if (li < 0) return
     arr[idx].lignes[li].qtePrepared = qty
     arr[idx].lignes[li].valide = true
+    if (nbCaisseGros) arr[idx].lignes[li].nbCaisseGros = nbCaisseGros
+    if (nbCaisseDemi) arr[idx].lignes[li].nbCaisseDemi = nbCaisseDemi
     store.saveBonsPreparation(arr)
     refresh()
     if (viewing?.id === bonId) setViewing({ ...arr[idx] })
@@ -668,6 +678,12 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     const [localQtys, setLocalQtys] = useState<Record<string, number>>(
       Object.fromEntries(bon.lignes.map(l => [l.articleId, l.qtePrepared || l.qteCommandee]))
     )
+    const [localCaisseGros, setLocalCaisseGros] = useState<Record<string, number>>(
+      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseGros ?? 0]))
+    )
+    const [localCaisseDemi, setLocalCaisseDemi] = useState<Record<string, number>>(
+      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseDemi ?? 0]))
+    )
     const [activeTab, setActiveTab] = useState<"articles" | "clients">("articles")
     const seqMode = bon.sequenceMode ?? "horaire"
     const orderedClients = sortClients(bon.clientsInfo ?? [], seqMode)
@@ -787,21 +803,37 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
 
                   {/* Input + Valider */}
                   {bon.statut !== "valide" && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={localQtys[ligne.articleId] ?? ligne.qteCommandee}
-                        onChange={e => setLocalQtys(prev => ({ ...prev, [ligne.articleId]: parseFloat(e.target.value) || 0 }))}
-                        className="w-24 px-2 py-1.5 rounded-xl border border-border bg-background text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                        min={0} step={0.5}
-                      />
-                      <span className="text-xs text-muted-foreground">{ligne.unite}</span>
-                      <button
-                        onClick={() => validateLigne(bon.id, ligne.articleId, localQtys[ligne.articleId] ?? ligne.qteCommandee)}
-                        disabled={ligne.valide}
-                        className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${ligne.valide ? "bg-green-100 text-green-700" : "bg-primary text-white hover:opacity-90"}`}>
-                        {ligne.valide ? "Validé" : "Valider"}
-                      </button>
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={localQtys[ligne.articleId] ?? ligne.qteCommandee}
+                          onChange={e => setLocalQtys(prev => ({ ...prev, [ligne.articleId]: parseFloat(e.target.value) || 0 }))}
+                          className="w-24 px-2 py-1.5 rounded-xl border border-border bg-background text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                          min={0} step={0.5}
+                        />
+                        <span className="text-xs text-muted-foreground">{ligne.unite}</span>
+                        <button
+                          onClick={() => validateLigne(bon.id, ligne.articleId, localQtys[ligne.articleId] ?? ligne.qteCommandee, localCaisseGros[ligne.articleId], localCaisseDemi[ligne.articleId])}
+                          disabled={ligne.valide}
+                          className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${ligne.valide ? "bg-green-100 text-green-700" : "bg-primary text-white hover:opacity-90"}`}>
+                          {ligne.valide ? "Validé" : "Valider"}
+                        </button>
+                      </div>
+                      {/* Caisses utilisées — informatif, alimente le décompte de la préparation */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-muted-foreground shrink-0">🧺 Caisses :</span>
+                        <input type="number" min={0} step={1}
+                          value={localCaisseGros[ligne.articleId] || ""}
+                          onChange={e => setLocalCaisseGros(prev => ({ ...prev, [ligne.articleId]: parseInt(e.target.value) || 0 }))}
+                          placeholder="0" className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">gros</span>
+                        <input type="number" min={0} step={1}
+                          value={localCaisseDemi[ligne.articleId] || ""}
+                          onChange={e => setLocalCaisseDemi(prev => ({ ...prev, [ligne.articleId]: parseInt(e.target.value) || 0 }))}
+                          placeholder="0" className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">demi</span>
+                      </div>
                     </div>
                   )}
                   {bon.statut === "valide" && (
@@ -809,6 +841,9 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
                       {ligne.qtePrepared.toFixed(1)} {ligne.unite} préparés
                       {ligne.qtePrepared !== ligne.qteCommandee && (
                         <span className="text-xs text-amber-500 ml-2">Ecart: {(ligne.qtePrepared - ligne.qteCommandee).toFixed(1)}</span>
+                      )}
+                      {((ligne.nbCaisseGros ?? 0) > 0 || (ligne.nbCaisseDemi ?? 0) > 0) && (
+                        <span className="block text-xs font-semibold text-blue-700 mt-0.5">🧺 {ligne.nbCaisseGros ?? 0} gros + {ligne.nbCaisseDemi ?? 0} demi</span>
                       )}
                     </p>
                   )}

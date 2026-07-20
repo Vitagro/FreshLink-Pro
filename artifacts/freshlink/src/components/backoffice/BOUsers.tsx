@@ -2388,7 +2388,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                     <div className="flex flex-col gap-1.5 sm:col-span-2">
                       <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                         Rôles supplémentaires
-                        <span className="text-[9px] font-normal text-muted-foreground">(optionnel — active le Switch de rôle sur mobile)</span>
+                        <span className="text-[9px] font-normal text-muted-foreground">(optionnel — jusqu&apos;à 3 rôles au total, active le Switch de rôle sur mobile)</span>
                       </label>
                       <div className="flex flex-wrap gap-1.5 p-3 rounded-xl border border-border bg-muted/30">
                         {([
@@ -2402,6 +2402,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                               <button key={r} type="button"
                                 onClick={() => {
                                   const base = (form as { roles?: UserRole[] }).roles ?? [form.role as UserRole]
+                                  if (!isChecked && base.length >= 3) { alert("Maximum 3 rôles par compte (1 rôle principal + 2 supplémentaires)."); return }
                                   const next = isChecked
                                     ? base.filter(x => x !== r)
                                     : [...base, r]
