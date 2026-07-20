@@ -452,6 +452,33 @@ export default function MobileLogistique({ user }: Props) {
         statut: "en_attente",
       })
     }
+
+    // ── Recalage GPS client à la livraison ──────────────────────────────────
+    // Le livreur est physiquement chez le client au moment du "Livré" — moment
+    // idéal pour corriger un point GPS approximatif/erroné. Verrouillé par
+    // défaut (cf. ProcessConfig.autoriserModifGpsClientLivraison, Paramètres)
+    // — le point GPS d'un client ne bouge jamais tant qu'un admin ne l'a pas
+    // explicitement dévérouillé. Best-effort : jamais bloquant pour la
+    // confirmation de livraison elle-même (déjà enregistrée ci-dessus).
+    if (statut === "livre" && commande.clientId && typeof navigator !== "undefined" && navigator.geolocation) {
+      try {
+        const cfg = store.getProcessConfig()
+        if (cfg.autoriserModifGpsClientLivraison) {
+          navigator.geolocation.getCurrentPosition(
+            pos => {
+              const { latitude, longitude } = pos.coords
+              const ok = window.confirm(
+                `📍 Recaler le point GPS de « ${commande.clientNom} » sur votre position actuelle ?\n\nCela remplace le point GPS enregistré pour ce client (utilisé pour la navigation des prochaines livraisons).`
+              )
+              if (ok) store.updateClient(commande.clientId, { gpsLat: latitude, gpsLng: longitude })
+            },
+            () => { /* GPS indisponible/refusé — la livraison reste validée normalement */ },
+            { enableHighAccuracy: true, timeout: 8000 }
+          )
+        }
+      } catch { /* noop */ }
+    }
+
     refresh()
   }
 

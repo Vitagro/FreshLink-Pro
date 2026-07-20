@@ -1265,6 +1265,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
                 { key: "enableDispatchCommandes" as const,   label: "Dispatch Commandes",          desc: "Le dispatcheur affecte les commandes aux trips de livraison" },
                 { key: "photoAchatObligatoire" as const,     label: "Photo achat obligatoire",     desc: "Exiger une photo de la marchandise pour confirmer un achat (mobile acheteur)" },
                 { key: "modeCrossdocking" as const,          label: "Mode Crossdocking",           desc: "Commercial saisit → acheteur (PO) → logistique prépare/valide/charge → écart achat↔prép → livraison → cash-man en fin de tournée" },
+                { key: "autoriserModifGpsClientLivraison" as const, label: "Recalage GPS client à la livraison", desc: "Verrouillé (défaut) = le point GPS d'un client ne change jamais depuis le mobile. Dévérouillé = à la confirmation \"Livré\", le livreur peut recaler le point GPS du client sur sa position réelle." },
               ] as { key: keyof ProcessConfig; label: string; desc: string }[]).map(item => (
                 <div key={item.key} className="flex items-start justify-between gap-3 py-2 border-b border-border last:border-0">
                   <div className="flex-1 min-w-0">

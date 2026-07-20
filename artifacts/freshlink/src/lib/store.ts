@@ -1367,6 +1367,11 @@ export interface ProcessConfig {
   // Mode crossdocking : commercial saisit → acheteur (PO) → logistique prépare/valide/charge
   // → rapport d'écart achat vs préparation → livraison → passage cash-man en fin de livraison
   modeCrossdocking?: boolean
+  // Verrouillé (défaut) : le point GPS d'un client ne change jamais depuis le
+  // mobile. Dévérouillé : à la confirmation "Livré", le livreur est à la
+  // position réelle du client — on lui propose de recaler le point GPS
+  // enregistré sur sa position actuelle (cf. MobileLogistique.handleDeliveryUpdate).
+  autoriserModifGpsClientLivraison?: boolean
   notes?: string
   // Familles d'articles personnalisées (créées depuis Catalogue Produits /
   // Gestion des Familles). Stockées ici (et non dans leur propre clé locale)
@@ -1403,6 +1408,7 @@ export const DEFAULT_PROCESS_CONFIG: ProcessConfig = {
   cameraSignature: true,
   photoAchatObligatoire: true,
   modeCrossdocking: false,
+  autoriserModifGpsClientLivraison: false,
 }
 
 // ── Fiscalité & Fiduciaire (Maroc) — taux configurables, à valider avec le

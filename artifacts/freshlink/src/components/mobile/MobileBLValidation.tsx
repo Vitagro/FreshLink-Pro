@@ -377,10 +377,33 @@ export default function MobileBLValidation({ user }: { user: { id: string; name:
       setMsg({ ok: true, text: "BL validé avec succès !" })
       setBls(b => b.map(x => x.id === selected.id ? { ...x, statut: "livre", _payload: { ...(x._payload ?? {}), ...patch } } : x))
       setSelected(s => s ? { ...s, statut: "livre", _payload: { ...(s._payload ?? {}), ...patch } } : null)
+      await maybeRecalerGpsClient(selected, gpsCaptured)
     }
     setSaving(false)
     setShowSig(false)
     setTimeout(() => setMsg(null), 3000)
+  }
+
+  // ── Recalage GPS client à la livraison ──────────────────────
+  // Le livreur vient de capturer sa position GPS réelle chez le client
+  // ("Capturer GPS" ci-dessus) — on lui propose de recaler le point GPS
+  // enregistré du client dessus. Verrouillé par défaut (Paramètres →
+  // Modules actifs → "Recalage GPS client à la livraison") : tant qu'un
+  // admin ne l'a pas explicitement dévérouillé, le point GPS d'un client ne
+  // change jamais depuis le mobile. Best-effort, jamais bloquant — le BL est
+  // déjà validé au moment où cette fonction s'exécute.
+  const maybeRecalerGpsClient = async (bl: BonLivraison, gps: { lat: number; lng: number } | null) => {
+    if (!gps || !bl.client_id) return
+    try {
+      if (!store.getProcessConfig().autoriserModifGpsClientLivraison) return
+      const ok = window.confirm(
+        `📍 Recaler le point GPS de « ${bl.client_nom} » sur votre position actuelle ?\n\nCela remplace le point GPS enregistré pour ce client (utilisé pour la navigation des prochaines livraisons).`
+      )
+      if (!ok) return
+      store.updateClient(bl.client_id, { gpsLat: gps.lat, gpsLng: gps.lng })
+      const client = store.getClients().find(c => c.id === bl.client_id)
+      if (client) { const { upsertClient } = await import("@/lib/supabase/db"); await upsertClient(client) }
+    } catch { /* offline / noop */ }
   }
 
   const handlePartiel = async () => {
