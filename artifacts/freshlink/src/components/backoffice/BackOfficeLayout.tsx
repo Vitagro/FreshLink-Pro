@@ -85,6 +85,7 @@ const BORetour               = React.lazy(() => import("./BORetour"))
 const BORecap                = React.lazy(() => import("./BORecap"))
 const BOPurchaseOrders       = React.lazy(() => import("./BOPurchaseOrders"))
 const BOUsers                = React.lazy(() => import("./BOUsers"))
+const BOEquipes              = React.lazy(() => import("./BOEquipes"))
 const BOSettings             = React.lazy(() => import("./BOSettings"))
 const BOFinance              = React.lazy(() => import("./BOFinance"))
 const BOFiscalite            = React.lazy(() => import("./BOFiscalite"))
@@ -168,7 +169,7 @@ export type Tab =
   | "recap" | "rapport_livraison" | "preparation"
   | "fournisseurs" | "articles" | "familles"
   | "finance" | "fiscalite" | "whatsapp"
-  | "users" | "database" | "settings" | "gsheets"
+  | "users" | "equipes" | "database" | "settings" | "gsheets"
   | "comptes_externes"
   | "prospection" | "credit_fournisseur" | "agents_ia"
   | "gps_tracker"
@@ -401,6 +402,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
     label: "Administration", labelAr: "الإدارة والإعدادات",
     items: [
       { id: "users",             label: "Utilisateurs",          labelAr: "المستخدمون",        permKey: "canViewDatabase", icon: <Icon d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /> },
+      { id: "equipes",           label: "Equipes",               labelAr: "الفرق",             permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-2.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a4 4 0 10-4-4 4 4 0 004 4z" /> },
       { id: "roles_permissions", label: "Roles & Permissions",   labelAr: "الأدوار والصلاحيات", permKey: "canViewDatabase", icon: <Icon d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /> },
       { id: "journal_activite",  label: "Journal d'Activité",     labelAr: "سجل النشاط",        permKey: "canViewDatabase", icon: <Icon d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" /> },
       { id: "device_access",     label: "Acces Appareils",       labelAr: "أجهزة الوصول",     permKey: "canViewDatabase", icon: <Icon d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /> },
@@ -447,7 +449,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
   { label: "Finance & Contrôle de Gestion", labelAr: "المالية ومراقبة التسيير", ids: ["finance", "fiscalite", "cash", "caisse_acheteur", "analyse_credit", "finance_cdg", "performance_incentives", "investissement"] },
   { label: "Ressources Humaines",         labelAr: "الموارد البشرية",      ids: ["rh_productivite", "rh_comptabilite", "hr_documents", "template_editor", "agents_ia"] },
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "roles_permissions", "journal_activite", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "equipes", "roles_permissions", "journal_activite", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -478,6 +480,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   cash:              (u) => <BOCash user={u} />,
   recap:             (_u) => <BORecap />,
   users:             (u) => <BOUsers currentUser={u} />,
+  equipes:           (u) => <BOEquipes user={u} />,
   depots:            (u) => <BODepots user={u} />,
   database:          (u) => <BODatabase user={u} />,
   marketplace:       (u) => <BOMarketplace user={u} />,

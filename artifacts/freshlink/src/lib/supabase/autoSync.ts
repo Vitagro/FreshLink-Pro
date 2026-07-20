@@ -27,6 +27,7 @@ const SYNCED_KEYS = new Set<string>([
   // calculé l'éligibilité "Prime nouveau client" indépendamment, risque de
   // double versement au prévendeur si consulté depuis deux appareils.
   "fl_loyalty_transactions", "fl_primes_nouveaux_clients",
+  "fl_reglements_cv",
 ])
 
 // La clé localStorage ne correspond pas toujours 1:1 au nom de la table
@@ -45,7 +46,7 @@ const TABLE_NAME_OVERRIDE: Record<string, string> = { fl_caisse: "fl_caisse_entr
 // été saisie (bug critique, source de la "confusion de logos").
 const CONFIG_KEYS = new Set<string>([
   "fl_process_config", "fl_workflow_config", "fl_alert_config", "fl_email_config", "fl_fiscal_config",
-  "fl_company", "fl_loyalty_config",
+  "fl_company", "fl_loyalty_config", "fl_group_names",
 ])
 
 type Row = { id: string; [k: string]: unknown }

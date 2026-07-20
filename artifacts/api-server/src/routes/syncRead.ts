@@ -30,6 +30,7 @@ const ALLOWED_TABLES = new Set([
   "fl_notices",
   "fl_caisses_etrangeres",
   "fl_reglements_cv",
+  "fl_group_names",
 ]);
 
 router.get("/", async (req: Request, res: Response) => {

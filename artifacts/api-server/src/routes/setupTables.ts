@@ -29,6 +29,7 @@ const EXPECTED_TABLES = [
   "fl_intel_prix", "fl_conc_pv", "fl_conc_ventes_daily",
   "fl_notices",
   "fl_reglements_cv",
+  "fl_group_names",
 ];
 
 function projectRef(): string {

@@ -3076,6 +3076,17 @@ export const store = {
   },
   deleteReglementCV: (id: string) => { store.saveReglementsCV(store.getReglementsCV().filter(r => r.id !== id)); deleteSynced("fl_reglements_cv", [id]) },
 
+  // --- Noms d'équipe (label libre pour un groupeId — cf. effectiveGroupId) ---
+  // Une équipe n'a pas d'entité propre : c'est juste l'ensemble des users
+  // dont effectiveGroupId() === un même id racine. Ce nom est purement
+  // cosmétique (affiché dans BOEquipes à la place de "Groupe de <admin>").
+  getGroupNames: (): Record<string, string> => getLS("fl_group_names", {}),
+  setGroupName: (groupId: string, nom: string) => {
+    const all = store.getGroupNames()
+    if (nom.trim()) all[groupId] = nom.trim(); else delete all[groupId]
+    setLS("fl_group_names", all)
+  },
+
   // --- Reserve caisse historique ---
   getReserveSnaps: (): ReserveCaisseSnap[] => getLS("fl_reserve_snaps", []),
   addReserveSnap: (s: ReserveCaisseSnap) => {
