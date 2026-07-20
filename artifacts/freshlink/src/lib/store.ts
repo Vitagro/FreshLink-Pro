@@ -1111,6 +1111,33 @@ export interface CaisseEntry {
   createdBy: string
 }
 
+// ── Registre chèques & virements reçus (Cash Man + Finance) ─────────────────
+// Un chèque/virement reçu n'est pas de la caisse (espèces) : il doit être
+// suivi séparément jusqu'à son encaissement effectif en banque (ou son rejet)
+// — d'où ce registre dédié, distinct de CaisseEntry.
+export type TypeReglementCV = "cheque" | "virement"
+export type StatutReglementCV = "en_attente" | "encaisse" | "rejete"
+
+export interface ReglementCV {
+  id: string
+  type: TypeReglementCV
+  date: string                    // date de réception
+  clientId?: string
+  clientNom: string
+  montant: number
+  reference?: string              // n° chèque ou n°/référence de virement
+  banque?: string
+  dateEcheance?: string           // date d'encaissement prévue (chèque différé)
+  statut: StatutReglementCV
+  dateEncaissement?: string       // date effective d'encaissement en banque
+  motifRejet?: string
+  factureId?: string              // facture liée si applicable
+  blIds?: string[]
+  notes?: string
+  createdBy: string
+  createdAt: string
+}
+
 // Historique des reserves caisse par actionnaire
 export interface ReserveCaisseSnap {
   id: string
@@ -3037,6 +3064,17 @@ export const store = {
     return { ok: true }
   },
   deleteCaisseEntry: (id: string) => { store.saveCaisseEntries(store.getCaisseEntries().filter(e => e.id !== id)); deleteSynced("fl_caisse_entries", [id]) },
+
+  // --- Registre chèques & virements (Cash Man + Finance) ---
+  getReglementsCV: (): ReglementCV[] => getLS("fl_reglements_cv", []),
+  saveReglementsCV: (r: ReglementCV[]) => setLS("fl_reglements_cv", r),
+  addReglementCV: (r: ReglementCV) => { const arr = store.getReglementsCV(); arr.push(r); store.saveReglementsCV(arr) },
+  updateReglementCV: (id: string, updates: Partial<ReglementCV>) => {
+    const arr = store.getReglementsCV()
+    const idx = arr.findIndex(r => r.id === id)
+    if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.saveReglementsCV(arr) }
+  },
+  deleteReglementCV: (id: string) => { store.saveReglementsCV(store.getReglementsCV().filter(r => r.id !== id)); deleteSynced("fl_reglements_cv", [id]) },
 
   // --- Reserve caisse historique ---
   getReserveSnaps: (): ReserveCaisseSnap[] => getLS("fl_reserve_snaps", []),

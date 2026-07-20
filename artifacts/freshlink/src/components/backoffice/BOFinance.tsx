@@ -12,6 +12,7 @@ import {
 } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
+import BOChequesVirements from "@/components/backoffice/BOChequesVirements"
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n: number) => (Number(n) || 0).toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -28,7 +29,7 @@ function KpiCard({ label, labelAr, value, sub, color }: { label: string; labelAr
   )
 }
 
-type FinanceTab = "synthese" | "caisse" | "actionnaires" | "charges" | "salaries" | "credit" | "cashman"
+type FinanceTab = "synthese" | "caisse" | "actionnaires" | "charges" | "salaries" | "credit" | "cashman" | "cheques"
 
 const DELAI_MS: Record<string, number> = {
   jour_meme:  0,
@@ -68,6 +69,7 @@ const TAB_DEF: { id: FinanceTab; label: string; labelAr: string; color: string }
   { id: "salaries",      label: "Salaries",        labelAr: "الأجراء",         color: "oklch(0.38 0.18 310)" },
   { id: "credit",        label: "Credit Client",   labelAr: "ائتمان العملاء",  color: "oklch(0.45 0.22 25)" },
   { id: "cashman",       label: "Cash Man",        labelAr: "تسيير النقد",     color: "oklch(0.38 0.18 155)" },
+  { id: "cheques",       label: "Chèques & Virements", labelAr: "الشيكات والتحويلات", color: "oklch(0.42 0.15 195)" },
 ]
 
 function getTauxCaisse(): number { return Number(localStorage.getItem("fl_taux_caisse") || "10") }
@@ -1704,6 +1706,8 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
           </div>
         )
       })()}
+
+      {tab === "cheques" && <BOChequesVirements user={user} />}
     </div>
   )
 }

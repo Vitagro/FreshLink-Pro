@@ -5,6 +5,7 @@ import { store, type BonLivraison, type User, DEFAULT_CAISSE_PRICING, type Caiss
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import { printBL, printFacture as printFactureLib } from "@/lib/print"
+import BOChequesVirements from "@/components/backoffice/BOChequesVirements"
 
 // ── FMT ──────────────────────────────────────────────────────────────────
 const fmtDH = (n: number) => n.toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " DH"
@@ -361,7 +362,7 @@ export default function BOCash({ user }: { user: User }) {
   const [printFraisId, setPrintFraisId] = useState<string | null>(null) // BL id being configured for print
 
   // ── Facturation (regroupement de BL en une facture) ──────────────────────
-  const [view, setView] = useState<"cash" | "facturation">("cash")
+  const [view, setView] = useState<"cash" | "facturation" | "cheques">("cash")
   const [factClient, setFactClient] = useState("")              // clé client sélectionnée (clientId || clientNom)
   const [factSelected, setFactSelected] = useState<Set<string>>(new Set())
   const [factModeReglement, setFactModeReglement] = useState<"especes" | "cheque" | "virement" | "effet">("especes")
@@ -583,6 +584,7 @@ export default function BOCash({ user }: { user: User }) {
         {[
           { id: "cash" as const, label: "Cash & BL" },
           { id: "facturation" as const, label: "Facturation" },
+          { id: "cheques" as const, label: "Chèques & Virements" },
         ].map(t => (
           <button key={t.id} onClick={() => setView(t.id)}
             className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl text-xs font-semibold transition-all whitespace-nowrap flex items-center justify-center gap-1.5"
@@ -989,6 +991,8 @@ export default function BOCash({ user }: { user: User }) {
           )}
         </div>
       )}
+
+      {view === "cheques" && <BOChequesVirements user={user} />}
 
       {/* ── Frais BL Print Modal ─────────────────────────────────────────── */}
       {printFraisId && (() => {

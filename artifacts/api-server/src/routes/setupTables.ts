@@ -28,6 +28,7 @@ const EXPECTED_TABLES = [
   "fl_process_config", "fl_workflow_config", "fl_alert_config", "fl_email_config", "fl_fiscal_config",
   "fl_intel_prix", "fl_conc_pv", "fl_conc_ventes_daily",
   "fl_notices",
+  "fl_reglements_cv",
 ];
 
 function projectRef(): string {
