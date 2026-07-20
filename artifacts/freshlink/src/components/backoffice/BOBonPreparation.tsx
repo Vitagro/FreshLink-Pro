@@ -284,6 +284,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   const [trips, setTrips] = useState<Trip[]>([])
   const [commandes, setCommandes] = useState<Commande[]>([])
   const [articles, setArticles] = useState<Article[]>([])
+  const [preparateurs, setPreparateurs] = useState<User[]>([])
   const [showNew, setShowNew] = useState(false)
   const [search, setSearch] = useState("")
   const [sortMode, setSortMode] = useState<"recent" | "alpha">("recent")
@@ -300,6 +301,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   const [tripId, setTripId] = useState("")
   const [selectedClients, setSelectedClients] = useState<string[]>([])
   const [sequenceMode, setSequenceMode] = useState<SequenceModePrep>("horaire")
+  const [preparateurId, setPreparateurId] = useState("")
 
   // Auto-generate nom when trip / selection changes (unless user manually edited it)
   const autoNom = (() => {
@@ -323,6 +325,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     setTrips(store.getTrips())
     setCommandes(store.getVisibleCommandes())
     setArticles(store.getArticles())
+    setPreparateurs(store.getUsers().filter(u => (u.role === "preparateur" || u.role === "magasinier") && u.actif))
   }, [])
 
   const refresh = () => setBons(store.getBonsPreparation())
@@ -445,6 +448,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
 
   const handleCreate = () => {
     if (!effectiveNom.trim()) return
+    const assignedPreparateur = preparateurs.find(p => p.id === preparateurId)
 
     // ── Multi-client : un bon distinct par client ────────────────────────────
     if (selectedClients.length > 1) {
@@ -474,6 +478,8 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
           lignes: clientLignes,
           statut: format === "numerique" ? "en_cours" : "brouillon",
           createdBy: user.id,
+          preparateurId: assignedPreparateur?.id,
+          preparateurNom: assignedPreparateur?.name,
         }
         store.addBonPreparation(bon)
         bonsCreated.push(bon)
@@ -483,7 +489,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
       refresh()
       setShowNew(false)
       setNom(""); setNomManual(false); setMode("par_article"); setType("stockage"); setFormat("papier")
-      setTripId(""); setSelectedClients([])
+      setTripId(""); setSelectedClients([]); setPreparateurId("")
       if (format === "papier") {
         bonsCreated.forEach((bon, i) => setTimeout(() => openPrintPrep(bon, commandes), 350 * (i + 1)))
         // Impression papier lancée -> bascule directement vers l'écran des BL.
@@ -515,12 +521,14 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
       lignes,
       statut: format === "numerique" ? "en_cours" : "brouillon",
       createdBy: user.id,
+      preparateurId: assignedPreparateur?.id,
+      preparateurNom: assignedPreparateur?.name,
     }
     store.addBonPreparation(bon)
     refresh()
     setShowNew(false)
     setNom(""); setNomManual(false); setMode("par_article"); setType("stockage"); setFormat("papier")
-    setTripId(""); setSelectedClients([])
+    setTripId(""); setSelectedClients([]); setPreparateurId("")
     if (format === "papier") {
       setTimeout(() => openPrintPrep(bon, commandes), 300)
       // Impression papier lancée -> bascule directement vers l'écran des BL.
@@ -711,6 +719,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
             <p className="text-xs" style={{ color: "oklch(0.60 0.03 245)" }}>
               {bon.date} · {MODE_LABELS[bon.mode].label}
               {" · "}{bon.sequenceMode === "itineraire" ? "Itinéraire GPS" : "Ordre horaire"}
+              {bon.preparateurNom && <>{" · 👤 "}{bon.preparateurNom}</>}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -1061,6 +1070,19 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
               </div>
             </div>
 
+            {/* Préparateur assigné */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-foreground">Assigner à un préparateur (optionnel)</label>
+              <select value={preparateurId} onChange={e => setPreparateurId(e.target.value)}
+                className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="">-- Non assigné (visible de tous les préparateurs) --</option>
+                {preparateurs.map(p => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.role === "preparateur" ? "Préparateur" : "Magasinier"})</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground">Liste tirée des comptes Utilisateurs (rôle préparateur/magasinier). Laisser vide = n&apos;importe quel préparateur peut le prendre.</p>
+            </div>
+
             {/* Trip ou clients */}
             {tripsEnCours.length > 0 && (
               <div className="flex flex-col gap-1">
@@ -1219,6 +1241,11 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                         {bon.sequenceMode === "itineraire" ? "GPS" : "Horaire"}
                       </span>
+                      {bon.preparateurNom && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200">
+                          👤 {bon.preparateurNom}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground">
                       {bon.date} · {bon.lignes.length} articles · {bon.lignes.reduce((s, l) => s + l.qteCommandee, 0).toFixed(1)} kg · {ordClients.length} clients

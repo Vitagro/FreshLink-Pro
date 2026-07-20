@@ -556,6 +556,12 @@ export interface Livreur {
   actif: boolean
   // Compte ERP du livreur : créé en attente, activé après validation admin (Demandes de comptes)
   compteStatut?: "en_attente" | "valide" | "rejete"
+  // Lien vers le compte utilisateur (User) associé — permet à la création de
+  // trip (BODispatch) de retrouver les infos véhicule/capacité de CE profil
+  // roster à partir du conducteur choisi dans la liste des comptes users
+  // (conducteur/livreur), qui est désormais la source de vérité pour "qui
+  // peut être affecté à un trip" — pas ce roster.
+  userId?: string
 }
 
 export interface MotifRetour {
@@ -1043,6 +1049,11 @@ export interface BonPreparation {
   createdBy: string
   validatedAt?: string
   validatedBy?: string
+  // Affectation à un préparateur (compte User, role preparateur/magasinier) —
+  // optionnel : un bon non affecté reste visible de tous les préparateurs
+  // (MobilePreparation le filtre par !preparateurId || preparateurId === user.id).
+  preparateurId?: string
+  preparateurNom?: string
 }
 
 // ============================================================

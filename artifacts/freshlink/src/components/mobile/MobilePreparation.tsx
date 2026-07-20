@@ -124,16 +124,21 @@ export default function MobilePreparation({ user }: Props) {
     return Math.max(0, Math.round((brut - tare) * 100) / 100)
   }
 
+  // Un bon assigné à un préparateur précis (preparateurId) ne doit encombrer
+  // que sa liste — les bons non assignés restent visibles de tous, pour ne
+  // jamais bloquer un travail urgent faute d'assignation explicite.
+  const forMe = (b: BonPreparation) => !b.preparateurId || b.preparateurId === user.id
+
   useEffect(() => {
     const all = store.getBonsPreparation()
     // Livreurs and magasiniers see only in_cours or brouillon bons
-    const relevant = all.filter(b => b.statut !== "valide" || b.format === "numerique")
+    const relevant = all.filter(b => (b.statut !== "valide" || b.format === "numerique") && forMe(b))
     setBons(relevant)
     setContenants(store.getContenantsConfig().filter(c => c.actif))
   }, [])
 
   const refresh = () => {
-    const all = store.getBonsPreparation()
+    const all = store.getBonsPreparation().filter(forMe)
     setBons(all)
     if (activeBon) {
       const updated = all.find(b => b.id === activeBon.id)
