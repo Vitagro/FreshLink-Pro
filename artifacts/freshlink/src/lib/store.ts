@@ -3832,7 +3832,10 @@ export const store = {
     const bascule = type === "commande" ? h >= 14 : h < 8
     const d = new Date(now)
     if (bascule) d.setDate(d.getDate() - 1)
-    return d.toISOString().split("T")[0]
+    // Date LOCALE (pas toISOString(), en UTC) — au Maroc (UTC+1), entre 00h00
+    // et 00h59 heure locale, la conversion UTC faisait reculer d'un jour
+    // supplementaire (double bascule), cf. le meme correctif sur today().
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
   },
   lastWeekDay: (d: string) => { const date = new Date(d); date.setDate(date.getDate() - 7); return date.toISOString().split("T")[0] },
 
