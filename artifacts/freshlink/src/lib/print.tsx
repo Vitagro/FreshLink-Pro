@@ -23,6 +23,8 @@ export interface CompanyConfig {
   couleurEntete?: string
   mentionsBL?: string
   mentionsFacture?: string
+  logoFondBL?: string
+  logoFondBLActif?: boolean
 }
 
 // ── HR Doc Data ───────────────────────────────────────────────────────────────
@@ -250,6 +252,11 @@ function fmtDate(d?: string) {
   if (!d) return new Date().toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" })
   try { return new Date(d).toLocaleDateString("fr-FR", { day: "2-digit", month: "long", year: "numeric" }) } catch { return d }
 }
+// Filigrane (logo d'arrière-plan) sur le BL — s'affiche derrière le contenu, sur chaque page imprimée
+function watermarkHtml(cfg: { logoFondBL?: string; logoFondBLActif?: boolean }) {
+  if (!cfg.logoFondBLActif || !cfg.logoFondBL) return ""
+  return `<img src="${cfg.logoFondBL}" onerror="this.style.display='none'" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:65%;height:65%;opacity:0.09;z-index:0;pointer-events:none;object-fit:contain"/>`
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  BON DE LIVRAISON  (international grade)
@@ -267,7 +274,8 @@ export function printBL(bl: BonLivraison, company?: CompanyConfig) {
   const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
 <title>BL ${blId}</title>
 <style>${baseCss(accent, gold)}</style></head><body>
-<div style="max-width:794px;margin:0 auto;padding:24px 28px">
+${watermarkHtml(cfg)}
+<div style="max-width:794px;margin:0 auto;padding:24px 28px;position:relative;z-index:1">
 <div class="stripe"></div>
 <div class="lh">
   <div class="lh-brand">
@@ -698,7 +706,8 @@ function buildBLHtml(bl: BOBonLivraison, opts: PrintBLOpts, company?: CompanyCon
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
 <title>${docLabel} ${bl.numero}</title>
 <style>${baseCss(accent, gold)}</style></head><body>
-<div style="max-width:794px;margin:0 auto;padding:24px 28px">
+${!isFacture ? watermarkHtml(cfg) : ""}
+<div style="max-width:794px;margin:0 auto;padding:24px 28px;position:relative;z-index:1">
 <div class="stripe"></div>
 <div class="lh">
   <div class="lh-brand" style="flex-direction:column;align-items:flex-start;gap:8px">

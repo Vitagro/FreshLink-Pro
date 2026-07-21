@@ -1306,6 +1306,9 @@ export interface CompanyConfig {
   // ── Application branding ──────────────────────────────────────
   appName?: string             // Display name in sidebar/login (default: FreshLink Pro)
   appSlogan?: string           // Sub-label in sidebar (default: company nom)
+  // ── Filigrane BL (logo d'arrière-plan sur les bons de livraison) ──
+  logoFondBL?: string          // base64 ou URL — logo affiché en filigrane sur le BL imprimé
+  logoFondBLActif?: boolean    // active/désactive le filigrane sur le BL
 }
 
 // ── Coordonnées publiques — synchronisées avec Supabase ───────

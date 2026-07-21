@@ -1078,7 +1078,7 @@ export default function BOCash({ user }: { user: User }) {
                     fraisImpressionParFeuille: fraisConfig.fraisImpressionParFeuille,
                     nbFeuilles: fraisConfig.nbFeuilles,
                     fraisServiceParCaisse: fraisConfig.fraisServiceParCaisse,
-                  } as Parameters<typeof printBL>[0])
+                  } as Parameters<typeof printBL>[0], store.getCompanyConfig())
                   setPrintFraisId(null)
                 }}
                   className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-1.5"

@@ -365,6 +365,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
   const [sbTesting, setSbTesting] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
   const logoRef = useRef<HTMLInputElement>(null)
+  const logoFondRef = useRef<HTMLInputElement>(null)
   const [company, setCompany] = useState<CompanyConfig>(() => store.getCompanyConfig())
   const [workflow, setWorkflow] = useState<WorkflowConfig>(() => {
     const wf = store.getWorkflowConfig()
@@ -726,6 +727,14 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
     reader.readAsDataURL(file)
   }
 
+  const handleLogoFondUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setCompany(c => ({ ...c, logoFondBL: ev.target?.result as string, logoFondBLActif: true }))
+    reader.readAsDataURL(file)
+  }
+
   const handleSaveContacts = async () => {
     store.saveCompanyContacts(contacts)
     await saveContactsToSupabase(contacts)
@@ -851,6 +860,56 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
                   onChange={e => setCompany(c => ({ ...c, couleurEntete: e.target.value }))}
                   className="w-10 h-10 rounded-lg border border-border cursor-pointer" />
                 <span className="text-xs font-mono text-muted-foreground">{company.couleurEntete || "#1e3a5f"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Filigrane BL (logo d'arrière-plan) */}
+          <div className="bg-card rounded-2xl border border-border p-6 flex flex-col gap-4">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div>
+                <h3 className="font-semibold text-sm">Filigrane du Bon de Livraison / علامة مائية</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Un autre logo, imprimé en transparence sur tout l&apos;arrière-plan du BL (différent du logo d&apos;en-tête).</p>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer select-none">
+                <input type="checkbox" checked={company.logoFondBLActif ?? false}
+                  disabled={!company.logoFondBL}
+                  onChange={e => setCompany(c => ({ ...c, logoFondBLActif: e.target.checked }))}
+                  className="w-4 h-4 accent-primary" />
+                Activer le filigrane sur les BL
+              </label>
+            </div>
+            <div className="flex items-start gap-6 flex-wrap">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-32 h-24 rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted overflow-hidden">
+                  {company.logoFondBL
+                    ? <img src={company.logoFondBL} alt="Filigrane BL" className="w-full h-full object-contain" />
+                    : <svg className="w-10 h-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                  }
+                </div>
+                <input ref={logoFondRef} type="file" accept="image/*" className="hidden" onChange={handleLogoFondUpload} />
+                <button onClick={() => logoFondRef.current?.click()}
+                  className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-muted transition-colors font-medium">
+                  {company.logoFondBL ? "Changer le filigrane" : "Importer un filigrane"}
+                </button>
+                {company.logoFondBL && (
+                  <button onClick={() => setCompany(c => ({ ...c, logoFondBL: undefined, logoFondBLActif: false }))}
+                    className="text-xs text-red-600 hover:underline">Supprimer</button>
+                )}
+              </div>
+              {/* Apercu filigrane */}
+              <div className="flex-1 min-w-48">
+                <p className="text-xs text-muted-foreground mb-2">Aperçu — arrière-plan du BL imprimé</p>
+                <div className="relative rounded-xl border border-border p-3 text-xs overflow-hidden bg-white" style={{ minHeight: 96 }}>
+                  {company.logoFondBL && (company.logoFondBLActif ?? false) && (
+                    <img src={company.logoFondBL} alt="Filigrane" className="absolute top-1/2 left-1/2 object-contain"
+                      style={{ transform: "translate(-50%,-50%)", width: "65%", height: "65%", opacity: 0.09 }} />
+                  )}
+                  <div className="relative">
+                    <p className="font-bold text-sm text-foreground">Bon de Livraison — {company.nom || "Nom entreprise"}</p>
+                    <p className="text-muted-foreground">Le filigrane s&apos;imprime en transparence, sur chaque page du BL.</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
