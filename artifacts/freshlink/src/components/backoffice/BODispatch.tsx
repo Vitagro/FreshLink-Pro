@@ -86,9 +86,11 @@ export default function BODispatch({ user }: Props) {
   // Rôle du compte app créé avec ce profil flotte — conducteur (a un compte,
   // se connecte) ou livreur (idem, simple étiquette différente).
   const [livreurAccountRole, setLivreurAccountRole] = useState<"conducteur" | "livreur">("livreur")
-  const [selectedLivreurId, setSelectedLivreurId] = useState("")
-  const [modeConduite, setModeConduite] = useState<"solo" | "avec_livreur">("solo")
-  const [coLivreurId, setCoLivreurId] = useState("")
+  // Un conducteur (roster flotte, par défaut sans accès app) n'a jamais de
+  // compte ERP à créer sauf exception explicitement accordée par le back-office.
+  const [createAccountForRoster, setCreateAccountForRoster] = useState(false)
+  const [selectedLivreurId, setSelectedLivreurId] = useState("")     // livreur — compte ERP, obligatoire
+  const [selectedConducteurId, setSelectedConducteurId] = useState("") // conducteur — profil flotte (roster), obligatoire
   const [livreurSearch, setLivreurSearch] = useState("")
   const [livreurSortMode, setLivreurSortMode] = useState<"recent" | "alpha">("alpha")
   const [vehicule, setVehicule] = useState("")
@@ -122,16 +124,15 @@ export default function BODispatch({ user }: Props) {
     setUsers(store.getUsers())
   }
 
-  // Source de vérité pour "qui peut être affecté à un trip" : les comptes
-  // Utilisateurs de rôle conducteur/livreur — pas le roster Livreur (qui ne
-  // sert plus qu'aux infos véhicule/capacité, liées via Livreur.userId).
-  // Le conducteur DOIT avoir un compte actif (c'est lui qui se connecte).
-  const conducteurCandidates = users.filter(u => (u.role === "conducteur" || u.role === "livreur") && u.actif)
-  // Le second livreur (aide/co-équipier) est choisi dans le même vivier de
-  // rôles mais sans exiger un compte actif — il n'a besoin d'un accès à
-  // l'application que si le back-office le lui accorde explicitement.
-  const allDriverUsers = users.filter(u => u.role === "conducteur" || u.role === "livreur")
-  const findLivreurProfile = (userId: string) => livreurs.find(l => l.userId === userId)
+  // LIVREUR = celui qui a le compte ERP, embarque avec le conducteur et
+  // utilise l'application. Toujours obligatoire, toujours un compte actif.
+  const livreurAccountCandidates = users.filter(u => (u.role === "conducteur" || u.role === "livreur") && u.actif)
+  // CONDUCTEUR = celui qui conduit le véhicule (matricule + données) — choisi
+  // directement dans le roster flotte, pas dans les comptes Utilisateurs (il
+  // n'a besoin d'un compte que si le back-office le lui accorde — cf. lien
+  // Livreur.userId, utilisé seulement pour pré-suggérer le livreur du trip).
+  const conducteurRoster = livreurs.filter(l => l.actif)
+  const findRosterByUserId = (userId: string) => livreurs.find(l => l.userId === userId)
 
   const saveTransport = () => {
     if (!transportForm.nom.trim()) return
@@ -197,17 +198,18 @@ export default function BODispatch({ user }: Props) {
   const zones = [...new Set(availableCommandes.map(c => c.zone).filter(Boolean))]
   const prevendeurs = [...new Set(availableCommandes.map(c => c.commercialNom))]
 
-  // Démarrage / fin de tournée = action exclusive du LIVREUR assigné. Ni le
-  // BO ni l'admin ne peuvent déclencher Départ/Terminée, même avec un rôle
-  // "dispatcheur"/"admin" — un autre livreur ne peut pas non plus démarrer
-  // la tournée de quelqu'un d'autre.
-  const ownsTrip = (t: Trip) => user.role === "livreur" && (t.livreurId === user.id || t.livreurNom === user.name)
+  // Démarrage / fin de tournée = action exclusive du LIVREUR assigné (le
+  // titulaire du compte ERP sur ce trip — rôle "livreur" ou "conducteur" si ce
+  // dernier a exceptionnellement un accès). Ni le BO ni l'admin ne peuvent
+  // déclencher Départ/Terminée, même avec un rôle "dispatcheur"/"admin" — un
+  // autre livreur ne peut pas non plus démarrer la tournée de quelqu'un d'autre.
+  const ownsTrip = (t: Trip) => (user.role === "livreur" || user.role === "conducteur") && (t.livreurId === user.id || t.livreurNom === user.name)
   const canRunTrip = (t: Trip) => ownsTrip(t)
 
   // Estimation coût voyage + analyse carburant (prévu vs réel) d'un trip
   const tripCout = (t: Trip) => {
     const p = store.getEmailConfig()   // tarifs livreur + prixCarburantL vivent dans EmailConfig
-    const liv = livreurs.find(l => l.id === t.livreurId)
+    const liv = livreurs.find(l => l.id === t.conducteurId) ?? livreurs.find(l => l.id === t.livreurId)
     const kmReel = t.kmTotal ?? ((t.kmArrivee ?? 0) > 0 && (t.kmDepart ?? 0) > 0 ? (t.kmArrivee! - t.kmDepart!) : 0)
     // Tant que le livreur n'a pas saisi de KM réel, on retombe sur l'estimation
     // calculée à l'affectation (kmEstime) — jamais 0/vide entre planification et départ.
@@ -231,12 +233,18 @@ export default function BODispatch({ user }: Props) {
   const toggleCmd = (id: string) =>
     setSelectedCmds(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
 
-  // Autofill vehicule from the roster profile linked to this user (if any)
-  const handleSelectLivreur = (id: string) => {
-    setSelectedLivreurId(id)
-    if (id) {
-      const liv = findLivreurProfile(id)
-      if (liv?.matricule) setVehicule(liv.matricule)
+  // Choix du conducteur (roster flotte) : auto-remplit le matricule véhicule
+  // et, si ce conducteur a exceptionnellement un compte ERP lié (Livreur.userId,
+  // accordé par le back-office), pré-suggère ce même compte comme livreur —
+  // le dispatcher reste libre de choisir un autre livreur.
+  const handleSelectConducteur = (id: string) => {
+    setSelectedConducteurId(id)
+    if (!id) return
+    const liv = livreurs.find(l => l.id === id)
+    if (liv?.matricule) setVehicule(liv.matricule)
+    if (liv?.userId) {
+      const linked = users.find(u => u.id === liv.userId && u.actif)
+      if (linked) setSelectedLivreurId(linked.id)
     }
   }
 
@@ -246,8 +254,7 @@ export default function BODispatch({ user }: Props) {
   const resetTripForm = () => {
     setShowTripForm(false)
     setEditingTripId(null)
-    setSelectedLivreurId(""); setVehicule(""); setSelectedCmds([])
-    setModeConduite("solo"); setCoLivreurId("")
+    setSelectedLivreurId(""); setSelectedConducteurId(""); setVehicule(""); setSelectedCmds([])
   }
 
   // Pré-remplit le formulaire avec les données du trip — uniquement pour un
@@ -256,9 +263,8 @@ export default function BODispatch({ user }: Props) {
   const openEditTrip = (trip: Trip) => {
     setEditingTripId(trip.id)
     setSelectedLivreurId(trip.livreurId)
+    setSelectedConducteurId(trip.conducteurId ?? "")
     setVehicule(trip.vehicule || "")
-    setModeConduite(trip.modeConduite ?? "solo")
-    setCoLivreurId(trip.coLivreurId ?? "")
     setSelectedCmds(trip.commandeIds)
     setShowTripForm(true)
   }
@@ -285,18 +291,16 @@ export default function BODispatch({ user }: Props) {
     // "Logistique & Livraison" : creer_trip/valider_trip, pas plus fin).
     const perm = "creer_trip"
     if (!hasPermission(user.role, perm)) { logAction(user, perm, "denied"); return }
-    if (!selectedLivreurId || selectedCmds.length === 0) return
-    if (modeConduite === "avec_livreur" && !coLivreurId) return
+    if (!selectedLivreurId || !selectedConducteurId || selectedCmds.length === 0) return
     if (creatingTrip) return // anti double-clic — jamais deux tournées/doubles affectations
     setCreatingTrip(true)
-    // Identité (compte app) = User conducteur/livreur choisi. Profil roster
-    // (véhicule/capacité/conso carburant) = optionnel, retrouvé via le lien
-    // Livreur.userId si ce conducteur a un profil flotte associé.
-    const conducteur = users.find(u => u.id === selectedLivreurId)
-    if (!conducteur) { setCreatingTrip(false); return }
-    const livreurProfile = findLivreurProfile(selectedLivreurId)
-    const coConducteur = modeConduite === "avec_livreur" ? users.find(u => u.id === coLivreurId) : undefined
-    logAction(user, perm, "success", { type: "livreur", id: conducteur.id, label: conducteur.name })
+    // Livreur = compte ERP (User conducteur/livreur), obligatoire — c'est lui
+    // qui utilise l'application. Conducteur = profil flotte (roster), obligatoire
+    // — véhicule/matricule/capacité/conso carburant.
+    const livreurAccount = users.find(u => u.id === selectedLivreurId)
+    const conducteurProfile = livreurs.find(l => l.id === selectedConducteurId)
+    if (!livreurAccount || !conducteurProfile) { setCreatingTrip(false); return }
+    logAction(user, perm, "success", { type: "livreur", id: livreurAccount.id, label: livreurAccount.name })
     const cmds = commandes.filter(c => selectedCmds.includes(c.id))
     const itineraire = cmds
       .filter(c => c.gpsLat && c.gpsLng)
@@ -305,19 +309,18 @@ export default function BODispatch({ user }: Props) {
     // avant tout trajet réel (le livreur saisira les valeurs réelles au retour).
     const kmEstime = estimateTripKm(itineraire)
     const emailCfg = store.getEmailConfig()
-    const avecCarb = livreurProfile?.carburantInclus ?? false
-    const consoL100 = Number(livreurProfile?.consommationL100) || 0
+    const avecCarb = conducteurProfile?.carburantInclus ?? false
+    const consoL100 = Number(conducteurProfile?.consommationL100) || 0
     const prixL = Number(emailCfg.prixCarburantL) || 15
     const litresEstimeAffectation = consoL100 > 0 ? Math.round((kmEstime / 100) * consoL100 * 10) / 10 : 0
     const coutKmEstime = kmEstime * (Number(emailCfg.tarifKmLivreur) || 0)
     const coutCarbEstime = avecCarb ? litresEstimeAffectation * prixL : 0
     const tripFields = {
-      livreurId: conducteur.id,
-      livreurNom: conducteur.name,
-      modeConduite,
-      coLivreurId: coConducteur?.id,
-      coLivreurNom: coConducteur?.name,
-      vehicule: vehicule || livreurProfile?.matricule || "",
+      livreurId: livreurAccount.id,
+      livreurNom: livreurAccount.name,
+      conducteurId: conducteurProfile.id,
+      conducteurNom: `${conducteurProfile.prenom} ${conducteurProfile.nom}`.trim(),
+      vehicule: vehicule || conducteurProfile.matricule || "",
       commandeIds: selectedCmds,
       itineraire,
       kmEstime,
@@ -485,7 +488,7 @@ export default function BODispatch({ user }: Props) {
   }
 
   // --- LIVREURS ---
-  const openNewLivreur = () => { setEditingLivreur(null); setLivreurForm(EMPTY_LIVREUR); setLivreurAccountRole("livreur"); setShowLivreurForm(true) }
+  const openNewLivreur = () => { setEditingLivreur(null); setLivreurForm(EMPTY_LIVREUR); setLivreurAccountRole("livreur"); setCreateAccountForRoster(false); setShowLivreurForm(true) }
   const openEditLivreur = (l: Livreur) => {
     setEditingLivreur(l)
     setLivreurForm({ type: l.type, nom: l.nom, prenom: l.prenom, telephone: l.telephone, actif: l.actif,
@@ -501,15 +504,23 @@ export default function BODispatch({ user }: Props) {
       const idx = all.findIndex(l => l.id === editingLivreur.id)
       if (idx >= 0) { all[idx] = { ...all[idx], ...livreurForm }; store.saveLivreurs(all) }
     } else {
-      // Nouveau livreur → compte ERP EN ATTENTE de validation admin (pas actif tant
-      // que l'admin n'a pas approuvé via « Demandes de comptes »). Le profil
-      // flotte (ce roster) est lié au compte via userId — c'est ce lien que
-      // BODispatch utilise ensuite pour retrouver véhicule/capacité à partir
-      // du conducteur choisi dans la liste des comptes Utilisateurs.
+      // Nouveau conducteur (profil flotte — véhicule/matricule/données). Par
+      // défaut PAS de compte ERP : un conducteur ne fait que conduire, il n'a
+      // besoin d'un accès à l'application que si le back-office le lui
+      // accorde explicitement (case "Créer aussi un compte ERP" cochée).
       const livreurId = store.genId()
-      const userId = store.genId()
       const fullName = `${livreurForm.prenom} ${livreurForm.nom}`.trim()
       const tel = (livreurForm.telephone ?? "").trim()
+
+      if (!createAccountForRoster) {
+        store.addLivreur({ ...livreurForm, id: livreurId })
+        alert(`Conducteur créé (sans accès à l'application).\n\nIl pourra être choisi comme conducteur lors de la création d'un trip.`)
+        setShowLivreurForm(false)
+        refresh()
+        return
+      }
+
+      const userId = store.genId()
       store.addLivreur({ ...livreurForm, id: livreurId, actif: false, compteStatut: "en_attente", userId })
 
       // ⚡ Synchronisation immédiate avec Utilisateurs & Droits : on crée le COMPTE
@@ -551,7 +562,7 @@ export default function BODispatch({ user }: Props) {
         })
         localStorage.setItem("fl_account_requests", JSON.stringify(reqs))
       } catch { /* noop */ }
-      alert(`Livreur créé et compte utilisateur ajouté (Utilisateurs & Droits).\n\nIdentifiants mobile temporaires :\n• Login : ${tel || "(téléphone)"}\n• Mot de passe : ${tel || "livreur"}\n\nLe compte est EN ATTENTE — validez-le dans « Demandes de comptes » pour l'activer.`)
+      alert(`Conducteur créé et compte utilisateur ajouté (Utilisateurs & Droits).\n\nIdentifiants mobile temporaires :\n• Login : ${tel || "(téléphone)"}\n• Mot de passe : ${tel || "livreur"}\n\nLe compte est EN ATTENTE — validez-le dans « Demandes de comptes » pour l'activer.`)
     }
     setShowLivreurForm(false)
     refresh()
@@ -571,11 +582,13 @@ export default function BODispatch({ user }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: "fl_livreurs", deletes: [l.id] }),
     }).catch(e => console.error("[BODispatch] livreur delete sync error:", e))
-    // Retire le compte utilisateur lié (rôle livreur, même nom) s'il existe
+    // Retire le compte utilisateur lié (via Livreur.userId, ou à défaut par
+    // nom pour les anciens profils sans lien explicite) s'il existe.
     try {
       const fullName = `${l.prenom} ${l.nom}`.trim().toLowerCase()
-      const linkedUser = store.getUsers().find(u => u.role === "livreur" && (u.name ?? "").trim().toLowerCase() === fullName)
-      const users = store.getUsers().filter(u => !(u.role === "livreur" && (u.name ?? "").trim().toLowerCase() === fullName))
+      const isLinked = (u: User) => l.userId ? u.id === l.userId : ((u.role === "livreur" || u.role === "conducteur") && (u.name ?? "").trim().toLowerCase() === fullName)
+      const linkedUser = store.getUsers().find(isLinked)
+      const users = store.getUsers().filter(u => !isLinked(u))
       store.saveUsers(users)
       if (linkedUser) {
         fetch("/api/sync-write", {
@@ -619,7 +632,7 @@ export default function BODispatch({ user }: Props) {
               <h2 className="font-bold text-foreground">Dispatch / التوزيع</h2>
               <p className="text-sm text-muted-foreground">{availableCommandes.length} commande(s) validée(s) disponible(s)</p>
             </div>
-            <button onClick={() => { setEditingTripId(null); setSelectedLivreurId(""); setVehicule(""); setSelectedCmds([]); setModeConduite("solo"); setCoLivreurId(""); setShowTripForm(true) }}
+            <button onClick={() => { setEditingTripId(null); setSelectedLivreurId(""); setSelectedConducteurId(""); setVehicule(""); setSelectedCmds([]); setShowTripForm(true) }}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
               style={{ background: "oklch(0.38 0.2 260)" }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -634,66 +647,41 @@ export default function BODispatch({ user }: Props) {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-foreground">Conducteur (livreur) *</label>
-                  <select value={selectedLivreurId} onChange={e => handleSelectLivreur(e.target.value)}
+                  <label className="text-xs font-semibold text-foreground">Conducteur (véhicule) *</label>
+                  <select value={selectedConducteurId} onChange={e => handleSelectConducteur(e.target.value)}
                     className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                     <option value="">-- Choisir un conducteur --</option>
-                    {conducteurCandidates.map(u => {
-                      const prof = findLivreurProfile(u.id)
-                      return (
-                        <option key={u.id} value={u.id}>
-                          {u.name} ({u.role === "conducteur" ? "Conducteur" : "Livreur"}{prof?.matricule ? ` — ${prof.matricule}` : ""})
-                        </option>
-                      )
-                    })}
+                    {conducteurRoster.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.prenom} {l.nom}{l.matricule ? ` — ${l.matricule}` : ""}
+                      </option>
+                    ))}
                   </select>
-                  <p className="text-[11px] text-muted-foreground">Le conducteur est toujours le livreur qui possède un compte — seul lui se connecte à l&apos;application. Liste tirée des comptes Utilisateurs (rôle conducteur/livreur).</p>
+                  <p className="text-[11px] text-muted-foreground">Celui qui conduit le véhicule (matricule + données) — liste tirée du roster Livreurs. N&apos;a besoin d&apos;un accès à l&apos;application que si le back-office le lui accorde explicitement.</p>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-foreground">Véhicule / matricule</label>
-                  <input type="text" value={vehicule} onChange={e => setVehicule(e.target.value)}
-                    placeholder="Ex: A-12345 MA"
-                    className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                  <label className="text-xs font-semibold text-foreground">Livreur (compte ERP) *</label>
+                  <select value={selectedLivreurId} onChange={e => setSelectedLivreurId(e.target.value)}
+                    className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="">-- Choisir un livreur --</option>
+                    {livreurAccountCandidates.map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.role === "conducteur" ? "Conducteur" : "Livreur"})</option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-muted-foreground">Celui qui a le compte ERP, sort avec le conducteur et utilise l&apos;application (confirmation livraison, GPS, KM…). Toujours obligatoire.</p>
                 </div>
               </div>
 
-              {/* Solo ou avec un second livreur (aide/co-équipier — jamais de compte propre) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-foreground">Type de conduite</label>
-                  <div className="flex gap-1 p-1 rounded-xl bg-muted/50 w-fit">
-                    <button type="button"
-                      onClick={() => { setModeConduite("solo"); setCoLivreurId("") }}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${modeConduite === "solo" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>
-                      Solo
-                    </button>
-                    <button type="button"
-                      onClick={() => setModeConduite("avec_livreur")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${modeConduite === "avec_livreur" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>
-                      Avec livreur
-                    </button>
-                  </div>
-                </div>
-                {modeConduite === "avec_livreur" && (
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-foreground">Second livreur *</label>
-                    <select value={coLivreurId} onChange={e => setCoLivreurId(e.target.value)}
-                      className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                      <option value="">-- Choisir un second livreur --</option>
-                      {allDriverUsers.filter(u => u.id !== selectedLivreurId).map(u => (
-                        <option key={u.id} value={u.id}>{u.name}{!u.actif ? " (sans accès app)" : ""}</option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-muted-foreground">Aide/co-équipier — même liste de comptes que le conducteur, mais n&apos;a besoin d&apos;un accès à l&apos;application que si le back-office le lui accorde explicitement (Utilisateurs → compte actif).</p>
-                  </div>
-                )}
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-semibold text-foreground">Véhicule / matricule</label>
+                <input type="text" value={vehicule} onChange={e => setVehicule(e.target.value)}
+                  placeholder="Ex: A-12345 MA"
+                  className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
               </div>
 
-              {/* Livreur info + capacite bar — best-effort : seulement si ce
-                  conducteur a un profil flotte (Livreur.userId) lié, sinon
-                  rien à afficher (pas bloquant, pas d'erreur). */}
-              {selectedLivreurId && (() => {
-                const liv = findLivreurProfile(selectedLivreurId)
+              {/* Info conducteur + capacite bar */}
+              {selectedConducteurId && (() => {
+                const liv = livreurs.find(l => l.id === selectedConducteurId)
                 if (!liv) return null
                 // Calculate volume already selected
                 const selCmds = commandes.filter(c => selectedCmds.includes(c.id))
@@ -829,7 +817,7 @@ export default function BODispatch({ user }: Props) {
                     Annuler
                   </button>
                   <button onClick={handleCreateTrip}
-                    disabled={creatingTrip || !selectedLivreurId || selectedCmds.length === 0 || (modeConduite === "avec_livreur" && !coLivreurId)}
+                    disabled={creatingTrip || !selectedLivreurId || !selectedConducteurId || selectedCmds.length === 0}
                     className="px-5 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
                     style={{ background: "oklch(0.38 0.2 260)" }}>
                     {editingTripId ? `Enregistrer (${selectedCmds.length})` : `Créer (${selectedCmds.length})`}
@@ -852,9 +840,9 @@ export default function BODispatch({ user }: Props) {
               <div className="p-4 flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-bold text-foreground">{trip.livreurNom}</span>
-                    {trip.modeConduite === "avec_livreur" && trip.coLivreurNom && (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold">+ {trip.coLivreurNom}</span>
+                    <span className="font-bold text-foreground">👤 {trip.livreurNom}</span>
+                    {trip.conducteurNom && (
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold">🚚 {trip.conducteurNom}</span>
                     )}
                     {trip.vehicule && <span className="px-2 py-0.5 bg-muted rounded-lg text-xs text-muted-foreground">{trip.vehicule}</span>}
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${tripStatusColor[trip.statut] || "bg-gray-100 text-gray-800"}`}>{trip.statut}</span>
@@ -986,14 +974,14 @@ export default function BODispatch({ user }: Props) {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="font-bold text-foreground">Gestion des Livreurs / إدارة السائقين</h2>
-              <p className="text-sm text-muted-foreground">{livreurs.length} livreur(s) · {livreurs.filter(l => l.actif).length} actifs</p>
+              <h2 className="font-bold text-foreground">Gestion des Conducteurs / إدارة السائقين</h2>
+              <p className="text-sm text-muted-foreground">{livreurs.length} conducteur(s) · {livreurs.filter(l => l.actif).length} actifs — véhicule &amp; matricule ; accès application optionnel</p>
             </div>
             <button onClick={openNewLivreur}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
               style={{ background: "oklch(0.38 0.2 260)" }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Nouveau livreur
+              Nouveau conducteur
             </button>
           </div>
 
@@ -1002,7 +990,7 @@ export default function BODispatch({ user }: Props) {
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={e => e.target === e.currentTarget && setShowLivreurForm(false)}>
               <div className="bg-card rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                  <h3 className="font-bold text-foreground">{editingLivreur ? "Modifier le livreur" : "Nouveau livreur"}</h3>
+                  <h3 className="font-bold text-foreground">{editingLivreur ? "Modifier le conducteur" : "Nouveau conducteur"}</h3>
                   <button onClick={() => setShowLivreurForm(false)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
@@ -1020,18 +1008,28 @@ export default function BODispatch({ user }: Props) {
                   </div>
 
                   {!editingLivreur && (
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-semibold text-foreground">Rôle du compte app créé avec ce profil</label>
-                      <div className="flex gap-2">
-                        {(["conducteur", "livreur"] as const).map(r => (
-                          <button key={r} type="button" onClick={() => setLivreurAccountRole(r)}
-                            className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${livreurAccountRole === r ? "text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}
-                            style={livreurAccountRole === r ? { background: "oklch(0.38 0.2 260)" } : {}}>
-                            {r === "conducteur" ? "Conducteur" : "Livreur"}
-                          </button>
-                        ))}
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">Détermine le rôle du compte Utilisateur créé (Utilisateurs &amp; Droits) — accès mobile identique, juste l&apos;étiquette du compte.</p>
+                    <div className="rounded-xl border border-border p-3 flex flex-col gap-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={createAccountForRoster}
+                          onChange={e => setCreateAccountForRoster(e.target.checked)}
+                          className="w-4 h-4 rounded accent-primary" />
+                        <span className="text-sm text-foreground">Créer aussi un compte ERP (accès à l&apos;application)</span>
+                      </label>
+                      <p className="text-[11px] text-muted-foreground">Un conducteur ne conduit que le véhicule — par défaut, pas besoin d&apos;accès à l&apos;application. Ne cocher que si le back-office accorde exceptionnellement un accès (ex: ce conducteur joue aussi le rôle livreur).</p>
+                      {createAccountForRoster && (
+                        <div className="flex flex-col gap-1 pt-1">
+                          <label className="text-xs font-semibold text-foreground">Rôle du compte créé</label>
+                          <div className="flex gap-2">
+                            {(["conducteur", "livreur"] as const).map(r => (
+                              <button key={r} type="button" onClick={() => setLivreurAccountRole(r)}
+                                className={`flex-1 py-2 rounded-xl text-sm font-semibold border transition-all ${livreurAccountRole === r ? "text-white border-transparent" : "border-border text-muted-foreground hover:bg-muted"}`}
+                                style={livreurAccountRole === r ? { background: "oklch(0.38 0.2 260)" } : {}}>
+                                {r === "conducteur" ? "Conducteur" : "Livreur"}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 

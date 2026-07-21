@@ -554,13 +554,14 @@ export interface Livreur {
   consommationL100?: number        // consommation moyenne L/100km (estimation)
   notes?: string
   actif: boolean
-  // Compte ERP du livreur : créé en attente, activé après validation admin (Demandes de comptes)
+  // Ce profil roster = le CONDUCTEUR (véhicule + matricule + données). Il n'a
+  // pas besoin d'un compte ERP par défaut (il ne fait que conduire) — sauf
+  // exception accordée par le back-office (ex: il joue aussi le rôle livreur).
+  // Compte ERP du conducteur (optionnel) : créé en attente, activé après validation admin (Demandes de comptes)
   compteStatut?: "en_attente" | "valide" | "rejete"
-  // Lien vers le compte utilisateur (User) associé — permet à la création de
-  // trip (BODispatch) de retrouver les infos véhicule/capacité de CE profil
-  // roster à partir du conducteur choisi dans la liste des comptes users
-  // (conducteur/livreur), qui est désormais la source de vérité pour "qui
-  // peut être affecté à un trip" — pas ce roster.
+  // Lien optionnel vers le compte utilisateur (User) de CE conducteur, s'il en
+  // a un (exception back-office). Sert à pré-suggérer ce même compte comme
+  // "livreur" du trip quand on choisit ce conducteur dans BODispatch.
   userId?: string
 }
 
@@ -698,13 +699,16 @@ export interface Trip {
   id: string           // auto-number: T001, T002…
   numero?: string      // display number e.g. "T001"
   date: string
-  livreurId: string    // conducteur — toujours le livreur actuel (compte appli, seul type pouvant se connecter)
+  // Livreur = la personne qui possède le compte ERP, embarque avec le
+  // conducteur et utilise l'application (confirmation livraison, GPS, KM…).
+  // Toujours obligatoire — c'est le seul type de compte qui se connecte.
+  livreurId: string
   livreurNom: string
-  // Solo (un seul conducteur) ou avec un second livreur (aide/co-équipier —
-  // n'a jamais son propre compte appli, seul le conducteur principal se connecte).
-  modeConduite?: "solo" | "avec_livreur"   // défaut: "solo" si absent (trips existants)
-  coLivreurId?: string
-  coLivreurNom?: string
+  // Conducteur = celui qui conduit le véhicule — profil flotte (roster
+  // Livreur : matricule, marque, capacité…), pas forcément un compte ERP.
+  // Un trip a toujours un conducteur ET un livreur (jamais de mode solo).
+  conducteurId?: string
+  conducteurNom?: string
   vehicule: string
   commandeIds: string[]
   statut: "planifié" | "en_cours" | "terminé"

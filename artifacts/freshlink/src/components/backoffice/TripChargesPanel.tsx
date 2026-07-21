@@ -83,7 +83,8 @@ interface TripAnalyse {
 
 function analyse(trip: Trip, cfg: CoutTrajetConfig): TripAnalyse {
   const livreurs = store.getLivreurs()
-  const liv = livreurs.find(l => l.id === trip.livreurId || `${l.nom} ${l.prenom ?? ""}`.trim() === trip.livreurNom || l.nom === trip.livreurNom)
+  const liv = livreurs.find(l => l.id === trip.conducteurId)
+    ?? livreurs.find(l => l.id === trip.livreurId || `${l.nom} ${l.prenom ?? ""}`.trim() === trip.livreurNom || l.nom === trip.livreurNom)
   const conso = (liv?.consommationL100 && liv.consommationL100 > 0) ? liv.consommationL100 : cfg.consoDefautL100
 
   // Points de l'itinéraire (commandes assignées) triés par ordre
