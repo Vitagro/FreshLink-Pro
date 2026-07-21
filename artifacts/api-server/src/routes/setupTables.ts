@@ -30,6 +30,7 @@ const EXPECTED_TABLES = [
   "fl_notices",
   "fl_reglements_cv",
   "fl_group_names",
+  "fl_mobile_tabs_visibility",
 ];
 
 function projectRef(): string {

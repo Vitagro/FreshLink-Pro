@@ -1013,13 +1013,32 @@ export interface LignePreparation {
   // what was actually picked (validated on tablet)
   qtePrepared: number
   valide: boolean
-  // Caisses utilisées pour préparer cet article — déclarées par le
-  // préparateur/magasinier à la validation de la ligne. Purement informatif
-  // à ce stade (pas de répartition automatique par client, une caisse
-  // physique n'étant pas divisible) : le contrôle préparation (ctrl_prep,
-  // MobileControlPrep) reste la source de vérité pour les caisses par BL.
+  // Caisses utilisées pour préparer cet article — calculées automatiquement
+  // (cf. computeCaissesAuto) à partir de la quantité, rectifiables manuellement
+  // au niveau article (ce total) ET/OU au niveau client (caissesParClient,
+  // détail par client — recalculé en somme sur ce total à chaque rectification
+  // par client). Le contrôle préparation (ctrl_prep, MobileControlPrep) reste
+  // la source de vérité pour les caisses effectivement chargées par BL.
   nbCaisseGros?: number
   nbCaisseDemi?: number
+  // Détail des caisses par client (keyed by clientId) — permet de rectifier
+  // la répartition auto-calculée client par client, pas seulement le total.
+  caissesParClient?: Record<string, { gros: number; demi: number }>
+}
+
+// Capacité standard (kg) d'une caisse gros / demi-caisse — cf.
+// DEFAULT_CONTENANTS_TARE (ct1 "30kg", ct2 "15kg") — sert à calculer
+// automatiquement le nombre de caisses nécessaires pour une quantité donnée,
+// sur les Bons de Préparation numériques (rectifiable ensuite manuellement).
+export const CAISSE_GROS_CAPACITE_KG = 30
+export const CAISSE_DEMI_CAPACITE_KG = 15
+export function computeCaissesAuto(qteKg: number, unite?: string): { gros: number; demi: number } {
+  if (unite && unite !== "kg") return { gros: 0, demi: 0 }
+  if (!qteKg || qteKg <= 0) return { gros: 0, demi: 0 }
+  const gros = Math.floor(qteKg / CAISSE_GROS_CAPACITE_KG)
+  const reste = qteKg - gros * CAISSE_GROS_CAPACITE_KG
+  const demi = reste > 0 ? Math.ceil(reste / CAISSE_DEMI_CAPACITE_KG) : 0
+  return { gros, demi }
 }
 
 export type SequenceModePrep = "horaire" | "itineraire"
@@ -2610,6 +2629,28 @@ export function computeEchelonAuto(clientId: string, commandes: Commande[], eche
   return undefined
 }
 
+// ── Visibilité des onglets mobile (contrôle back-office) ──────────────────────
+// Registre statique des écrans mobile pilotables et de leurs onglets — sert à
+// la fois à MobileAchat (filtre le rendu de sa barre d'onglets) et à l'écran
+// back-office (Paramètres → Onglets Mobile) qui génère ses cases à cocher à
+// partir de cette liste, sans dupliquer les libellés à deux endroits.
+export const MOBILE_TABS_REGISTRY: { id: string; label: string; role: UserRole; tabs: { id: string; label: string }[] }[] = [
+  {
+    id: "achat", label: "Achat (Acheteur)", role: "acheteur",
+    tabs: [
+      { id: "besoin", label: "DA — Demande d'Achat" },
+      { id: "bon", label: "Bon d'achat" },
+      { id: "po_push", label: "PO Auto (poussés)" },
+      { id: "fournisseurs", label: "Fournisseurs" },
+      { id: "charges", label: "Charges" },
+      { id: "camera", label: "Photo IA Qualité" },
+      { id: "comparatif", label: "Comparatif Fournisseurs" },
+      { id: "mes_achats", label: "Historique achats" },
+      { id: "avis", label: "Avis" },
+    ],
+  },
+]
+
 // ============================================================
 // STORE API
 // ============================================================
@@ -3093,6 +3134,26 @@ export const store = {
     if (nom.trim()) all[groupId] = nom.trim(); else delete all[groupId]
     setLS("fl_group_names", all)
   },
+
+  // --- Visibilité des onglets mobile (par rôle) — cf. MOBILE_TABS_REGISTRY ---
+  // Sparse : seuls les onglets explicitement MASQUÉS sont stockés (false).
+  // Un onglet absent de la config = visible par défaut (comportement actuel
+  // inchangé tant que l'admin n'a rien désactivé).
+  getMobileTabsVisibility: (): Record<string, Record<string, Record<string, boolean>>> =>
+    getLS("fl_mobile_tabs_visibility", {}),
+  setMobileTabVisible: (role: string, screenId: string, tabId: string, visible: boolean) => {
+    const all = store.getMobileTabsVisibility()
+    if (visible) {
+      delete all[role]?.[screenId]?.[tabId]
+    } else {
+      all[role] = all[role] ?? {}
+      all[role][screenId] = all[role][screenId] ?? {}
+      all[role][screenId][tabId] = false
+    }
+    setLS("fl_mobile_tabs_visibility", all)
+  },
+  isMobileTabVisible: (role: string, screenId: string, tabId: string): boolean =>
+    store.getMobileTabsVisibility()[role]?.[screenId]?.[tabId] !== false,
 
   // --- Reserve caisse historique ---
   getReserveSnaps: (): ReserveCaisseSnap[] => getLS("fl_reserve_snaps", []),

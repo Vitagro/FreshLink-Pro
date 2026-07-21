@@ -46,7 +46,7 @@ const TABLE_NAME_OVERRIDE: Record<string, string> = { fl_caisse: "fl_caisse_entr
 // été saisie (bug critique, source de la "confusion de logos").
 const CONFIG_KEYS = new Set<string>([
   "fl_process_config", "fl_workflow_config", "fl_alert_config", "fl_email_config", "fl_fiscal_config",
-  "fl_company", "fl_loyalty_config", "fl_group_names",
+  "fl_company", "fl_loyalty_config", "fl_group_names", "fl_mobile_tabs_visibility",
 ])
 
 type Row = { id: string; [k: string]: unknown }

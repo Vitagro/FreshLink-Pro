@@ -1211,7 +1211,7 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-lg bg-white rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-green-50 shrink-0">
           <p className="text-sm font-bold text-slate-800">{isEdit ? "Modifier fournisseur" : "Nouveau fournisseur"}</p>

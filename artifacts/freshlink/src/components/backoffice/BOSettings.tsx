@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
-import { store, passwordMatches, type EmailConfig, type MotifRetour, type CompanyConfig, type CompanyContacts, type WorkflowConfig, type WorkflowStep, type ContenantTare, DEFAULT_WORKFLOW_STEPS, type ProcessConfig, DEFAULT_PROCESS_CONFIG, type TransportCompany, ROLE_LABELS, type UserRole } from "@/lib/store"
+import { store, passwordMatches, type EmailConfig, type MotifRetour, type CompanyConfig, type CompanyContacts, type WorkflowConfig, type WorkflowStep, type ContenantTare, DEFAULT_WORKFLOW_STEPS, type ProcessConfig, DEFAULT_PROCESS_CONFIG, type TransportCompany, ROLE_LABELS, type UserRole, MOBILE_TABS_REGISTRY } from "@/lib/store"
 import { useRealtimeSync } from "@/lib/supabase/useRealtimeSync"
 // EmailJS retiré — l'envoi d'email passe par Resend (serveur, /api/send-email)
 import { createClient } from "@/lib/supabase/client"
@@ -120,6 +120,43 @@ function MonCompteContent({ user, monNom, setMonNom, monPwd, setMonPwd, monPwdCo
         className="self-start px-6 py-2.5 rounded-xl bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition-colors">
         Enregistrer les modifications
       </button>
+    </div>
+  )
+}
+
+// Affiche/masque des onglets mobile par rôle — cf. store.ts MOBILE_TABS_REGISTRY.
+// Un onglet décoché disparaît de la barre d'onglets du rôle concerné (mobile) ;
+// si l'utilisateur était dessus au moment du changement, l'app le bascule
+// automatiquement sur le premier onglet encore visible (cf. MobileAchat.tsx).
+function MobileTabsVisibilityContent() {
+  const [, forceRerender] = useState(0)
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <h3 className="font-semibold text-sm text-foreground">Onglets Mobile / علامات تبويب الجوال</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">Choisissez les onglets visibles sur l&apos;application mobile, par rôle. Un onglet décoché est immédiatement masqué pour tous les comptes de ce rôle.</p>
+      </div>
+      {MOBILE_TABS_REGISTRY.map(screen => (
+        <div key={screen.id} className="bg-card rounded-2xl border border-border p-6 flex flex-col gap-3">
+          <div>
+            <p className="font-semibold text-sm text-foreground">{screen.label}</p>
+            <p className="text-xs text-muted-foreground">Rôle concerné : {ROLE_LABELS[screen.role] ?? screen.role}</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {screen.tabs.map(t => {
+              const visible = store.isMobileTabVisible(screen.role, screen.id, t.id)
+              return (
+                <label key={t.id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border cursor-pointer hover:bg-muted/50">
+                  <input type="checkbox" checked={visible}
+                    onChange={e => { store.setMobileTabVisible(screen.role, screen.id, t.id, e.target.checked); forceRerender(n => n + 1) }}
+                    className="w-4 h-4 rounded accent-primary shrink-0" />
+                  <span className="text-sm text-foreground">{t.label}</span>
+                </label>
+              )
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -274,7 +311,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
   const [motifs, setMotifs] = useState<MotifRetour[]>([])
   const [newMotif, setNewMotif] = useState({ label: "", labelAr: "" })
   const [saved, setSaved] = useState("")
-  const [tab, setTab] = useState<"entreprise" | "contacts" | "process" | "workflow" | "emails" | "motifs" | "contenants" | "dataguard" | "ai_config" | "alertes" | "transporteurs" | "moncompte" | "systeme" | "siteweb">("entreprise")
+  const [tab, setTab] = useState<"entreprise" | "contacts" | "process" | "workflow" | "emails" | "motifs" | "contenants" | "dataguard" | "ai_config" | "alertes" | "transporteurs" | "moncompte" | "systeme" | "siteweb" | "mobile_tabs">("entreprise")
   const [restartMsg, setRestartMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [restartLoading, setRestartLoading] = useState(false)
 
@@ -756,6 +793,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
     { id: "alertes" as const,     label: "Alertes Email",             labelAr: "تنبيهات البريد" },
     // Transporteurs : géré dans Dispatch & Logistique → onglet Transporteurs (doublon retiré d'ici)
     { id: "siteweb" as const,       label: "🌐 Site Web",               labelAr: "إعدادات الموقع" },
+    { id: "mobile_tabs" as const,   label: "📱 Onglets Mobile",         labelAr: "علامات تبويب الجوال" },
     ...(user.role === "super_super_admin" ? [{ id: "systeme" as const, label: "⚡ Système", labelAr: "النظام" }] : []),
   ]
 
@@ -2758,6 +2796,11 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
       {/* ══ MON COMPTE ════════════════════════════════════════════════════════ */}
       {tab === "moncompte" && (
         <MonCompteContent user={user} monNom={monNom} setMonNom={setMonNom} monPwd={monPwd} setMonPwd={setMonPwd} monPwdConfirm={monPwdConfirm} setMonPwdConfirm={setMonPwdConfirm} monCompteMsg={monCompteMsg} setMonCompteMsg={setMonCompteMsg} />
+      )}
+
+      {/* ══ ONGLETS MOBILE — afficher/masquer des onglets par rôle ══════════════ */}
+      {tab === "mobile_tabs" && (
+        <MobileTabsVisibilityContent />
       )}
 
       {/* ══ SYSTÈME — super_super_admin only ══════════════════════════════════ */}

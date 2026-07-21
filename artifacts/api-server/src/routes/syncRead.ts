@@ -31,6 +31,7 @@ const ALLOWED_TABLES = new Set([
   "fl_caisses_etrangeres",
   "fl_reglements_cv",
   "fl_group_names",
+  "fl_mobile_tabs_visibility",
 ]);
 
 router.get("/", async (req: Request, res: Response) => {

@@ -5,7 +5,7 @@ import {
   store, type User, type BonPreparation, type LignePreparation,
   type ModePreparation, type TypePreparation, type FormatPreparation,
   type Trip, type Commande, type Article, type ClientSequenceInfo,
-  type SequenceModePrep,
+  type SequenceModePrep, computeCaissesAuto,
 } from "@/lib/store"
 
 interface Props { user: User; onValidated?: () => void }
@@ -547,8 +547,8 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     if (li < 0) return
     arr[idx].lignes[li].qtePrepared = qty
     arr[idx].lignes[li].valide = true
-    if (nbCaisseGros) arr[idx].lignes[li].nbCaisseGros = nbCaisseGros
-    if (nbCaisseDemi) arr[idx].lignes[li].nbCaisseDemi = nbCaisseDemi
+    if (nbCaisseGros !== undefined) arr[idx].lignes[li].nbCaisseGros = nbCaisseGros
+    if (nbCaisseDemi !== undefined) arr[idx].lignes[li].nbCaisseDemi = nbCaisseDemi
     store.saveBonsPreparation(arr)
     refresh()
     if (viewing?.id === bonId) setViewing({ ...arr[idx] })
@@ -572,6 +572,36 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     ligne.qtesParClient = { ...ligne.qtesParClient, [clientId]: Math.max(0, newQty) }
     ligne.qteCommandee = Math.max(0, ligne.qteCommandee + delta)
     if (ligne.valide) ligne.qtePrepared = Math.max(0, ligne.qtePrepared + delta)
+    store.saveBonsPreparation(arr)
+    refresh()
+    if (viewing?.id === bonId) setViewing({ ...arr[idx] })
+  }
+
+  // Rectification manuelle des caisses (gros/demi) par client (onglet
+  // "Clients") — le total de l'article (nbCaisseGros/nbCaisseDemi) est
+  // recalculé comme la somme sur tous les clients affectés à cette ligne, en
+  // retombant sur le calcul automatique (computeCaissesAuto) pour tout client
+  // pas encore rectifié manuellement.
+  const updateCaisseClient = (bonId: string, articleId: string, clientId: string, type: "gros" | "demi", newVal: number) => {
+    const arr = store.getBonsPreparation()
+    const idx = arr.findIndex(b => b.id === bonId)
+    if (idx < 0) return
+    const li = arr[idx].lignes.findIndex(l => l.articleId === articleId)
+    if (li < 0) return
+    const ligne = arr[idx].lignes[li]
+    const current = ligne.caissesParClient ?? {}
+    const auto = computeCaissesAuto(ligne.qtesParClient[clientId] ?? 0, ligne.unite)
+    const prev = current[clientId] ?? auto
+    ligne.caissesParClient = { ...current, [clientId]: { ...prev, [type]: Math.max(0, newVal) } }
+    // Recalcule le total article = somme sur tous les clients affectés (valeur
+    // rectifiée si présente, sinon calcul auto pour ce client).
+    let totalGros = 0, totalDemi = 0
+    for (const cid of Object.keys(ligne.qtesParClient)) {
+      const v = ligne.caissesParClient[cid] ?? computeCaissesAuto(ligne.qtesParClient[cid] ?? 0, ligne.unite)
+      totalGros += v.gros; totalDemi += v.demi
+    }
+    ligne.nbCaisseGros = totalGros
+    ligne.nbCaisseDemi = totalDemi
     store.saveBonsPreparation(arr)
     refresh()
     if (viewing?.id === bonId) setViewing({ ...arr[idx] })
@@ -686,11 +716,14 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     const [localQtys, setLocalQtys] = useState<Record<string, number>>(
       Object.fromEntries(bon.lignes.map(l => [l.articleId, l.qtePrepared || l.qteCommandee]))
     )
+    // Pré-rempli avec le calcul automatique (computeCaissesAuto) tant que la
+    // ligne n'a jamais été rectifiée manuellement — l'utilisateur voit
+    // directement une suggestion au lieu de 0, et peut la corriger.
     const [localCaisseGros, setLocalCaisseGros] = useState<Record<string, number>>(
-      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseGros ?? 0]))
+      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseGros ?? computeCaissesAuto(l.qteCommandee, l.unite).gros]))
     )
     const [localCaisseDemi, setLocalCaisseDemi] = useState<Record<string, number>>(
-      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseDemi ?? 0]))
+      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseDemi ?? computeCaissesAuto(l.qteCommandee, l.unite).demi]))
     )
     const [activeTab, setActiveTab] = useState<"articles" | "clients">("articles")
     const seqMode = bon.sequenceMode ?? "horaire"
@@ -886,24 +919,53 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
-                  {clientArticles.map(l => (
-                    <div key={l.articleId} className="flex justify-between items-center px-3 py-2 bg-muted/40 rounded-xl">
-                      <span className="text-sm text-foreground font-medium">{l.articleNom}</span>
-                      <div className="flex items-center gap-1.5">
-                        {umLabel(l.articleId, l.qtesParClient[ci.clientId] ?? 0) && (
-                          <span className="text-xs text-primary font-semibold">{umLabel(l.articleId, l.qtesParClient[ci.clientId] ?? 0)}</span>
-                        )}
-                        <input type="number" min={0} step={0.5}
-                          defaultValue={l.qtesParClient[ci.clientId] ?? 0}
+                  {clientArticles.map(l => {
+                    const autoCaisses = computeCaissesAuto(l.qtesParClient[ci.clientId] ?? 0, l.unite)
+                    const caissesClient = l.caissesParClient?.[ci.clientId] ?? autoCaisses
+                    return (
+                    <div key={l.articleId} className="flex flex-col gap-1.5 px-3 py-2 bg-muted/40 rounded-xl">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-foreground font-medium">{l.articleNom}</span>
+                        <div className="flex items-center gap-1.5">
+                          {umLabel(l.articleId, l.qtesParClient[ci.clientId] ?? 0) && (
+                            <span className="text-xs text-primary font-semibold">{umLabel(l.articleId, l.qtesParClient[ci.clientId] ?? 0)}</span>
+                          )}
+                          <input type="number" min={0} step={0.5}
+                            defaultValue={l.qtesParClient[ci.clientId] ?? 0}
+                            onBlur={e => {
+                              const v = parseFloat(e.target.value)
+                              if (!isNaN(v) && v !== (l.qtesParClient[ci.clientId] ?? 0)) updateQteClient(bon.id, l.articleId, ci.clientId, v)
+                            }}
+                            className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-sm text-right font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-primary" />
+                          <span className="text-xs text-muted-foreground">{l.unite}</span>
+                        </div>
+                      </div>
+                      {/* Caisses gros/demi pour ce client — auto-calculées (computeCaissesAuto),
+                          rectifiables individuellement sans repasser par le total article. */}
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-[10px] text-muted-foreground">🧺</span>
+                        <input type="number" min={0} step={1}
+                          key={`gros-${caissesClient.gros}`}
+                          defaultValue={caissesClient.gros}
                           onBlur={e => {
-                            const v = parseFloat(e.target.value)
-                            if (!isNaN(v) && v !== (l.qtesParClient[ci.clientId] ?? 0)) updateQteClient(bon.id, l.articleId, ci.clientId, v)
+                            const v = parseInt(e.target.value)
+                            if (!isNaN(v) && v !== caissesClient.gros) updateCaisseClient(bon.id, l.articleId, ci.clientId, "gros", v)
                           }}
-                          className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-sm text-right font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <span className="text-xs text-muted-foreground">{l.unite}</span>
+                          className="w-14 px-1.5 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">gros</span>
+                        <input type="number" min={0} step={1}
+                          key={`demi-${caissesClient.demi}`}
+                          defaultValue={caissesClient.demi}
+                          onBlur={e => {
+                            const v = parseInt(e.target.value)
+                            if (!isNaN(v) && v !== caissesClient.demi) updateCaisseClient(bon.id, l.articleId, ci.clientId, "demi", v)
+                          }}
+                          className="w-14 px-1.5 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">demi</span>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
                 <div className="mt-2 flex justify-end items-center gap-2">
                   {bon.statut !== "valide" && (

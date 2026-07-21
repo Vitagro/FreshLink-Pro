@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
+import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, FOURNISSEUR_TYPE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { CameraQualiteIA, ComparatifFournisseurs, NouveauFournisseurModal } from "@/components/mobile/AchatIAModules"
@@ -186,7 +186,8 @@ export default function MobileAchat({ user }: Props) {
   const [success, setSuccess] = useState(false)
   const [emailDest, setEmailDest] = useState("")
   // "besoin" is shown first — it displays the Demande d'Achat (DA) based on stock vs orders
-  const [activeTab, setActiveTab] = useState<"bon" | "besoin" | "po_push" | "charges" | "camera" | "comparatif" | "avis" | "mes_achats">("besoin")
+  const [activeTab, setActiveTab] = useState<"bon" | "besoin" | "po_push" | "fournisseurs" | "charges" | "camera" | "comparatif" | "avis" | "mes_achats">("besoin")
+  const [fournisseurSearch, setFournisseurSearch] = useState("")
   const [clients, setClients] = useState<Client[]>([])
   // PA history modal
   const [historyArtId, setHistoryArtId] = useState<string | null>(null)
@@ -720,6 +721,20 @@ export default function MobileAchat({ user }: Props) {
   const urgents = besoinSKU.filter(b => b.lancerDA)
   const totalBesoinEstime = urgents.reduce((s, b) => s + b.totalEstime, 0)
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible.
+  const ACHAT_TAB_IDS = ["besoin", "bon", "po_push", "fournisseurs", "charges", "camera", "comparatif", "avis", "mes_achats"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "achat", id)
+  const visibleTabIds = ACHAT_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(activeTab) && visibleTabIds.length > 0) setActiveTab(visibleTabIds[0])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user.role])
+
+  const filteredFournisseurs = fournisseurs.filter(f =>
+    !fournisseurSearch.trim() || f.nom.toLowerCase().includes(fournisseurSearch.trim().toLowerCase())
+  ).sort((a, b) => a.nom.localeCompare(b.nom, "fr"))
+
   return (
     <div className="p-4 flex flex-col gap-4 font-sans">
       <div>
@@ -729,6 +744,7 @@ export default function MobileAchat({ user }: Props) {
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted overflow-x-auto no-scrollbar">
+        {tabVisible("besoin") && (
         <button
           onClick={() => setActiveTab("besoin")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all relative ${activeTab === "besoin" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -739,12 +755,16 @@ export default function MobileAchat({ user }: Props) {
             </span>
           )}
         </button>
+        )}
+        {tabVisible("bon") && (
         <button
           onClick={() => setActiveTab("bon")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "bon" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Bon d&apos;Achat
         </button>
+        )}
         {/* PO Push tab with badge */}
+        {tabVisible("po_push") && (
         <button
           onClick={() => { setActiveTab("po_push"); refreshPOs() }}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all relative ${activeTab === "po_push" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -756,11 +776,22 @@ export default function MobileAchat({ user }: Props) {
             </span>
           )}
         </button>
+        )}
+        {tabVisible("fournisseurs") && (
+        <button
+          onClick={() => setActiveTab("fournisseurs")}
+          className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "fournisseurs" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          Fournisseurs
+        </button>
+        )}
+        {tabVisible("charges") && (
         <button
           onClick={() => setActiveTab("charges")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "charges" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Charges
         </button>
+        )}
+        {tabVisible("camera") && (
         <button
           onClick={() => setActiveTab("camera")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === "camera" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -770,6 +801,8 @@ export default function MobileAchat({ user }: Props) {
           </svg>
           Qualite IA
         </button>
+        )}
+        {tabVisible("comparatif") && (
         <button
           onClick={() => setActiveTab("comparatif")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${activeTab === "comparatif" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -778,17 +811,100 @@ export default function MobileAchat({ user }: Props) {
           </svg>
           Comparatif
         </button>
+        )}
+        {tabVisible("avis") && (
         <button
           onClick={() => setActiveTab("avis")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all ${activeTab === "avis" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Avis
         </button>
+        )}
+        {tabVisible("mes_achats") && (
         <button
           onClick={() => setActiveTab("mes_achats")}
           className={`flex-1 min-w-max py-2 px-3 rounded-lg text-xs font-bold transition-all relative ${activeTab === "mes_achats" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Mes Achats
         </button>
+        )}
       </div>
+
+      {/* Modal Fournisseur (création/édition + recensement GPS) — hors des
+          onglets pour rester disponible depuis "Bon d'achat", "PO Achat" ET "Fournisseurs" */}
+      {(showNewFournisseur || editingFournisseur) && (
+        <NouveauFournisseurModal
+          articles={articles}
+          fournisseur={editingFournisseur ?? undefined}
+          onClose={() => { setShowNewFournisseur(false); setEditingFournisseur(null) }}
+          onCreated={f => {
+            setFournisseurs(prev => [...prev, f])
+            // Auto-sélectionne le fournisseur créé dans le formulaire d'où le
+            // "+ Nouveau" a été ouvert (Bon d'achat ou PO Achat).
+            if (activeTab === "po_push") setPoDetail(p => ({ ...p, fournisseurId: f.id }))
+            else setFournisseurId(f.id)
+            setShowNewFournisseur(false)
+          }}
+          onUpdated={f => {
+            setFournisseurs(prev => prev.map(x => x.id === f.id ? f : x))
+            setEditingFournisseur(null)
+          }}
+        />
+      )}
+
+      {/* ═══ FOURNISSEURS — création, modification, recensement GPS ═══════════ */}
+      {activeTab === "fournisseurs" && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-2">
+            <input type="text" value={fournisseurSearch} onChange={e => setFournisseurSearch(e.target.value)}
+              placeholder="🔍 Rechercher un fournisseur..."
+              className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+            <button onClick={() => setShowNewFournisseur(true)}
+              className="px-3 py-2.5 rounded-xl bg-primary text-primary-foreground text-xs font-bold whitespace-nowrap">
+              + Nouveau
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">{filteredFournisseurs.length} fournisseur(s)</p>
+          {filteredFournisseurs.length === 0 ? (
+            <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-sm">
+              Aucun fournisseur.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {filteredFournisseurs.map(f => (
+                <div key={f.id} className="bg-card rounded-xl border border-border p-3 flex flex-col gap-1.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-foreground truncate">{f.nom}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {f.type ? FOURNISSEUR_TYPE_LABELS[f.type] : "—"}{f.ville ? ` · ${f.ville}` : ""}
+                      </p>
+                    </div>
+                    <button onClick={() => setEditingFournisseur(f)}
+                      className="text-xs font-bold text-primary hover:underline shrink-0">✏️ Modifier</button>
+                  </div>
+                  {f.telephone && <p className="text-xs text-muted-foreground">📞 {f.telephone}</p>}
+                  {f.specialites?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {f.specialites.slice(0, 4).map(s => (
+                        <span key={s} className="px-2 py-0.5 rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">{s}</span>
+                      ))}
+                      {f.specialites.length > 4 && <span className="text-[10px] text-muted-foreground">+{f.specialites.length - 4}</span>}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    {f.gpsVerifie ? (
+                      <span className="px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-semibold">📍 Position confirmée sur place</span>
+                    ) : f.itineraires?.length > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-semibold">⚠️ Position non confirmée</span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-semibold">Aucune position GPS</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══ PO PUSH — Bons d'achat automatiques a traiter ═══════════════════ */}
       {activeTab === "po_push" && (
@@ -1136,23 +1252,6 @@ export default function MobileAchat({ user }: Props) {
           </div>
         )}
       </div>
-
-      {(showNewFournisseur || editingFournisseur) && (
-        <NouveauFournisseurModal
-          articles={articles}
-          fournisseur={editingFournisseur ?? undefined}
-          onClose={() => { setShowNewFournisseur(false); setEditingFournisseur(null) }}
-          onCreated={f => {
-            setFournisseurs(prev => [...prev, f])
-            setFournisseurId(f.id)
-            setShowNewFournisseur(false)
-          }}
-          onUpdated={f => {
-            setFournisseurs(prev => prev.map(x => x.id === f.id ? f : x))
-            setEditingFournisseur(null)
-          }}
-        />
-      )}
 
       {/* ── Inline Article Selector ─────────────────────────────────────────── */}
       <div className="bg-card rounded-xl border border-border flex flex-col overflow-hidden">
@@ -1806,7 +1905,11 @@ export default function MobileAchat({ user }: Props) {
 
                 {/* Fournisseur */}
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">Fournisseur *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-slate-700">Fournisseur *</label>
+                    <button type="button" onClick={() => setShowNewFournisseur(true)}
+                      className="text-xs font-bold text-green-700 hover:underline">+ Nouveau</button>
+                  </div>
                   <select
                     value={poDetail.fournisseurId}
                     onChange={e => setPoDetail(p => ({ ...p, fournisseurId: e.target.value }))}
@@ -1814,6 +1917,19 @@ export default function MobileAchat({ user }: Props) {
                     <option value="">-- Selectionner un fournisseur --</option>
                     {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
                   </select>
+                  {poDetail.fournisseurId && (() => {
+                    const poFournisseur = fournisseurs.find(f => f.id === poDetail.fournisseurId)
+                    if (!poFournisseur) return null
+                    return (
+                      <div className="flex items-center justify-between mt-1">
+                        {poFournisseur.telephone ? (
+                          <p className="text-xs text-slate-500">Tel: {poFournisseur.telephone}</p>
+                        ) : <span />}
+                        <button type="button" onClick={() => setEditingFournisseur(poFournisseur)}
+                          className="text-xs font-bold text-green-700 hover:underline">✏️ Modifier</button>
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Paiement */}
