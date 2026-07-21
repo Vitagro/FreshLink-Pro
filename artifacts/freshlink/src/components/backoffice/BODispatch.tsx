@@ -156,11 +156,18 @@ export default function BODispatch({ user }: Props) {
   const deleteTransport = (id: string) => { store.deleteTransportCompany(id); refresh() }
 
   // --- TRIPS ---
-  // Toutes les commandes non encore affectees a un trip — pas besoin de stock disponible
-  const existingTripCmds = new Set(trips.flatMap(t => t.commandeIds))
+  const [editingTripId, setEditingTripId] = useState<string | null>(null)
+  // Toutes les commandes non encore affectees a un trip — pas besoin de stock disponible.
+  // En édition, les commandes du trip lui-même doivent rester sélectionnables
+  // (et pré-cochées) même si elles ont déjà basculé en "en_transit" à la
+  // création du trip — sinon elles disparaissent purement et simplement de la
+  // liste (aucune case à décocher pour les retirer du trip en cours d'édition).
+  const editingTrip = trips.find(t => t.id === editingTripId)
+  const editingTripOwnCmds = new Set(editingTrip?.commandeIds ?? [])
+  const existingTripCmds = new Set(trips.filter(t => t.id !== editingTripId).flatMap(t => t.commandeIds))
   const availableCommandes = commandes.filter(c =>
     !existingTripCmds.has(c.id) &&
-    (c.statut === "valide" || c.statut === "en_attente" || c.statut === "en_attente_approbation")
+    (editingTripOwnCmds.has(c.id) || c.statut === "valide" || c.statut === "en_attente" || c.statut === "en_attente_approbation")
   )
   // Ancienneté d'une commande — J-1 (reçue hier pour livraison aujourd'hui)
   // est le cycle normal, PAS un retard. En retard seulement à partir de J-2.
@@ -236,9 +243,48 @@ export default function BODispatch({ user }: Props) {
   // Note: stock guard removed — affectation autorisee meme sans stock disponible
   // Le controleur de chargement vérifie les quantités réelles au départ
 
+  const resetTripForm = () => {
+    setShowTripForm(false)
+    setEditingTripId(null)
+    setSelectedLivreurId(""); setVehicule(""); setSelectedCmds([])
+    setModeConduite("solo"); setCoLivreurId("")
+  }
+
+  // Pré-remplit le formulaire avec les données du trip — uniquement pour un
+  // trip "planifié" (une fois démarré, le chargement physique a peut-être
+  // déjà eu lieu, modifier l'affectation deviendrait incohérent avec le réel).
+  const openEditTrip = (trip: Trip) => {
+    setEditingTripId(trip.id)
+    setSelectedLivreurId(trip.livreurId)
+    setVehicule(trip.vehicule || "")
+    setModeConduite(trip.modeConduite ?? "solo")
+    setCoLivreurId(trip.coLivreurId ?? "")
+    setSelectedCmds(trip.commandeIds)
+    setShowTripForm(true)
+  }
+
+  const [deletingTripId, setDeletingTripId] = useState<string | null>(null)
+  const deleteTrip = (trip: Trip) => {
+    if (!hasPermission(user.role, "creer_trip")) { logAction(user, "creer_trip", "denied", { type: "trip", id: trip.id }); return }
+    if (trip.statut !== "planifié") return
+    if (deletingTripId) return // anti double-clic
+    if (!confirm(`Supprimer le trip de ${trip.livreurNom} ? Les ${trip.commandeIds.length} commande(s) affectée(s) redeviendront disponibles.`)) return
+    logAction(user, "creer_trip", "success", { type: "trip", id: trip.id, label: `suppression — ${trip.livreurNom}` })
+    setDeletingTripId(trip.id)
+    trip.commandeIds.forEach(id => store.updateCommande(id, { statut: "valide" }))
+    store.deleteTrip(trip.id)
+    setDeletingTripId(null)
+    if (editingTripId === trip.id) resetTripForm()
+    refresh()
+  }
+
   const [creatingTrip, setCreatingTrip] = useState(false)
   const handleCreateTrip = () => {
-    if (!hasPermission(user.role, "creer_trip")) { logAction(user, "creer_trip", "denied"); return }
+    // Pas de permission "modifier_trip" distincte dans la matrice — qui peut
+    // créer un trip peut aussi le modifier (même granularité que le reste de
+    // "Logistique & Livraison" : creer_trip/valider_trip, pas plus fin).
+    const perm = "creer_trip"
+    if (!hasPermission(user.role, perm)) { logAction(user, perm, "denied"); return }
     if (!selectedLivreurId || selectedCmds.length === 0) return
     if (modeConduite === "avec_livreur" && !coLivreurId) return
     if (creatingTrip) return // anti double-clic — jamais deux tournées/doubles affectations
@@ -250,7 +296,7 @@ export default function BODispatch({ user }: Props) {
     if (!conducteur) { setCreatingTrip(false); return }
     const livreurProfile = findLivreurProfile(selectedLivreurId)
     const coConducteur = modeConduite === "avec_livreur" ? users.find(u => u.id === coLivreurId) : undefined
-    logAction(user, "creer_trip", "success", { type: "livreur", id: conducteur.id, label: conducteur.name })
+    logAction(user, perm, "success", { type: "livreur", id: conducteur.id, label: conducteur.name })
     const cmds = commandes.filter(c => selectedCmds.includes(c.id))
     const itineraire = cmds
       .filter(c => c.gpsLat && c.gpsLng)
@@ -265,9 +311,7 @@ export default function BODispatch({ user }: Props) {
     const litresEstimeAffectation = consoL100 > 0 ? Math.round((kmEstime / 100) * consoL100 * 10) / 10 : 0
     const coutKmEstime = kmEstime * (Number(emailCfg.tarifKmLivreur) || 0)
     const coutCarbEstime = avecCarb ? litresEstimeAffectation * prixL : 0
-    const trip: Trip = {
-      id: store.genTripNumber(),
-      date: store.today(),
+    const tripFields = {
       livreurId: conducteur.id,
       livreurNom: conducteur.name,
       modeConduite,
@@ -275,17 +319,25 @@ export default function BODispatch({ user }: Props) {
       coLivreurNom: coConducteur?.name,
       vehicule: vehicule || livreurProfile?.matricule || "",
       commandeIds: selectedCmds,
-      statut: "planifié",
       itineraire,
       kmEstime,
       litresEstimeAffectation,
       coutEstime: Math.round(coutKmEstime + coutCarbEstime),
     }
-    store.addTrip(trip)
-    selectedCmds.forEach(id => store.updateCommande(id, { statut: "en_transit" }))
-    setShowTripForm(false)
-    setSelectedLivreurId(""); setVehicule(""); setSelectedCmds([])
-    setModeConduite("solo"); setCoLivreurId("")
+
+    if (editingTripId) {
+      const before = trips.find(t => t.id === editingTripId)
+      store.updateTrip(editingTripId, tripFields)
+      // Commandes retirées du trip → redeviennent disponibles ; nouvelles → affectées.
+      const beforeIds = before?.commandeIds ?? []
+      beforeIds.filter(id => !selectedCmds.includes(id)).forEach(id => store.updateCommande(id, { statut: "valide" }))
+      selectedCmds.filter(id => !beforeIds.includes(id)).forEach(id => store.updateCommande(id, { statut: "en_transit" }))
+    } else {
+      const trip: Trip = { id: store.genTripNumber(), date: store.today(), statut: "planifié", ...tripFields }
+      store.addTrip(trip)
+      selectedCmds.forEach(id => store.updateCommande(id, { statut: "en_transit" }))
+    }
+    resetTripForm()
     setCreatingTrip(false)
     refresh()
   }
@@ -567,7 +619,7 @@ export default function BODispatch({ user }: Props) {
               <h2 className="font-bold text-foreground">Dispatch / التوزيع</h2>
               <p className="text-sm text-muted-foreground">{availableCommandes.length} commande(s) validée(s) disponible(s)</p>
             </div>
-            <button onClick={() => setShowTripForm(true)}
+            <button onClick={() => { setEditingTripId(null); setSelectedLivreurId(""); setVehicule(""); setSelectedCmds([]); setModeConduite("solo"); setCoLivreurId(""); setShowTripForm(true) }}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
               style={{ background: "oklch(0.38 0.2 260)" }}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
@@ -575,10 +627,10 @@ export default function BODispatch({ user }: Props) {
             </button>
           </div>
 
-          {/* Trip creation form */}
+          {/* Trip creation / edit form */}
           {showTripForm && (
             <div className="bg-card rounded-2xl border border-border p-5 flex flex-col gap-4">
-              <h3 className="font-bold text-foreground">Nouveau Trip</h3>
+              <h3 className="font-bold text-foreground">{editingTripId ? "Modifier le Trip" : "Nouveau Trip"}</h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
@@ -772,7 +824,7 @@ export default function BODispatch({ user }: Props) {
                   {selectedCmds.length} commande(s) sélectionnée(s)
                 </p>
                 <div className="flex gap-2">
-                  <button onClick={() => { setShowTripForm(false); setSelectedCmds([]); setFilterZone(""); setFilterPrevendeur("") }}
+                  <button onClick={() => { resetTripForm(); setFilterZone(""); setFilterPrevendeur("") }}
                     className="px-4 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted">
                     Annuler
                   </button>
@@ -780,7 +832,7 @@ export default function BODispatch({ user }: Props) {
                     disabled={creatingTrip || !selectedLivreurId || selectedCmds.length === 0 || (modeConduite === "avec_livreur" && !coLivreurId)}
                     className="px-5 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
                     style={{ background: "oklch(0.38 0.2 260)" }}>
-                    Créer ({selectedCmds.length})
+                    {editingTripId ? `Enregistrer (${selectedCmds.length})` : `Créer (${selectedCmds.length})`}
                   </button>
                 </div>
               </div>
@@ -824,6 +876,18 @@ export default function BODispatch({ user }: Props) {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {trip.statut === "planifié" && (
+                    <>
+                      <button onClick={() => openEditTrip(trip)} title="Modifier ce trip"
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-border text-muted-foreground hover:bg-muted">
+                        Modifier
+                      </button>
+                      <button onClick={() => deleteTrip(trip)} disabled={deletingTripId === trip.id} title="Supprimer ce trip"
+                        className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40">
+                        Supprimer
+                      </button>
+                    </>
+                  )}
                   {trip.statut === "planifié" && (
                     canRunTrip(trip) ? (
                       <button onClick={() => updateTripStatus(trip.id, "en_cours")}

@@ -3442,6 +3442,7 @@ export const store = {
     const idx = trips.findIndex(t => t.id === id)
     if (idx >= 0) { trips[idx] = { ...trips[idx], ...updates }; store.saveTrips(trips) }
   },
+  deleteTrip: (id: string) => { store.saveTrips(store.getTrips().filter(t => t.id !== id)); deleteSynced("fl_trips", [id]) },
 
   // --- Retours ---
   getRetours: (): Retour[] => getLS("fl_retours", []),

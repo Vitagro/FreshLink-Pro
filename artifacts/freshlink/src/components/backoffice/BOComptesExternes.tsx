@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { store, isClientVisible, type User, type Client } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
@@ -294,7 +294,18 @@ export default function BOComptesExternes({ user }: Props) {
   const canEditClient = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "modifier_client")
   const canDelete = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "supprimer_client")
 
+  // Garde anti-course : reload() est ré-appelé automatiquement à chaque
+  // "fl_store_updated" (ex. store.addClient() déclenche un reload AVANT même
+  // que le compte portail lié n'ait fini d'être poussé vers Supabase, en
+  // parallèle du reload explicite lancé en fin de handleAdd une fois tout
+  // publié). Sans ce compteur, rien n'empêche le fetch le plus ANCIEN de
+  // résoudre APRÈS le plus RÉCENT et d'écraser un état à jour avec un état
+  // obsolète — capable de faire "disparaître" temporairement Portail/KPI pour
+  // un compte qui vient d'être créé, selon la latence relative des deux appels.
+  const reloadSeq = useRef(0)
+
   const reload = useCallback(() => {
+    const mySeq = ++reloadSeq.current
     // 1. Données locales (affichage instantané)
     const localClients = store.getClients()
     const localUsers   = store.getUsers()
@@ -340,6 +351,7 @@ export default function BOComptesExternes({ user }: Props) {
             source: "web",
           } as unknown as Client)
         })
+        if (mySeq !== reloadSeq.current) return  // un reload plus récent a déjà démarré, on abandonne
         setClients(Array.from(byId.values()).filter(c => isClientVisible(c, user)))
 
         const uById = new Map<string, User>()
@@ -358,6 +370,7 @@ export default function BOComptesExternes({ user }: Props) {
             password: String(p.password ?? ""),
           } as unknown as User)
         })
+        if (mySeq !== reloadSeq.current) return
         setUsers(Array.from(uById.values()))
       } catch { /* hors ligne → on garde les données locales */ }
     })()
