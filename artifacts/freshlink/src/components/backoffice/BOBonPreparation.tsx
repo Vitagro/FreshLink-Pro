@@ -292,17 +292,20 @@ interface DigitalPrepaViewProps {
   retiringId: string | null
   validatingId: string | null
   onClose: () => void
+  onRefresh: () => void
   onValidateLigne: (bonId: string, articleId: string, qty: number, nbCaisseGros?: number, nbCaisseDemi?: number) => void
   onUpdateQteClient: (bonId: string, articleId: string, clientId: string, newQty: number) => void
   onUpdateCaisseClient: (bonId: string, articleId: string, clientId: string, type: "gros" | "demi", newVal: number) => void
   onUpdatePreparedClient: (bonId: string, articleId: string, clientId: string, preparedQty: number) => void
   onRetirerClient: (bonId: string, clientId: string) => void
   onValidateAll: (bonId: string) => void
+  onValidateAllForClient: (bonId: string, clientId: string) => void
 }
 
 function DigitalPrepaView({
-  bon, articles, retiringId, validatingId, onClose,
+  bon, articles, retiringId, validatingId, onClose, onRefresh,
   onValidateLigne, onUpdateQteClient, onUpdateCaisseClient, onUpdatePreparedClient, onRetirerClient, onValidateAll,
+  onValidateAllForClient,
 }: DigitalPrepaViewProps) {
   const [localQtys, setLocalQtys] = useState<Record<string, number>>(
     Object.fromEntries(bon.lignes.map(l => [l.articleId, l.qtePrepared || l.qteCommandee]))
@@ -351,10 +354,19 @@ function DigitalPrepaView({
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge s={bon.statut} />
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 text-white">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          <button onClick={onRefresh} title="Actualiser"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:bg-white/10">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
+            Actualiser
+          </button>
+          <button onClick={onClose} title="Retour"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white hover:bg-white/10">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            Retour
           </button>
         </div>
       </div>
@@ -402,7 +414,14 @@ function DigitalPrepaView({
               </div>
 
               <div className="flex-1 min-w-0">
-                <p className="font-bold text-foreground text-sm">{ligne.articleNom}</p>
+                <p className="font-bold text-foreground text-sm">
+                  {ligne.articleNom}
+                  {articles.find(a => a.id === ligne.articleId)?.nomAr && (
+                    <span className="block text-xs font-normal text-muted-foreground" dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', Arial, sans-serif" }}>
+                      {articles.find(a => a.id === ligne.articleId)?.nomAr}
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-muted-foreground mb-2">
                   Total commandé : <strong>{ligne.qteCommandee.toFixed(1)} {ligne.unite}</strong>
                   {umLabel(ligne.articleId, ligne.qteCommandee) && (
@@ -538,7 +557,14 @@ function DigitalPrepaView({
                     return (
                     <div key={l.articleId} className="flex flex-col gap-1.5 px-3 py-2 bg-muted/40 rounded-xl">
                       <div className="flex justify-between items-center">
-                        <span className="text-sm text-foreground font-medium">{l.articleNom}</span>
+                        <span className="text-sm text-foreground font-medium">
+                          {l.articleNom}
+                          {articles.find(a => a.id === l.articleId)?.nomAr && (
+                            <span className="block text-xs font-normal text-muted-foreground" dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', Arial, sans-serif" }}>
+                              {articles.find(a => a.id === l.articleId)?.nomAr}
+                            </span>
+                          )}
+                        </span>
                         <div className="flex items-center gap-1.5">
                           {umLabel(l.articleId, ordered) && (
                             <span className="text-xs text-primary font-semibold">{umLabel(l.articleId, ordered)}</span>
@@ -611,6 +637,12 @@ function DigitalPrepaView({
                   <button onClick={() => onRetirerClient(bon.id, ci.clientId)} disabled={retiringId === ci.clientId}
                     className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50">
                     {retiringId === ci.clientId ? "Retrait…" : "Retirer de la préparation"}
+                  </button>
+                )}
+                {bon.statut !== "valide" && clientArticles.length > 0 && (
+                  <button onClick={() => onValidateAllForClient(bon.id, ci.clientId)}
+                    className="text-xs font-bold text-white bg-emerald-600 hover:opacity-90 px-3 py-1.5 rounded-xl">
+                    ✓ Valider tout pour ce client
                   </button>
                 )}
                 {clientArticles.length > 0 && (
@@ -708,6 +740,18 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   }, [])
 
   const refresh = () => setBons(store.getBonsPreparation())
+
+  // Bouton "Actualiser" (DigitalPrepaView) — recharge ce bon depuis le store
+  // (cache local, mis à jour par le sync temps réel) pour refléter tout
+  // changement fait ailleurs (autre appareil/préparateur) pendant que la
+  // fenêtre est ouverte.
+  const refreshViewing = () => {
+    refresh()
+    if (viewing) {
+      const fresh = store.getBonsPreparation().find(b => b.id === viewing.id)
+      if (fresh) setViewing(fresh)
+    }
+  }
 
   // Commandes prêtes à préparer. Inclut "en_attente"/"en_attente_approbation" :
   // la logique de validation de prép gère déjà ces statuts (sinon les commandes
@@ -924,10 +968,21 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     if (idx < 0) return
     const li = arr[idx].lignes.findIndex(l => l.articleId === articleId)
     if (li < 0) return
-    arr[idx].lignes[li].qtePrepared = qty
-    arr[idx].lignes[li].valide = true
-    if (nbCaisseGros !== undefined) arr[idx].lignes[li].nbCaisseGros = nbCaisseGros
-    if (nbCaisseDemi !== undefined) arr[idx].lignes[li].nbCaisseDemi = nbCaisseDemi
+    const ligne = arr[idx].lignes[li]
+    ligne.qtePrepared = qty
+    ligne.valide = true
+    if (nbCaisseGros !== undefined) ligne.nbCaisseGros = nbCaisseGros
+    if (nbCaisseDemi !== undefined) ligne.nbCaisseDemi = nbCaisseDemi
+    // Répercute sur l'onglet "Par Client" — sinon une validation ici (même à
+    // 0, ex: rupture totale) laissait qtesPreparedParClient inchangé et
+    // "Par Client" continuait d'afficher l'article comme entièrement à
+    // préparer, incohérent avec ce qui vient d'être validé. Répartition au
+    // prorata des quantités commandées par client (même logique que la
+    // génération des BL, cf. BODispatch.tsx).
+    const ratio = ligne.qteCommandee > 0 ? qty / ligne.qteCommandee : 0
+    ligne.qtesPreparedParClient = Object.fromEntries(
+      Object.entries(ligne.qtesParClient).map(([cid, q]) => [cid, Math.round(q * ratio * 100) / 100])
+    )
     store.saveBonsPreparation(arr)
     refresh()
     if (viewing?.id === bonId) setViewing({ ...arr[idx] })
@@ -1007,6 +1062,26 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
       .reduce((s, cid) => s + (ligne.qtesPreparedParClient?.[cid] ?? 0), 0)
     ligne.qtePrepared = totalPrepared
     ligne.valide = totalPrepared >= ligne.qteCommandee
+    store.saveBonsPreparation(arr)
+    refresh()
+    if (viewing?.id === bonId) setViewing({ ...arr[idx] })
+  }
+
+  // Validation groupée pour UN client (onglet "Clients") — marque tous ses
+  // articles pas encore entièrement préparés comme prêts en un clic, plutôt
+  // que de cliquer "✓ Valider" ligne par ligne quand tout est effectivement
+  // disponible pour ce client.
+  const validateAllForClient = (bonId: string, clientId: string) => {
+    const arr = store.getBonsPreparation()
+    const idx = arr.findIndex(b => b.id === bonId)
+    if (idx < 0) return
+    arr[idx].lignes = arr[idx].lignes.map(l => {
+      const ordered = l.qtesParClient[clientId] ?? 0
+      if (ordered <= 0) return l
+      const qtesPreparedParClient = { ...(l.qtesPreparedParClient ?? {}), [clientId]: ordered }
+      const totalPrepared = Object.keys(l.qtesParClient).reduce((s, cid) => s + (qtesPreparedParClient[cid] ?? 0), 0)
+      return { ...l, qtesPreparedParClient, qtePrepared: totalPrepared, valide: totalPrepared >= l.qteCommandee }
+    })
     store.saveBonsPreparation(arr)
     refresh()
     if (viewing?.id === bonId) setViewing({ ...arr[idx] })
@@ -1340,12 +1415,14 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
           retiringId={retiringId}
           validatingId={validatingId}
           onClose={() => setViewing(null)}
+          onRefresh={refreshViewing}
           onValidateLigne={validateLigne}
           onUpdateQteClient={updateQteClient}
           onUpdateCaisseClient={updateCaisseClient}
           onUpdatePreparedClient={updatePreparedQteClient}
           onRetirerClient={retirerClientDeLaPrep}
           onValidateAll={validateAll}
+          onValidateAllForClient={validateAllForClient}
         />
       )}
 

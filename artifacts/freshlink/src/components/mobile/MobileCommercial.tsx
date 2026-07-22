@@ -161,6 +161,10 @@ export default function MobileCommercial({ user }: Props) {
   // de place visuelle sur mobile. Le prévendeur peut les réafficher au besoin.
   const [showStockBadges, setShowStockBadges] = useState(false)
   const [articleSort, setArticleSort] = useState<ArticleSort>("tous")
+  // Méthode de sélection des articles — "liste" (case à cocher, historique)
+  // ou "grille" (photos + stepper +/-, sélection plus rapide au tactile).
+  // Partagent la même recherche/tri (articleSearch/articleSort/pickerArticles).
+  const [pickerMode, setPickerMode] = useState<"liste" | "grille">("liste")
 
   // Global article rotation: how many times each article was ordered across ALL commandes
   const globalRotation = useMemo(() => {
@@ -577,6 +581,47 @@ export default function MobileCommercial({ user }: Props) {
           updated[i].quantite = "1"
         }
       }
+      return updated
+    })
+  }
+
+  // Stepper +/- de la méthode "grille photo" — ajoute/incrémente ou
+  // décrémente/retire un article du panier (même état `lignes` que la liste
+  // à cocher, juste une autre façon de le manipuler).
+  const qtyInPanier = (articleId: string): number => {
+    const l = lignes.find(x => x.articleId === articleId)
+    return l ? Number(l.quantite) || 0 : 0
+  }
+  const incArticleQty = (a: Article) => {
+    setLignes(prev => {
+      const idx = prev.findIndex(l => l.articleId === a.id)
+      if (idx >= 0) {
+        const updated = [...prev]
+        updated[idx] = { ...updated[idx], quantite: String((Number(updated[idx].quantite) || 0) + 1) }
+        return updated
+      }
+      const pv = store.computePrixEffectif(a, clients.find(c => c.id === selectedClientId))
+      const newLigne: LigneForm = { articleId: a.id, quantite: "1", prixVente: String(pv), uniteMode: a.um ?? "base" }
+      const emptyIdx = prev.findIndex(l => !l.articleId)
+      if (emptyIdx >= 0) {
+        const updated = [...prev]
+        updated[emptyIdx] = newLigne
+        return updated
+      }
+      return [...prev, newLigne]
+    })
+  }
+  const decArticleQty = (a: Article) => {
+    setLignes(prev => {
+      const idx = prev.findIndex(l => l.articleId === a.id)
+      if (idx < 0) return prev
+      const cur = Number(prev[idx].quantite) || 0
+      if (cur <= 1) {
+        const next = prev.filter((_, i) => i !== idx)
+        return next.length === 0 ? [{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }] : next
+      }
+      const updated = [...prev]
+      updated[idx] = { ...updated[idx], quantite: String(cur - 1) }
       return updated
     })
   }
@@ -1346,6 +1391,20 @@ export default function MobileCommercial({ user }: Props) {
           )}
         </div>
 
+        {/* Méthode de sélection — liste (historique) ou grille photo (stepper +/-) */}
+        <div className="flex gap-2 px-3 py-2 border-b border-border">
+          <button onClick={() => setPickerMode("liste")}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${pickerMode === "liste" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            Liste
+          </button>
+          <button onClick={() => setPickerMode("grille")}
+            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${pickerMode === "grille" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z" /></svg>
+            Grille photo
+          </button>
+        </div>
+
         {/* Search field */}
         <div className="px-3 py-2.5 border-b border-border">
           <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-background">
@@ -1384,6 +1443,7 @@ export default function MobileCommercial({ user }: Props) {
         </div>
 
         {/* Checkbox list */}
+        {pickerMode === "liste" && (
         <div className="max-h-72 overflow-y-auto divide-y divide-border">
           {pickerArticles.length === 0 ? (
             <div className="py-8 flex flex-col items-center gap-2 text-center">
@@ -1447,6 +1507,65 @@ export default function MobileCommercial({ user }: Props) {
             )
           })}
         </div>
+        )}
+
+        {/* Grille photo — stepper +/- au lieu d'une case à cocher, sélection
+            tactile plus rapide (mêmes recherche/tri que la liste ci-dessus). */}
+        {pickerMode === "grille" && (
+        <div className="max-h-[28rem] overflow-y-auto p-3">
+          {pickerArticles.length === 0 ? (
+            <div className="py-8 flex flex-col items-center gap-2 text-center">
+              <p className="text-sm text-muted-foreground">Aucun article trouve</p>
+              <button onClick={() => setArticleSearch("")} className="text-xs text-primary underline">Effacer</button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2.5">
+              {pickerArticles.map(a => {
+                const qty = qtyInPanier(a.id)
+                const pv = store.computePrixEffectif(a, clients.find(c => c.id === selectedClientId))
+                const globalCount = globalRotation[a.id] ?? 0
+                const habitCount = clientHabits[a.id]?.count ?? 0
+                return (
+                  <div key={a.id}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-colors ${qty > 0 ? "border-primary bg-primary/5" : "border-border bg-card"}`}>
+                    <img src={resolveArticlePhoto(a)}
+                      alt={`${a.nom} produit frais article`}
+                      className="w-full aspect-square rounded-lg object-cover border border-border"
+                      onError={e => { e.currentTarget.src = "https://placehold.co/120x120/e2e8f0/64748b?text=Art" }} />
+                    <p className="text-xs font-bold text-foreground text-center truncate w-full mt-0.5">{a.nom}</p>
+                    {a.nomAr && <p className="text-[10px] text-muted-foreground font-arabic text-center truncate w-full" dir="rtl" lang="ar">{a.nomAr}</p>}
+                    <div className="flex items-center gap-1 flex-wrap justify-center">
+                      {showStockBadges && (() => {
+                        const vs = store.getVirtualStock(a.id)
+                        const ok = vs.available > 0
+                        return (
+                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-lg ${ok ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                            {ok ? `${vs.available} ${a.unite}` : "Rupture"}
+                          </span>
+                        )
+                      })()}
+                      {globalCount > 0 && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-blue-100 text-blue-700">{globalCount} cmd</span>}
+                      {habitCount >= 2 && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">{habitCount}x</span>}
+                    </div>
+                    <span className="text-xs font-bold text-primary">{pv} DH</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <button onClick={() => decArticleQty(a)} disabled={qty === 0}
+                        className="w-7 h-7 rounded-full bg-muted text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-transform">
+                        −
+                      </button>
+                      <span className="w-6 text-center text-sm font-black text-foreground">{qty}</span>
+                      <button onClick={() => incArticleQty(a)}
+                        className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold text-base flex items-center justify-center active:scale-95 transition-transform">
+                        +
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+        )}
       </div>
 
       {/* ARTICLES lines ──────────────────────────────────────────────────── */}

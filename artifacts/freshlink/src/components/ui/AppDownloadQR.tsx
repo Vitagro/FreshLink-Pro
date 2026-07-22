@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react"
 // depuis le back-office desktop pour équiper rapidement un nouvel utilisateur.
 // Génère le QR côté client (qrcode-generator via CDN, aucune donnée envoyée à
 // un tiers) plutôt que d'ajouter une dépendance npm pour un seul composant.
-const APK_URL = "https://github.com/JawadVita/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk"
+const APK_URL = "https://github.com/Vitagro/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk"
 
 declare global {
   interface Window {
