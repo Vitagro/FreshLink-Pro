@@ -1117,7 +1117,7 @@ interface NouveauFournisseurModalProps {
   onUpdated?: (f: Fournisseur) => void
 }
 
-type NFStep = "type" | "form" | "confirm"
+type NFStep = "type" | "form"
 type SpecialiteMode = "famille" | "article"
 
 const FOURNISSEUR_TYPES = Object.entries(FOURNISSEUR_TYPE_LABELS) as [FournisseurType, string][]
@@ -1157,28 +1157,26 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
     )
   }, [])
 
-  const goToConfirm = () => {
-    if (!nom.trim()) return
-    setStep("confirm")
-    captureGPS()
-  }
+  // Capture automatique dès l'ouverture du formulaire — plus besoin de
+  // demander "Êtes-vous chez ce fournisseur ?" : la position est prise en
+  // tâche de fond pendant la saisie, prête au moment d'enregistrer.
+  useEffect(() => { captureGPS() }, [captureGPS])
 
-  const finalize = async (presentSurPlace: boolean) => {
+  const finalize = async () => {
+    if (!nom.trim()) return
     setSaving(true)
 
     if (isEdit && fournisseur) {
       // Édition — on garde l'historique d'itinéraires existant ; si un nouveau
-      // point GPS a été capté sur place, on l'AJOUTE (ne remplace jamais tout
-      // l'historique, contrairement à la création où la liste est vide au départ).
-      const nouveauPoint = presentSurPlace && gps
-        ? [{ nom: nom.trim() || fournisseur.nom, lat: gps.lat, lng: gps.lng }]
-        : []
+      // point GPS a été capté automatiquement, on l'AJOUTE (ne remplace jamais
+      // tout l'historique, contrairement à la création où la liste est vide au départ).
+      const nouveauPoint = gps ? [{ nom: nom.trim() || fournisseur.nom, lat: gps.lat, lng: gps.lng }] : []
       const updates: Partial<Fournisseur> = {
         nom: nom.trim(), contact: contact.trim(), telephone: telephone.trim(),
         ville: ville.trim() || undefined, type: type ?? fournisseur.type, specialites,
         notes: notes.trim() || undefined,
         itineraires: [...(fournisseur.itineraires ?? []), ...nouveauPoint],
-        gpsVerifie: fournisseur.gpsVerifie || (presentSurPlace && !!gps),
+        gpsVerifie: fournisseur.gpsVerifie || !!gps,
       }
       store.updateFournisseur(fournisseur.id, updates)
       const merged = { ...fournisseur, ...updates }
@@ -1195,11 +1193,9 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
       id: store.genId(),
       nom: nom.trim(), contact: contact.trim(), telephone: telephone.trim(), email: "",
       ville: ville.trim() || undefined, type: type ?? "autre", specialites,
-      notes: presentSurPlace
-        ? (notes.trim() || undefined)
-        : ["⚠️ Position GPS non confirmée sur place au moment de la création — données à vérifier.", notes.trim()].filter(Boolean).join("\n"),
+      notes: notes.trim() || undefined,
       itineraires: gps ? [{ nom: nom.trim() || "Point de création", lat: gps.lat, lng: gps.lng }] : [],
-      gpsVerifie: presentSurPlace && !!gps,
+      gpsVerifie: !!gps,
     }
     store.addFournisseur(created)
     try {
@@ -1318,58 +1314,38 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
                   className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
                   placeholder="Produits disponibles, horaires, conditions..." />
               </div>
-              <button onClick={goToConfirm} disabled={!nom.trim()}
-                className="mt-2 py-3 rounded-xl bg-green-600 text-white text-sm font-bold disabled:opacity-40">
-                Continuer
-              </button>
-            </>
-          )}
 
-          {step === "confirm" && (
-            <>
-              <div className="flex flex-col items-center gap-2 py-2">
+              {/* Position GPS — capturée automatiquement en tâche de fond dès
+                  l'ouverture du formulaire, aucune confirmation manuelle requise. */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
                 {gpsStatus === "loading" && (
                   <>
-                    <span className="w-6 h-6 border-2 border-green-500/40 border-t-green-600 rounded-full animate-spin" />
-                    <p className="text-xs text-slate-500">Localisation en cours...</p>
+                    <span className="w-4 h-4 border-2 border-green-500/40 border-t-green-600 rounded-full animate-spin shrink-0" />
+                    <p className="text-xs text-slate-500">Localisation automatique en cours...</p>
                   </>
                 )}
                 {gpsStatus === "granted" && gps && (
                   <>
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    <p className="text-xs font-mono text-slate-500">{gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}</p>
+                    <p className="text-xs font-mono text-green-700">📍 Position capturée : {gps.lat.toFixed(5)}, {gps.lng.toFixed(5)}</p>
                   </>
                 )}
                 {gpsStatus === "denied" && (
                   <>
-                    <p className="text-xs text-amber-600 text-center">Position indisponible — verifiez l&apos;autorisation de localisation. Vous pouvez continuer sans GPS.</p>
-                    <button onClick={captureGPS} className="text-xs font-semibold text-green-700 underline">Reessayer</button>
+                    <p className="text-xs text-amber-600 flex-1">Position indisponible — vérifiez l&apos;autorisation de localisation.</p>
+                    <button onClick={captureGPS} className="text-xs font-semibold text-green-700 underline shrink-0">Réessayer</button>
                   </>
                 )}
               </div>
 
-              <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3">
-                <p className="text-sm font-bold text-amber-800 text-center">Êtes-vous actuellement chez ce fournisseur ?</p>
-                <p className="text-[11px] text-amber-700 text-center mt-1">La position captée servira à localiser {nom || "ce fournisseur"} sur la carte.</p>
-              </div>
-
-              <div className="flex gap-2">
-                <button onClick={() => finalize(false)} disabled={saving || gpsStatus === "loading"}
-                  className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-600 text-sm font-bold disabled:opacity-40">
-                  Non
-                </button>
-                <button onClick={() => finalize(true)} disabled={saving || gpsStatus === "loading"}
-                  className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2">
-                  {saving && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
-                  Oui, valider
-                </button>
-              </div>
-              <p className="text-[10px] text-slate-400 text-center">
-                Si vous répondez « Non », le fournisseur est quand même créé avec votre position actuelle, mais marqué à vérifier.
-              </p>
+              <button onClick={finalize} disabled={!nom.trim() || saving}
+                className="mt-1 py-3 rounded-xl bg-green-600 text-white text-sm font-bold disabled:opacity-40 flex items-center justify-center gap-2">
+                {saving && <span className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />}
+                Enregistrer
+              </button>
             </>
           )}
         </div>
