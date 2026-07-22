@@ -165,6 +165,9 @@ export default function MobileCommercial({ user }: Props) {
   // ou "grille" (photos + stepper +/-, sélection plus rapide au tactile).
   // Partagent la même recherche/tri (articleSearch/articleSort/pickerArticles).
   const [pickerMode, setPickerMode] = useState<"liste" | "grille">("liste")
+  // Filtre par famille (ex: "Legumes") — distinct du tri "Par famille" qui ne
+  // fait que regrouper/ordonner ; ici on réduit vraiment la liste affichée.
+  const [filterFamille, setFilterFamille] = useState("")
 
   // Global article rotation: how many times each article was ordered across ALL commandes
   const globalRotation = useMemo(() => {
@@ -190,9 +193,15 @@ export default function MobileCommercial({ user }: Props) {
     })
   }, [articles])
 
-  // Inline article list — filtered + sorted (picker du haut, checkbox)
+  // Familles disponibles pour le filtre (dérivées du catalogue, ordre alphabétique)
+  const famillesDisponibles = useMemo(() => {
+    return [...new Set(allArticlesDedup.map(a => a.famille).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  }, [allArticlesDedup])
+
+  // Inline article list — filtré + trié (picker du haut, checkbox ET grille photo)
   const pickerArticles = useMemo(() => {
     let list = [...allArticlesDedup]
+    if (filterFamille) list = list.filter(a => a.famille === filterFamille)
     if (articleSearch.trim()) {
       const q = articleSearch.trim().toLowerCase()
       // 🛡️ Null-safety : sécurise nom/nomAr/famille contre undefined (fix crash client-side)
@@ -208,7 +217,7 @@ export default function MobileCommercial({ user }: Props) {
     else if (articleSort === "famille") list.sort((a, b) => (a.famille ?? "").localeCompare(b.famille ?? "") || (a.nom ?? "").localeCompare(b.nom ?? ""))
     else list.sort((a, b) => (a.nom ?? "").localeCompare(b.nom ?? ""))
     return list
-  }, [allArticlesDedup, articleSearch, articleSort, globalRotation])
+  }, [allArticlesDedup, filterFamille, articleSearch, articleSort, globalRotation])
 
   // Articles sorted by habit frequency for current client
   const sortedArticles = useMemo(() => {
@@ -623,6 +632,58 @@ export default function MobileCommercial({ user }: Props) {
       const updated = [...prev]
       updated[idx] = { ...updated[idx], quantite: String(cur - 1) }
       return updated
+    })
+  }
+
+  // Choix "Quantité" (unité de base, ex: kg — saisie libre au clavier) vs
+  // "Nbr {UM}" (ex: nb de Caisses — stepper +/-, pratique pour un petit
+  // compte entier) sur la grille photo. Mémorisé par article tant qu'aucune
+  // ligne panier n'existe encore ; une fois une ligne créée, sa propre
+  // uniteMode fait foi (cohérent avec le sélecteur de la fiche complète).
+  const [gridUnitMode, setGridUnitMode] = useState<Record<string, string>>({})
+  const gridModeFor = (a: Article): string => {
+    const l = lignes.find(x => x.articleId === a.id)
+    if (l) return l.uniteMode
+    return gridUnitMode[a.id] ?? (a.um ?? "base")
+  }
+  const setGridMode = (a: Article, mode: string) => {
+    setGridUnitMode(prev => ({ ...prev, [a.id]: mode }))
+    setLignes(prev => {
+      const idx = prev.findIndex(l => l.articleId === a.id)
+      if (idx < 0) return prev
+      const updated = [...prev]
+      const cur = Number(updated[idx].quantite) || 0
+      const wasUM = updated[idx].uniteMode === a.um
+      const isNowUM = mode === a.um
+      let newQty = updated[idx].quantite
+      if (wasUM && !isNowUM && cur > 0 && a.colisageParUM) newQty = String(cur * a.colisageParUM)
+      else if (!wasUM && isNowUM && cur > 0 && a.colisageParUM) newQty = String(Math.round((cur / a.colisageParUM) * 100) / 100)
+      updated[idx] = { ...updated[idx], uniteMode: mode, quantite: newQty }
+      return updated
+    })
+  }
+  // Saisie directe au clavier en mode "Quantité" — le stepper +/- seul est
+  // impraticable pour taper ex. 25kg (25 clics), contrairement au nb de UM
+  // (petit compte entier, ex: 3 caisses) qui reste sur le stepper.
+  const setGridQtyDirect = (a: Article, mode: string, raw: string) => {
+    setLignes(prev => {
+      const idx = prev.findIndex(l => l.articleId === a.id)
+      const empty = raw.trim() === "" || Number(raw) <= 0
+      if (idx >= 0) {
+        if (empty) {
+          const next = prev.filter((_, i) => i !== idx)
+          return next.length === 0 ? [{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }] : next
+        }
+        const updated = [...prev]
+        updated[idx] = { ...updated[idx], quantite: raw }
+        return updated
+      }
+      if (empty) return prev
+      const pv = store.computePrixEffectif(a, clients.find(c => c.id === selectedClientId))
+      const newLigne: LigneForm = { articleId: a.id, quantite: raw, prixVente: String(pv), uniteMode: mode }
+      const emptyIdx = prev.findIndex(l => !l.articleId)
+      if (emptyIdx >= 0) { const updated = [...prev]; updated[emptyIdx] = newLigne; return updated }
+      return [...prev, newLigne]
     })
   }
 
@@ -1425,6 +1486,12 @@ export default function MobileCommercial({ user }: Props) {
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showStockBadges ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg>
             {showStockBadges ? "Masquer le stock" : "Afficher le stock"}
           </button>
+          {/* Filtre par famille — réduit vraiment la liste (≠ tri "Par famille" qui ne fait que regrouper) */}
+          <select value={filterFamille} onChange={e => setFilterFamille(e.target.value)}
+            className="mt-2 ml-2 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-border bg-background text-foreground focus:outline-none">
+            <option value="">Toutes les familles</option>
+            {famillesDisponibles.map(f => <option key={f} value={f}>{f}</option>)}
+          </select>
         </div>
 
         {/* Sort toggles */}
@@ -1525,13 +1592,17 @@ export default function MobileCommercial({ user }: Props) {
                 const pv = store.computePrixEffectif(a, clients.find(c => c.id === selectedClientId))
                 const globalCount = globalRotation[a.id] ?? 0
                 const habitCount = clientHabits[a.id]?.count ?? 0
+                const hasUM = !!(a.um && a.colisageParUM)
+                const mode = gridModeFor(a)
+                const isUMMode = hasUM && mode === a.um
+                const ligneQty = lignes.find(l => l.articleId === a.id)?.quantite ?? ""
                 return (
                   <div key={a.id}
                     className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-colors ${qty > 0 ? "border-primary bg-primary/5" : "border-border bg-card"}`}>
                     <img src={resolveArticlePhoto(a)}
                       alt={`${a.nom} produit frais article`}
-                      className="w-full aspect-square rounded-lg object-cover border border-border"
-                      onError={e => { e.currentTarget.src = "https://placehold.co/120x120/e2e8f0/64748b?text=Art" }} />
+                      className="w-16 h-16 rounded-lg object-cover border border-border"
+                      onError={e => { e.currentTarget.src = "https://placehold.co/64x64/e2e8f0/64748b?text=Art" }} />
                     <p className="text-xs font-bold text-foreground text-center truncate w-full mt-0.5">{a.nom}</p>
                     {a.nomAr && <p className="text-[10px] text-muted-foreground font-arabic text-center truncate w-full" dir="rtl" lang="ar">{a.nomAr}</p>}
                     <div className="flex items-center gap-1 flex-wrap justify-center">
@@ -1548,17 +1619,41 @@ export default function MobileCommercial({ user }: Props) {
                       {habitCount >= 2 && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">{habitCount}x</span>}
                     </div>
                     <span className="text-xs font-bold text-primary">{pv} DH</span>
-                    <div className="flex items-center gap-2 mt-1">
-                      <button onClick={() => decArticleQty(a)} disabled={qty === 0}
-                        className="w-7 h-7 rounded-full bg-muted text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-transform">
-                        −
-                      </button>
-                      <span className="w-6 text-center text-sm font-black text-foreground">{qty}</span>
-                      <button onClick={() => incArticleQty(a)}
-                        className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold text-base flex items-center justify-center active:scale-95 transition-transform">
-                        +
-                      </button>
-                    </div>
+
+                    {/* Choix Quantité (saisie libre) / Nbr UM (stepper) — uniquement
+                        si cet article a une UM commerciale (ex: Caisse) définie. */}
+                    {hasUM && (
+                      <div className="flex gap-1 w-full mt-0.5">
+                        <button type="button" onClick={() => setGridMode(a, "base")}
+                          className={`flex-1 py-1 rounded-lg text-[9px] font-bold border transition-colors ${!isUMMode ? "border-green-600 bg-green-600 text-white" : "border-border text-muted-foreground"}`}>
+                          Quantité
+                        </button>
+                        <button type="button" onClick={() => setGridMode(a, a.um!)}
+                          className={`flex-1 py-1 rounded-lg text-[9px] font-bold border transition-colors ${isUMMode ? "border-blue-600 bg-blue-600 text-white" : "border-border text-blue-700"}`}>
+                          Nbr {a.um}
+                        </button>
+                      </div>
+                    )}
+
+                    {isUMMode ? (
+                      <div className="flex items-center gap-2 mt-1">
+                        <button onClick={() => decArticleQty(a)} disabled={qty === 0}
+                          className="w-7 h-7 rounded-full bg-muted text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-transform">
+                          −
+                        </button>
+                        <span className="w-6 text-center text-sm font-black text-foreground">{qty}</span>
+                        <button onClick={() => incArticleQty(a)}
+                          className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold text-base flex items-center justify-center active:scale-95 transition-transform">
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <input type="number" min="0" step="0.5" inputMode="decimal"
+                        value={ligneQty}
+                        onChange={e => setGridQtyDirect(a, mode, e.target.value)}
+                        placeholder="0"
+                        className="w-full mt-1 px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-center font-black text-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
+                    )}
                   </div>
                 )
               })}
