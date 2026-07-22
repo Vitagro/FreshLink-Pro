@@ -1024,20 +1024,29 @@ export interface LignePreparation {
   // Détail des caisses par client (keyed by clientId) — permet de rectifier
   // la répartition auto-calculée client par client, pas seulement le total.
   caissesParClient?: Record<string, { gros: number; demi: number }>
+  // Préparation PARTIELLE par client — quantité réellement préparée à date
+  // pour ce client sur cet article (peut être < qtesParClient[clientId] si
+  // rupture/manque). Une fois >= à la quantité commandée pour ce client, la
+  // ligne disparaît de l'onglet "Par Client" (ne reste que ce qui manque).
+  // qtePrepared (total article) = somme de ces valeurs sur tous les clients.
+  qtesPreparedParClient?: Record<string, number>
 }
 
-// Capacité standard (kg) d'une caisse gros / demi-caisse — cf.
-// DEFAULT_CONTENANTS_TARE (ct1 "30kg", ct2 "15kg") — sert à calculer
-// automatiquement le nombre de caisses nécessaires pour une quantité donnée,
-// sur les Bons de Préparation numériques (rectifiable ensuite manuellement).
-export const CAISSE_GROS_CAPACITE_KG = 30
-export const CAISSE_DEMI_CAPACITE_KG = 15
-export function computeCaissesAuto(qteKg: number, unite?: string): { gros: number; demi: number } {
+// Capacité (kg) d'une caisse gros / demi-caisse — basée sur le colisage
+// PROPRE À L'ARTICLE (Article.colisageParUM, ex: 28 kg/Caisse), le même que
+// celui déjà utilisé pour l'affichage "X Caisse" (qté / UM) sur la ligne de
+// préparation. Une demi-caisse = la moitié de cette capacité. Si l'article
+// n'a pas de colisage défini, on retombe sur une capacité par défaut (30kg)
+// pour ne jamais renvoyer une division par zéro.
+export const CAISSE_GROS_CAPACITE_KG_DEFAUT = 30
+export function computeCaissesAuto(qteKg: number, unite?: string, colisageParUM?: number): { gros: number; demi: number } {
   if (unite && unite !== "kg") return { gros: 0, demi: 0 }
   if (!qteKg || qteKg <= 0) return { gros: 0, demi: 0 }
-  const gros = Math.floor(qteKg / CAISSE_GROS_CAPACITE_KG)
-  const reste = qteKg - gros * CAISSE_GROS_CAPACITE_KG
-  const demi = reste > 0 ? Math.ceil(reste / CAISSE_DEMI_CAPACITE_KG) : 0
+  const grosKg = colisageParUM && colisageParUM > 0 ? colisageParUM : CAISSE_GROS_CAPACITE_KG_DEFAUT
+  const demiKg = grosKg / 2
+  const gros = Math.floor(qteKg / grosKg)
+  const reste = qteKg - gros * grosKg
+  const demi = reste > 0 ? Math.ceil(reste / demiKg) : 0
   return { gros, demi }
 }
 

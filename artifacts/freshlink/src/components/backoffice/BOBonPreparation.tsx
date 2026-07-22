@@ -278,6 +278,385 @@ ${(() => {
   win.document.close()
 }
 
+// ── Digital preparation view ──────────────────────────────────────────────
+// Composant de MODULE (pas défini dans le rendu du parent) : redéfinir ce
+// composant à chaque rendu de BOBonPreparation forçait React à le
+// démonter/remonter intégralement à chaque mise à jour (ex: après rectifier
+// une quantité), ce qui réinitialisait l'onglet actif — l'utilisateur était
+// éjecté vers "Par Article" dès qu'il rectifiait un deuxième article en
+// "Par Client". Toutes les données/actions dont il a besoin lui sont donc
+// passées explicitement en props plutôt que capturées par closure.
+interface DigitalPrepaViewProps {
+  bon: BonPreparation
+  articles: Article[]
+  retiringId: string | null
+  validatingId: string | null
+  onClose: () => void
+  onValidateLigne: (bonId: string, articleId: string, qty: number, nbCaisseGros?: number, nbCaisseDemi?: number) => void
+  onUpdateQteClient: (bonId: string, articleId: string, clientId: string, newQty: number) => void
+  onUpdateCaisseClient: (bonId: string, articleId: string, clientId: string, type: "gros" | "demi", newVal: number) => void
+  onUpdatePreparedClient: (bonId: string, articleId: string, clientId: string, preparedQty: number) => void
+  onRetirerClient: (bonId: string, clientId: string) => void
+  onValidateAll: (bonId: string) => void
+}
+
+function DigitalPrepaView({
+  bon, articles, retiringId, validatingId, onClose,
+  onValidateLigne, onUpdateQteClient, onUpdateCaisseClient, onUpdatePreparedClient, onRetirerClient, onValidateAll,
+}: DigitalPrepaViewProps) {
+  const [localQtys, setLocalQtys] = useState<Record<string, number>>(
+    Object.fromEntries(bon.lignes.map(l => [l.articleId, l.qtePrepared || l.qteCommandee]))
+  )
+  // Pré-rempli avec le calcul automatique (computeCaissesAuto) tant que la
+  // ligne n'a jamais été rectifiée manuellement — l'utilisateur voit
+  // directement une suggestion au lieu de 0, et peut la corriger.
+  const [localCaisseGros, setLocalCaisseGros] = useState<Record<string, number>>(
+    Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseGros ?? computeCaissesAuto(l.qteCommandee, l.unite, articles.find(a => a.id === l.articleId)?.colisageParUM).gros]))
+  )
+  const [localCaisseDemi, setLocalCaisseDemi] = useState<Record<string, number>>(
+    Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseDemi ?? computeCaissesAuto(l.qteCommandee, l.unite, articles.find(a => a.id === l.articleId)?.colisageParUM).demi]))
+  )
+  // Saisie en attente de validation pour la "quantité préparée" par client
+  // (onglet Par Client) — keyed par `${articleId}__${clientId}`.
+  const [localPrepared, setLocalPrepared] = useState<Record<string, string>>({})
+  const [activeTab, setActiveTab] = useState<"articles" | "clients">("articles")
+  const seqMode = bon.sequenceMode ?? "horaire"
+  const orderedClients = sortClients(bon.clientsInfo ?? [], seqMode)
+
+  // Nombre d'UM (caisse, carton...) équivalent à une quantité — même calcul
+  // que sur le BL imprimé, pour que le magasinier/préparateur voie tout de
+  // suite combien de caisses préparer, pas seulement le poids en kg.
+  const umLabel = (articleId: string, qte: number): string | null => {
+    const art = articles.find(a => a.id === articleId)
+    if (!art?.colisageParUM || art.colisageParUM <= 0) return null
+    const nb = Math.round((qte / art.colisageParUM) * 10) / 10
+    return `${nb} ${art.um ?? "UM"}`
+  }
+
+  const doneCount = bon.lignes.filter(l => l.valide).length
+  const pct = bon.lignes.length > 0 ? Math.round((doneCount / bon.lignes.length) * 100) : 0
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0"
+        style={{ background: "oklch(0.14 0.03 260)" }}>
+        <div>
+          <h2 className="font-bold text-white text-sm">{bon.nom}</h2>
+          <p className="text-xs" style={{ color: "oklch(0.60 0.03 245)" }}>
+            {bon.date} · {MODE_LABELS[bon.mode].label}
+            {" · "}{bon.sequenceMode === "itineraire" ? "Itinéraire GPS" : "Ordre horaire"}
+            {bon.preparateurNom && <>{" · 👤 "}{bon.preparateurNom}</>}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <StatusBadge s={bon.statut} />
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-white/10 text-white">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      {bon.statut !== "valide" && (
+        <div className="px-4 pt-3 pb-2 shrink-0">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-muted-foreground">Progression</span>
+            <span className="font-bold text-foreground">{pct}% — {doneCount}/{bon.lignes.length} articles</span>
+          </div>
+          <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full rounded-full transition-all"
+              style={{ width: `${pct}%`, background: pct === 100 ? "oklch(0.52 0.18 145)" : "oklch(0.65 0.20 260)" }} />
+          </div>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="px-4 py-2 flex gap-2 shrink-0 border-b border-border">
+        <button onClick={() => setActiveTab("articles")}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === "articles" ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}>
+          Par Article ({bon.lignes.length})
+        </button>
+        <button onClick={() => setActiveTab("clients")}
+          className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === "clients" ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}>
+          Par Client ({orderedClients.length})
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+
+        {/* === TAB: Articles === */}
+        {activeTab === "articles" && bon.lignes.map((ligne) => (
+          <div key={ligne.articleId}
+            className={`rounded-2xl border p-4 transition-colors ${ligne.valide ? "border-green-200 bg-green-50" : "border-border bg-card"}`}>
+            <div className="flex items-start gap-3">
+              {/* Icon */}
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${ligne.valide ? "bg-green-500" : "bg-muted"}`}>
+                {ligne.valide
+                  ? <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+                  : <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" /></svg>
+                }
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-foreground text-sm">{ligne.articleNom}</p>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Total commandé : <strong>{ligne.qteCommandee.toFixed(1)} {ligne.unite}</strong>
+                  {umLabel(ligne.articleId, ligne.qteCommandee) && (
+                    <span className="ml-1.5 text-primary font-semibold">({umLabel(ligne.articleId, ligne.qteCommandee)})</span>
+                  )}
+                </p>
+
+                {/* Répartition par client (ordered) */}
+                <div className="flex flex-col gap-1 mb-3">
+                  {orderedClients
+                    .filter(c => (ligne.qtesParClient[c.clientId] ?? 0) > 0)
+                    .map((ci, idx) => (
+                      <div key={ci.clientId} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-white bg-primary rounded-md px-1.5 py-0.5">{idx + 1}</span>
+                          <div>
+                            <span className="text-xs font-semibold text-foreground">{ci.clientNom}</span>
+                            <span className="text-xs text-muted-foreground ml-1.5">{ci.secteur}</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs font-bold text-green-700">{(ligne.qtesParClient[ci.clientId] ?? 0).toFixed(1)} {ligne.unite}</span>
+                          {umLabel(ligne.articleId, ligne.qtesParClient[ci.clientId] ?? 0) && (
+                            <span className="block text-[10px] text-primary font-semibold">{umLabel(ligne.articleId, ligne.qtesParClient[ci.clientId] ?? 0)}</span>
+                          )}
+                          {ci.heurelivraison && (
+                            <span className="block text-xs text-blue-600">{ci.heurelivraison}</span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+
+                {/* Input + Valider */}
+                {bon.statut !== "valide" && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={localQtys[ligne.articleId] ?? ligne.qteCommandee}
+                        onChange={e => setLocalQtys(prev => ({ ...prev, [ligne.articleId]: parseFloat(e.target.value) || 0 }))}
+                        className="w-24 px-2 py-1.5 rounded-xl border border-border bg-background text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary"
+                        min={0} step={0.5}
+                      />
+                      <span className="text-xs text-muted-foreground">{ligne.unite}</span>
+                      <button
+                        onClick={() => onValidateLigne(bon.id, ligne.articleId, localQtys[ligne.articleId] ?? ligne.qteCommandee, localCaisseGros[ligne.articleId], localCaisseDemi[ligne.articleId])}
+                        disabled={ligne.valide}
+                        className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${ligne.valide ? "bg-green-100 text-green-700" : "bg-primary text-white hover:opacity-90"}`}>
+                        {ligne.valide ? "Validé" : "Valider"}
+                      </button>
+                    </div>
+                    {/* Caisses utilisées — informatif, alimente le décompte de la préparation */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground shrink-0">🧺 Caisses :</span>
+                      <input type="number" min={0} step={1}
+                        value={localCaisseGros[ligne.articleId] || ""}
+                        onChange={e => setLocalCaisseGros(prev => ({ ...prev, [ligne.articleId]: parseInt(e.target.value) || 0 }))}
+                        placeholder="0" className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <span className="text-[10px] text-muted-foreground">gros</span>
+                      <input type="number" min={0} step={1}
+                        value={localCaisseDemi[ligne.articleId] || ""}
+                        onChange={e => setLocalCaisseDemi(prev => ({ ...prev, [ligne.articleId]: parseInt(e.target.value) || 0 }))}
+                        placeholder="0" className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary" />
+                      <span className="text-[10px] text-muted-foreground">demi</span>
+                    </div>
+                  </div>
+                )}
+                {bon.statut === "valide" && (
+                  <p className="text-sm font-bold text-green-600">
+                    {ligne.qtePrepared.toFixed(1)} {ligne.unite} préparés
+                    {ligne.qtePrepared !== ligne.qteCommandee && (
+                      <span className="text-xs text-amber-500 ml-2">Ecart: {(ligne.qtePrepared - ligne.qteCommandee).toFixed(1)}</span>
+                    )}
+                    {((ligne.nbCaisseGros ?? 0) > 0 || (ligne.nbCaisseDemi ?? 0) > 0) && (
+                      <span className="block text-xs font-semibold text-blue-700 mt-0.5">🧺 {ligne.nbCaisseGros ?? 0} gros + {ligne.nbCaisseDemi ?? 0} demi</span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* === TAB: Clients (sequence order) === */}
+        {activeTab === "clients" && orderedClients.map((ci, idx) => {
+          // Préparation PARTIELLE : une fois la quantité préparée pour ce
+          // client >= à la quantité commandée, l'article disparaît de sa
+          // liste — ne reste que ce qui n'est pas encore préparé/manquant.
+          const clientArticles = bon.lignes.filter(l => {
+            const ordered = l.qtesParClient[ci.clientId] ?? 0
+            if (ordered <= 0) return false
+            const prepared = l.qtesPreparedParClient?.[ci.clientId] ?? 0
+            return prepared < ordered - 0.001
+          })
+          const clientResteTotal = clientArticles.reduce((s, l) =>
+            s + Math.max(0, (l.qtesParClient[ci.clientId] ?? 0) - (l.qtesPreparedParClient?.[ci.clientId] ?? 0)), 0)
+          return (
+            <div key={ci.clientId} className="bg-card rounded-2xl border border-border p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0"
+                  style={{ background: "oklch(0.38 0.2 260)" }}>
+                  {idx + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-foreground">{ci.clientNom}</p>
+                  <p className="text-xs text-muted-foreground">{ci.secteur}{ci.zone ? ` — ${ci.zone}` : ""}</p>
+                </div>
+                <div className="text-right">
+                  {ci.heurelivraison && (
+                    <p className="text-sm font-bold text-blue-700">{ci.heurelivraison}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {seqMode === "itineraire" ? `Ordre GPS: #${ci.ordre + 1}` : "Horaire"}
+                  </p>
+                </div>
+              </div>
+              {clientArticles.length === 0 ? (
+                <div className="flex items-center gap-2 px-3 py-3 bg-green-50 border border-green-200 rounded-xl text-sm font-semibold text-green-700">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  Tout est préparé pour ce client
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  {clientArticles.map(l => {
+                    const ordered = l.qtesParClient[ci.clientId] ?? 0
+                    const prepared = l.qtesPreparedParClient?.[ci.clientId] ?? 0
+                    const reste = Math.max(0, ordered - prepared)
+                    const autoCaisses = computeCaissesAuto(ordered, l.unite, articles.find(a => a.id === l.articleId)?.colisageParUM)
+                    const caissesClient = l.caissesParClient?.[ci.clientId] ?? autoCaisses
+                    const prepKey = `${l.articleId}__${ci.clientId}`
+                    return (
+                    <div key={l.articleId} className="flex flex-col gap-1.5 px-3 py-2 bg-muted/40 rounded-xl">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-foreground font-medium">{l.articleNom}</span>
+                        <div className="flex items-center gap-1.5">
+                          {umLabel(l.articleId, ordered) && (
+                            <span className="text-xs text-primary font-semibold">{umLabel(l.articleId, ordered)}</span>
+                          )}
+                          <input type="number" min={0} step={0.5}
+                            defaultValue={ordered}
+                            onBlur={e => {
+                              const v = parseFloat(e.target.value)
+                              if (!isNaN(v) && v !== ordered) onUpdateQteClient(bon.id, l.articleId, ci.clientId, v)
+                            }}
+                            className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-sm text-right font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-primary" />
+                          <span className="text-xs text-muted-foreground">{l.unite}</span>
+                        </div>
+                      </div>
+                      {prepared > 0 && (
+                        <p className="text-[10px] text-emerald-600 font-semibold">
+                          ✓ {prepared.toFixed(1)} {l.unite} déjà préparé — reste {reste.toFixed(1)} {l.unite}
+                        </p>
+                      )}
+                      {/* Caisses gros/demi pour ce client — auto-calculées (computeCaissesAuto),
+                          rectifiables individuellement sans repasser par le total article. */}
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-[10px] text-muted-foreground">🧺</span>
+                        <input type="number" min={0} step={1}
+                          key={`gros-${caissesClient.gros}`}
+                          defaultValue={caissesClient.gros}
+                          onBlur={e => {
+                            const v = parseInt(e.target.value)
+                            if (!isNaN(v) && v !== caissesClient.gros) onUpdateCaisseClient(bon.id, l.articleId, ci.clientId, "gros", v)
+                          }}
+                          className="w-14 px-1.5 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">gros</span>
+                        <input type="number" min={0} step={1}
+                          key={`demi-${caissesClient.demi}`}
+                          defaultValue={caissesClient.demi}
+                          onBlur={e => {
+                            const v = parseInt(e.target.value)
+                            if (!isNaN(v) && v !== caissesClient.demi) onUpdateCaisseClient(bon.id, l.articleId, ci.clientId, "demi", v)
+                          }}
+                          className="w-14 px-1.5 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">demi</span>
+                      </div>
+                      {/* Préparation partielle — quantité effectivement préparée pour CE
+                          client sur cet article ; une fois >= commandé, la ligne disparaît. */}
+                      <div className="flex items-center gap-1.5 justify-end pt-1 border-t border-dashed border-border/60">
+                        <span className="text-[10px] text-muted-foreground">Préparé :</span>
+                        <input type="number" min={0} step={0.5}
+                          key={`prep-${prepared}`}
+                          defaultValue={localPrepared[prepKey] ?? (prepared || ordered)}
+                          onChange={e => setLocalPrepared(prev => ({ ...prev, [prepKey]: e.target.value }))}
+                          className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
+                        <span className="text-[10px] text-muted-foreground">{l.unite}</span>
+                        <button
+                          onClick={() => {
+                            const raw = localPrepared[prepKey]
+                            const v = raw !== undefined ? parseFloat(raw) : (prepared || ordered)
+                            if (!isNaN(v)) onUpdatePreparedClient(bon.id, l.articleId, ci.clientId, v)
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:opacity-90">
+                          ✓ Valider
+                        </button>
+                      </div>
+                    </div>
+                    )
+                  })}
+                </div>
+              )}
+              <div className="mt-2 flex justify-end items-center gap-2">
+                {bon.statut !== "valide" && (
+                  <button onClick={() => onRetirerClient(bon.id, ci.clientId)} disabled={retiringId === ci.clientId}
+                    className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50">
+                    {retiringId === ci.clientId ? "Retrait…" : "Retirer de la préparation"}
+                  </button>
+                )}
+                {clientArticles.length > 0 && (
+                  <span className="text-sm font-black text-foreground px-3 py-1 bg-amber-50 rounded-xl border border-amber-200">
+                    Reste à préparer : {clientResteTotal.toFixed(1)} kg
+                  </span>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      {bon.statut !== "valide" && (
+        <div className="px-4 py-4 border-t border-border bg-card shrink-0 flex gap-3">
+          <button onClick={onClose}
+            className="flex-1 py-3 rounded-2xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted">
+            Fermer
+          </button>
+          <button onClick={() => onValidateAll(bon.id)} disabled={!!validatingId}
+            className="flex-1 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-50"
+            style={{ background: "oklch(0.40 0.16 155)" }}>
+            {validatingId === bon.id ? "Validation…" : "Valider toute la prépa"}
+          </button>
+        </div>
+      )}
+      {bon.statut === "valide" && (
+        <div className="px-4 py-4 border-t border-border bg-green-50 shrink-0 flex items-center gap-3">
+          <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-green-700">Préparation validée</p>
+            {bon.validatedAt && <p className="text-xs text-green-600">{new Date(bon.validatedAt).toLocaleString("fr-MA")}</p>}
+          </div>
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-green-300 text-sm font-semibold text-green-700 hover:bg-green-100">
+            Fermer
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main component ───────────────────────────────────────────────────────────
 export default function BOBonPreparation({ user, onValidated }: Props) {
   const [bons, setBons] = useState<BonPreparation[]>([])
@@ -589,19 +968,45 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     const li = arr[idx].lignes.findIndex(l => l.articleId === articleId)
     if (li < 0) return
     const ligne = arr[idx].lignes[li]
+    const colisage = articles.find(a => a.id === articleId)?.colisageParUM
     const current = ligne.caissesParClient ?? {}
-    const auto = computeCaissesAuto(ligne.qtesParClient[clientId] ?? 0, ligne.unite)
+    const auto = computeCaissesAuto(ligne.qtesParClient[clientId] ?? 0, ligne.unite, colisage)
     const prev = current[clientId] ?? auto
     ligne.caissesParClient = { ...current, [clientId]: { ...prev, [type]: Math.max(0, newVal) } }
     // Recalcule le total article = somme sur tous les clients affectés (valeur
     // rectifiée si présente, sinon calcul auto pour ce client).
     let totalGros = 0, totalDemi = 0
     for (const cid of Object.keys(ligne.qtesParClient)) {
-      const v = ligne.caissesParClient[cid] ?? computeCaissesAuto(ligne.qtesParClient[cid] ?? 0, ligne.unite)
+      const v = ligne.caissesParClient[cid] ?? computeCaissesAuto(ligne.qtesParClient[cid] ?? 0, ligne.unite, colisage)
       totalGros += v.gros; totalDemi += v.demi
     }
     ligne.nbCaisseGros = totalGros
     ligne.nbCaisseDemi = totalDemi
+    store.saveBonsPreparation(arr)
+    refresh()
+    if (viewing?.id === bonId) setViewing({ ...arr[idx] })
+  }
+
+  // Préparation PARTIELLE par client (onglet "Clients") — enregistre la
+  // quantité réellement préparée pour CE client sur cet article (peut être
+  // inférieure à la quantité commandée en cas de rupture/manque). Une fois
+  // la quantité préparée pour un client >= à sa quantité commandée, la ligne
+  // disparaît de la liste de ce client (ne reste que ce qui manque). Le
+  // total article (qtePrepared/valide) est recalculé en somme sur tous les
+  // clients, pour rester cohérent avec la génération des BL et l'onglet
+  // "Par Article".
+  const updatePreparedQteClient = (bonId: string, articleId: string, clientId: string, preparedQty: number) => {
+    const arr = store.getBonsPreparation()
+    const idx = arr.findIndex(b => b.id === bonId)
+    if (idx < 0) return
+    const li = arr[idx].lignes.findIndex(l => l.articleId === articleId)
+    if (li < 0) return
+    const ligne = arr[idx].lignes[li]
+    ligne.qtesPreparedParClient = { ...(ligne.qtesPreparedParClient ?? {}), [clientId]: Math.max(0, preparedQty) }
+    const totalPrepared = Object.keys(ligne.qtesParClient)
+      .reduce((s, cid) => s + (ligne.qtesPreparedParClient?.[cid] ?? 0), 0)
+    ligne.qtePrepared = totalPrepared
+    ligne.valide = totalPrepared >= ligne.qteCommandee
     store.saveBonsPreparation(arr)
     refresh()
     if (viewing?.id === bonId) setViewing({ ...arr[idx] })
@@ -711,310 +1116,8 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     if (viewing?.id === id) setViewing(null)
   }
 
-  // ── Digital preparation view ──────────────────────────────────────────────
-  const DigitalPrepaView = ({ bon }: { bon: BonPreparation }) => {
-    const [localQtys, setLocalQtys] = useState<Record<string, number>>(
-      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.qtePrepared || l.qteCommandee]))
-    )
-    // Pré-rempli avec le calcul automatique (computeCaissesAuto) tant que la
-    // ligne n'a jamais été rectifiée manuellement — l'utilisateur voit
-    // directement une suggestion au lieu de 0, et peut la corriger.
-    const [localCaisseGros, setLocalCaisseGros] = useState<Record<string, number>>(
-      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseGros ?? computeCaissesAuto(l.qteCommandee, l.unite).gros]))
-    )
-    const [localCaisseDemi, setLocalCaisseDemi] = useState<Record<string, number>>(
-      Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseDemi ?? computeCaissesAuto(l.qteCommandee, l.unite).demi]))
-    )
-    const [activeTab, setActiveTab] = useState<"articles" | "clients">("articles")
-    const seqMode = bon.sequenceMode ?? "horaire"
-    const orderedClients = sortClients(bon.clientsInfo ?? [], seqMode)
-
-    // Nombre d'UM (caisse, carton...) équivalent à une quantité — même calcul
-    // que sur le BL imprimé, pour que le magasinier/préparateur voie tout de
-    // suite combien de caisses préparer, pas seulement le poids en kg.
-    const umLabel = (articleId: string, qte: number): string | null => {
-      const art = articles.find(a => a.id === articleId)
-      if (!art?.colisageParUM || art.colisageParUM <= 0) return null
-      const nb = Math.round((qte / art.colisageParUM) * 10) / 10
-      return `${nb} ${art.um ?? "UM"}`
-    }
-
-    const doneCount = bon.lignes.filter(l => l.valide).length
-    const pct = bon.lignes.length > 0 ? Math.round((doneCount / bon.lignes.length) * 100) : 0
-
-    return (
-      <div className="fixed inset-0 z-50 bg-background flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0"
-          style={{ background: "oklch(0.14 0.03 260)" }}>
-          <div>
-            <h2 className="font-bold text-white text-sm">{bon.nom}</h2>
-            <p className="text-xs" style={{ color: "oklch(0.60 0.03 245)" }}>
-              {bon.date} · {MODE_LABELS[bon.mode].label}
-              {" · "}{bon.sequenceMode === "itineraire" ? "Itinéraire GPS" : "Ordre horaire"}
-              {bon.preparateurNom && <>{" · 👤 "}{bon.preparateurNom}</>}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <StatusBadge s={bon.statut} />
-            <button onClick={() => setViewing(null)} className="p-2 rounded-lg hover:bg-white/10 text-white">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        {bon.statut !== "valide" && (
-          <div className="px-4 pt-3 pb-2 shrink-0">
-            <div className="flex items-center justify-between text-xs mb-1">
-              <span className="text-muted-foreground">Progression</span>
-              <span className="font-bold text-foreground">{pct}% — {doneCount}/{bon.lignes.length} articles</span>
-            </div>
-            <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
-              <div className="h-full rounded-full transition-all"
-                style={{ width: `${pct}%`, background: pct === 100 ? "oklch(0.52 0.18 145)" : "oklch(0.65 0.20 260)" }} />
-            </div>
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="px-4 py-2 flex gap-2 shrink-0 border-b border-border">
-          <button onClick={() => setActiveTab("articles")}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === "articles" ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}>
-            Par Article ({bon.lignes.length})
-          </button>
-          <button onClick={() => setActiveTab("clients")}
-            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${activeTab === "clients" ? "bg-primary text-white" : "text-muted-foreground hover:bg-muted"}`}>
-            Par Client ({orderedClients.length})
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
-
-          {/* === TAB: Articles === */}
-          {activeTab === "articles" && bon.lignes.map((ligne) => (
-            <div key={ligne.articleId}
-              className={`rounded-2xl border p-4 transition-colors ${ligne.valide ? "border-green-200 bg-green-50" : "border-border bg-card"}`}>
-              <div className="flex items-start gap-3">
-                {/* Icon */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${ligne.valide ? "bg-green-500" : "bg-muted"}`}>
-                  {ligne.valide
-                    ? <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
-                    : <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10" /></svg>
-                  }
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-foreground text-sm">{ligne.articleNom}</p>
-                  <p className="text-xs text-muted-foreground mb-2">
-                    Total commandé : <strong>{ligne.qteCommandee.toFixed(1)} {ligne.unite}</strong>
-                    {umLabel(ligne.articleId, ligne.qteCommandee) && (
-                      <span className="ml-1.5 text-primary font-semibold">({umLabel(ligne.articleId, ligne.qteCommandee)})</span>
-                    )}
-                  </p>
-
-                  {/* Répartition par client (ordered) */}
-                  <div className="flex flex-col gap-1 mb-3">
-                    {orderedClients
-                      .filter(c => (ligne.qtesParClient[c.clientId] ?? 0) > 0)
-                      .map((ci, idx) => (
-                        <div key={ci.clientId} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-white bg-primary rounded-md px-1.5 py-0.5">{idx + 1}</span>
-                            <div>
-                              <span className="text-xs font-semibold text-foreground">{ci.clientNom}</span>
-                              <span className="text-xs text-muted-foreground ml-1.5">{ci.secteur}</span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-xs font-bold text-green-700">{(ligne.qtesParClient[ci.clientId] ?? 0).toFixed(1)} {ligne.unite}</span>
-                            {umLabel(ligne.articleId, ligne.qtesParClient[ci.clientId] ?? 0) && (
-                              <span className="block text-[10px] text-primary font-semibold">{umLabel(ligne.articleId, ligne.qtesParClient[ci.clientId] ?? 0)}</span>
-                            )}
-                            {ci.heurelivraison && (
-                              <span className="block text-xs text-blue-600">{ci.heurelivraison}</span>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    }
-                  </div>
-
-                  {/* Input + Valider */}
-                  {bon.statut !== "valide" && (
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={localQtys[ligne.articleId] ?? ligne.qteCommandee}
-                          onChange={e => setLocalQtys(prev => ({ ...prev, [ligne.articleId]: parseFloat(e.target.value) || 0 }))}
-                          className="w-24 px-2 py-1.5 rounded-xl border border-border bg-background text-sm text-center font-bold focus:outline-none focus:ring-2 focus:ring-primary"
-                          min={0} step={0.5}
-                        />
-                        <span className="text-xs text-muted-foreground">{ligne.unite}</span>
-                        <button
-                          onClick={() => validateLigne(bon.id, ligne.articleId, localQtys[ligne.articleId] ?? ligne.qteCommandee, localCaisseGros[ligne.articleId], localCaisseDemi[ligne.articleId])}
-                          disabled={ligne.valide}
-                          className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${ligne.valide ? "bg-green-100 text-green-700" : "bg-primary text-white hover:opacity-90"}`}>
-                          {ligne.valide ? "Validé" : "Valider"}
-                        </button>
-                      </div>
-                      {/* Caisses utilisées — informatif, alimente le décompte de la préparation */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-muted-foreground shrink-0">🧺 Caisses :</span>
-                        <input type="number" min={0} step={1}
-                          value={localCaisseGros[ligne.articleId] || ""}
-                          onChange={e => setLocalCaisseGros(prev => ({ ...prev, [ligne.articleId]: parseInt(e.target.value) || 0 }))}
-                          placeholder="0" className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <span className="text-[10px] text-muted-foreground">gros</span>
-                        <input type="number" min={0} step={1}
-                          value={localCaisseDemi[ligne.articleId] || ""}
-                          onChange={e => setLocalCaisseDemi(prev => ({ ...prev, [ligne.articleId]: parseInt(e.target.value) || 0 }))}
-                          placeholder="0" className="w-16 px-2 py-1 rounded-lg border border-border bg-background text-xs text-center focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <span className="text-[10px] text-muted-foreground">demi</span>
-                      </div>
-                    </div>
-                  )}
-                  {bon.statut === "valide" && (
-                    <p className="text-sm font-bold text-green-600">
-                      {ligne.qtePrepared.toFixed(1)} {ligne.unite} préparés
-                      {ligne.qtePrepared !== ligne.qteCommandee && (
-                        <span className="text-xs text-amber-500 ml-2">Ecart: {(ligne.qtePrepared - ligne.qteCommandee).toFixed(1)}</span>
-                      )}
-                      {((ligne.nbCaisseGros ?? 0) > 0 || (ligne.nbCaisseDemi ?? 0) > 0) && (
-                        <span className="block text-xs font-semibold text-blue-700 mt-0.5">🧺 {ligne.nbCaisseGros ?? 0} gros + {ligne.nbCaisseDemi ?? 0} demi</span>
-                      )}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-
-          {/* === TAB: Clients (sequence order) === */}
-          {activeTab === "clients" && orderedClients.map((ci, idx) => {
-            const clientTotal = bon.lignes.reduce((s, l) => s + (l.qtesParClient[ci.clientId] ?? 0), 0)
-            const clientArticles = bon.lignes.filter(l => (l.qtesParClient[ci.clientId] ?? 0) > 0)
-            return (
-              <div key={ci.clientId} className="bg-card rounded-2xl border border-border p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-black text-white shrink-0"
-                    style={{ background: "oklch(0.38 0.2 260)" }}>
-                    {idx + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-foreground">{ci.clientNom}</p>
-                    <p className="text-xs text-muted-foreground">{ci.secteur}{ci.zone ? ` — ${ci.zone}` : ""}</p>
-                  </div>
-                  <div className="text-right">
-                    {ci.heurelivraison && (
-                      <p className="text-sm font-bold text-blue-700">{ci.heurelivraison}</p>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      {sequenceMode === "itineraire" ? `Ordre GPS: #${ci.ordre + 1}` : "Horaire"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  {clientArticles.map(l => {
-                    const autoCaisses = computeCaissesAuto(l.qtesParClient[ci.clientId] ?? 0, l.unite)
-                    const caissesClient = l.caissesParClient?.[ci.clientId] ?? autoCaisses
-                    return (
-                    <div key={l.articleId} className="flex flex-col gap-1.5 px-3 py-2 bg-muted/40 rounded-xl">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-foreground font-medium">{l.articleNom}</span>
-                        <div className="flex items-center gap-1.5">
-                          {umLabel(l.articleId, l.qtesParClient[ci.clientId] ?? 0) && (
-                            <span className="text-xs text-primary font-semibold">{umLabel(l.articleId, l.qtesParClient[ci.clientId] ?? 0)}</span>
-                          )}
-                          <input type="number" min={0} step={0.5}
-                            defaultValue={l.qtesParClient[ci.clientId] ?? 0}
-                            onBlur={e => {
-                              const v = parseFloat(e.target.value)
-                              if (!isNaN(v) && v !== (l.qtesParClient[ci.clientId] ?? 0)) updateQteClient(bon.id, l.articleId, ci.clientId, v)
-                            }}
-                            className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-sm text-right font-bold text-green-700 focus:outline-none focus:ring-2 focus:ring-primary" />
-                          <span className="text-xs text-muted-foreground">{l.unite}</span>
-                        </div>
-                      </div>
-                      {/* Caisses gros/demi pour ce client — auto-calculées (computeCaissesAuto),
-                          rectifiables individuellement sans repasser par le total article. */}
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <span className="text-[10px] text-muted-foreground">🧺</span>
-                        <input type="number" min={0} step={1}
-                          key={`gros-${caissesClient.gros}`}
-                          defaultValue={caissesClient.gros}
-                          onBlur={e => {
-                            const v = parseInt(e.target.value)
-                            if (!isNaN(v) && v !== caissesClient.gros) updateCaisseClient(bon.id, l.articleId, ci.clientId, "gros", v)
-                          }}
-                          className="w-14 px-1.5 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <span className="text-[10px] text-muted-foreground">gros</span>
-                        <input type="number" min={0} step={1}
-                          key={`demi-${caissesClient.demi}`}
-                          defaultValue={caissesClient.demi}
-                          onBlur={e => {
-                            const v = parseInt(e.target.value)
-                            if (!isNaN(v) && v !== caissesClient.demi) updateCaisseClient(bon.id, l.articleId, ci.clientId, "demi", v)
-                          }}
-                          className="w-14 px-1.5 py-1 rounded-lg border border-border bg-background text-xs text-right focus:outline-none focus:ring-2 focus:ring-primary" />
-                        <span className="text-[10px] text-muted-foreground">demi</span>
-                      </div>
-                    </div>
-                    )
-                  })}
-                </div>
-                <div className="mt-2 flex justify-end items-center gap-2">
-                  {bon.statut !== "valide" && (
-                    <button onClick={() => retirerClientDeLaPrep(bon.id, ci.clientId)} disabled={retiringId === ci.clientId}
-                      className="text-xs font-semibold text-red-500 hover:text-red-700 disabled:opacity-50">
-                      {retiringId === ci.clientId ? "Retrait…" : "Retirer de la préparation"}
-                    </button>
-                  )}
-                  <span className="text-sm font-black text-foreground px-3 py-1 bg-green-50 rounded-xl border border-green-200">
-                    Total : {clientTotal.toFixed(1)} kg
-                  </span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Footer */}
-        {bon.statut !== "valide" && (
-          <div className="px-4 py-4 border-t border-border bg-card shrink-0 flex gap-3">
-            <button onClick={() => setViewing(null)}
-              className="flex-1 py-3 rounded-2xl border border-border text-sm font-semibold text-muted-foreground hover:bg-muted">
-              Fermer
-            </button>
-            <button onClick={() => validateAll(bon.id)} disabled={!!validatingId}
-              className="flex-1 py-3 rounded-2xl text-sm font-bold text-white disabled:opacity-50"
-              style={{ background: "oklch(0.40 0.16 155)" }}>
-              {validatingId === bon.id ? "Validation…" : "Valider toute la prépa"}
-            </button>
-          </div>
-        )}
-        {bon.statut === "valide" && (
-          <div className="px-4 py-4 border-t border-border bg-green-50 shrink-0 flex items-center gap-3">
-            <svg className="w-5 h-5 text-green-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-green-700">Préparation validée</p>
-              {bon.validatedAt && <p className="text-xs text-green-600">{new Date(bon.validatedAt).toLocaleString("fr-MA")}</p>}
-            </div>
-            <button onClick={() => setViewing(null)}
-              className="px-4 py-2 rounded-xl border border-green-300 text-sm font-semibold text-green-700 hover:bg-green-100">
-              Fermer
-            </button>
-          </div>
-        )}
-      </div>
-    )
-  }
+  // Digital preparation view — module-level component DigitalPrepaView (voir
+  // plus haut dans le fichier), rendu plus bas avec toutes ses props.
 
   // ── New bon form ──────────────────────────────────────────────────────────
   const NewBonForm = () => {
@@ -1230,7 +1333,21 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-5">
-      {viewing && viewing.format === "numerique" && <DigitalPrepaView bon={viewing} />}
+      {viewing && viewing.format === "numerique" && (
+        <DigitalPrepaView
+          bon={viewing}
+          articles={articles}
+          retiringId={retiringId}
+          validatingId={validatingId}
+          onClose={() => setViewing(null)}
+          onValidateLigne={validateLigne}
+          onUpdateQteClient={updateQteClient}
+          onUpdateCaisseClient={updateCaisseClient}
+          onUpdatePreparedClient={updatePreparedQteClient}
+          onRetirerClient={retirerClientDeLaPrep}
+          onValidateAll={validateAll}
+        />
+      )}
 
       <div>
         <h2 className="text-xl font-bold text-foreground">
