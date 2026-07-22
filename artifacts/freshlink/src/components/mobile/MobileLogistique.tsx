@@ -219,12 +219,23 @@ export default function MobileLogistique({ user }: Props) {
   const [deliveryMode, setDeliveryMode] = useState<"horaire" | "gps">("horaire")
   const mapRef = useRef<HTMLDivElement>(null)
   const leafletMapRef = useRef<unknown>(null)
+  // Mini-carte du circuit total — affichée directement dans l'onglet "Trip"
+  // (à côté de la liste d'itinéraire texte), sans devoir passer par l'onglet
+  // "Carte GPS" séparé. Instance Leaflet indépendante de celle du tab Carte.
+  const tripMapRef = useRef<HTMLDivElement>(null)
+  const tripLeafletRef = useRef<unknown>(null)
+  const [tripMapLoaded, setTripMapLoaded] = useState(false)
 
   useEffect(() => { refresh() }, [])
 
   useEffect(() => {
     if (activeTab === "map" && !mapLoaded) loadMap()
   }, [activeTab, mapLoaded])
+
+  useEffect(() => {
+    if (activeTab === "trip" && !tripMapLoaded && activeTrip?.itineraire?.length) loadTripInlineMap()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, tripMapLoaded, activeTrip])
 
   const refresh = () => {
     const allTrips = store.getTrips()
@@ -313,6 +324,47 @@ export default function MobileLogistique({ user }: Props) {
       leafletMapRef.current = map
       setMapLoaded(true)
     } catch { setMapLoaded(true) }
+  }
+
+  // Mini-carte du circuit total de la tournée active, affichée directement
+  // dans l'onglet "Trip" (basée sur trip.itineraire — mêmes points que la
+  // liste texte "Itinéraire" juste au-dessus).
+  const loadTripInlineMap = async () => {
+    if (typeof window === "undefined" || tripLeafletRef.current || !activeTrip?.itineraire?.length) return
+    try {
+      if (!document.getElementById("leaflet-cdn-css")) {
+        const link = document.createElement("link")
+        link.id = "leaflet-cdn-css"
+        link.rel = "stylesheet"
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        document.head.appendChild(link)
+      }
+      const L = (await import("leaflet")).default
+      if (!tripMapRef.current) return
+      const pts = [...activeTrip.itineraire].sort((a, b) => a.ordre - b.ordre)
+      const map = L.map(tripMapRef.current).setView([pts[0].lat, pts[0].lng], 12)
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors" }).addTo(map)
+
+      const numberedIcon = (n: number, delivered: boolean) => L.divIcon({
+        html: `<div style="background:${delivered ? "#16a34a" : "#0891b2"};color:#fff;width:22px;height:22px;border-radius:50%;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,.4);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">${n}</div>`,
+        className: "", iconSize: [22, 22], iconAnchor: [11, 11],
+      })
+
+      const allPts: [number, number][] = []
+      pts.forEach(p => {
+        const bl = bls.find(b => b.clientNom === p.clientNom)
+        const delivered = bl?.statutLivraison === "livre"
+        allPts.push([p.lat, p.lng])
+        L.marker([p.lat, p.lng], { icon: numberedIcon(p.ordre, delivered) })
+          .addTo(map)
+          .bindPopup(`<b>${p.ordre}. ${p.clientNom}</b>`)
+      })
+      L.polyline(pts.map(p => [p.lat, p.lng] as [number, number]), { color: "#0891b2", weight: 3, opacity: 0.8 }).addTo(map)
+      if (allPts.length) map.fitBounds(allPts, { padding: [24, 24] })
+
+      tripLeafletRef.current = map
+      setTripMapLoaded(true)
+    } catch { setTripMapLoaded(true) }
   }
 
   // ── Validation tab: magasinier validates en_attente commandes ──────────────
@@ -797,6 +849,15 @@ export default function MobileLogistique({ user }: Props) {
                 <span className="font-bold text-sm">{tripStats.totalHT.toLocaleString("fr-MA")} DH HT</span>
               </div>
             </div>
+
+            {/* Mini-carte du circuit total — vue d'ensemble immédiate, sans
+                devoir passer par l'onglet "Carte GPS" séparé. */}
+            {activeTrip && activeTrip.itineraire.length > 0 && (
+              <div className="bg-card rounded-2xl border border-border overflow-hidden">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-4 pt-4">Circuit total</p>
+                <div ref={tripMapRef} className="h-52 mt-2" />
+              </div>
+            )}
 
             {/* Itinéraire — ordered list */}
             {activeTrip && activeTrip.itineraire.length > 0 && (
