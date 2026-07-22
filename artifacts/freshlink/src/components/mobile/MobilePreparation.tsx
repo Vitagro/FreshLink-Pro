@@ -35,6 +35,26 @@ export function autoGenerateBLs(bon: BonPreparation, operateurId: string, operat
   let seqThisYear = existingBLs.filter(b => ((b as unknown as { numero?: string }).numero ?? b.id).includes(`BL-${y}`)).length
   const created: BonLivraison[] = []
 
+  // Ratio de repli, PAR ARTICLE, à appliquer uniquement aux clients SANS
+  // suivi précis (qtesPreparedParClient) — jamais le ratio global brut
+  // (qtePrepared/qteCommandee) appliqué à tout le monde : ça sur-attribuerait
+  // la marchandise déjà comptée en exact pour d'autres clients (ex: 12kg
+  // réellement préparés, mais 16kg répartis sur les BL si un client précis
+  // à 12kg ET un client au ratio global 40% se cumulent sur la même ligne).
+  // On retire donc du total préparé ce qui est déjà attribué en exact, et on
+  // ne reproratise que sur la part commandée des clients restants.
+  const remainderRatioByArticle = new Map<string, number>()
+  for (const l of bon.lignes) {
+    const preciseSum = clientEntries.reduce((s, ce) => s + (l.qtesPreparedParClient?.[ce.clientId] ?? 0), 0)
+    const remainderOrdered = clientEntries.reduce((s, ce) => {
+      const hasPrecise = l.qtesPreparedParClient?.[ce.clientId] !== undefined
+      return hasPrecise ? s : s + (l.qtesParClient[ce.clientId] ?? 0)
+    }, 0)
+    const remainderPrepared = Math.max(0, l.qtePrepared - preciseSum)
+    const fallbackRatio = l.qteCommandee > 0 ? l.qtePrepared / l.qteCommandee : 1
+    remainderRatioByArticle.set(l.articleId, remainderOrdered > 0 ? remainderPrepared / remainderOrdered : fallbackRatio)
+  }
+
   for (const ce of clientEntries) {
     const alreadyExists = existingBLs.some(bl => {
       const blTripId = (bl as unknown as { tripId?: string }).tripId ?? ""
@@ -47,14 +67,21 @@ export function autoGenerateBLs(bon: BonPreparation, operateurId: string, operat
     const cmdsClient = commandes.filter(c => c.clientId === ce.clientId && c.statut !== "refuse" && c.statut !== "retour")
     const cmd = cmdsClient[0]
 
-    // Quantité par client : qtePrepared de l'article réparti au prorata de la
-    // part de CE client (qtesParClient), jamais le total agrégé de la prépa.
+    // Quantité par client : priorité à qtesPreparedParClient (montant RÉEL
+    // préparé pour CE client — précis même si la prépa est incomplète/en
+    // rupture partielle sur certains clients seulement) ; à défaut (anciennes
+    // préparations sans suivi par client, ou ligne complétée en bloc via
+    // "Valider tout"), on retombe sur le prorata qtePrepared/qteCommandee
+    // appliqué à la part commandée de ce client.
     const lignesBL: BonLivraison["lignes"] = bon.lignes
       .filter(l => (l.qtesParClient[ce.clientId] ?? 0) > 0)
       .map(l => {
         const ordered = l.qtesParClient[ce.clientId] ?? 0
-        const ratio = l.qteCommandee > 0 ? l.qtePrepared / l.qteCommandee : 1
-        const qte = Math.round(ordered * ratio * 100) / 100
+        const preciseQte = l.qtesPreparedParClient?.[ce.clientId]
+        const ratio = remainderRatioByArticle.get(l.articleId) ?? 1
+        const qte = preciseQte !== undefined
+          ? Math.round(preciseQte * 100) / 100
+          : Math.round(ordered * ratio * 100) / 100
         // Cherche le prix dans N'IMPORTE LAQUELLE des commandes groupées.
         let prixUnitaire = 0
         for (const c of cmdsClient) {

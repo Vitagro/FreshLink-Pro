@@ -1095,9 +1095,19 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     if (idx < 0) { setValidatingId(null); return }
     // Ne jamais écraser une ligne déjà validée manuellement (qtePrepared saisi
     // par l'admin via validateLigne) — sinon "Valider toute la prépa" annule
-    // silencieusement les écarts déjà corrigés. Seules les lignes jamais
+    // silencieusement les écarts déjà corrigés. Seules les lignes JAMAIS
     // touchées sont complétées à la quantité commandée.
-    arr[idx].lignes = arr[idx].lignes.map(l => l.valide ? l : { ...l, qtePrepared: l.qteCommandee, valide: true })
+    // ⚠️ Une ligne partiellement préparée (rupture/manque — qtePrepared > 0
+    // ou qtesPreparedParClient renseigné, mais < qteCommandee, donc l.valide
+    // encore false) doit être clôturée avec la quantité RÉELLEMENT préparée,
+    // pas être écrasée à la quantité commandée : "Valider tout" doit rester
+    // possible même avec des quantités manquantes, sans effacer le manque.
+    arr[idx].lignes = arr[idx].lignes.map(l => {
+      if (l.valide) return l
+      const dejaPartiellementTouchee = (l.qtePrepared ?? 0) > 0 || (l.qtesPreparedParClient && Object.keys(l.qtesPreparedParClient).length > 0)
+      if (dejaPartiellementTouchee) return { ...l, valide: true }
+      return { ...l, qtePrepared: l.qteCommandee, valide: true }
+    })
     arr[idx].statut = "valide"
     arr[idx].validatedAt = new Date().toISOString()
     arr[idx].validatedBy = user.id
