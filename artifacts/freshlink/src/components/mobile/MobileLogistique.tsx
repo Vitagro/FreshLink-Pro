@@ -1032,6 +1032,21 @@ interface RecepLigneForm {
   prixFacture: string
   dlc: string         // date limite de consommation تاريخ الصلاحية
   motifReliquat: string
+  // "base" = quantiteRecue saisie en unité de base (kg...), ou le libellé UM
+  // de l'article (ex: "Caisse") si reçu en nombre d'UM — converti en unité
+  // de base au moment d'enregistrer (cf. RECEP_EMPTY_LIGNE / qtyBaseRecue).
+  uniteMode: string
+}
+const RECEP_EMPTY_LIGNE: RecepLigneForm = {
+  articleId: "", articleNom: "", unite: "", quantiteCommandee: 0,
+  quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: "", uniteMode: "base",
+}
+// Quantité reçue convertie en unité de BASE (kg...) — que la saisie ait été
+// faite en unité de base ou en nombre d'UM (ex: 3 Caisses × 15kg = 45kg).
+function qtyBaseRecue(l: RecepLigneForm, art?: Article): number {
+  const raw = Number(l.quantiteRecue) || 0
+  if (art?.um && art.colisageParUM && l.uniteMode === art.um) return raw * art.colisageParUM
+  return raw
 }
 
 function MagasinierReceptionTab({ user }: { user: User }) {
@@ -1046,10 +1061,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
   const [selectedPOId, setSelectedPOId] = useState("")
   const [fournisseurId, setFournisseurId] = useState("")
   const [notes, setNotes] = useState("")
-  const [lignes, setLignes] = useState<RecepLigneForm[]>([{
-    articleId: "", articleNom: "", unite: "", quantiteCommandee: 0,
-    quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: ""
-  }])
+  const [lignes, setLignes] = useState<RecepLigneForm[]>([{ ...RECEP_EMPTY_LIGNE }])
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -1075,7 +1087,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
   const handlePOSelect = (poId: string) => {
     setSelectedPOId(poId)
     const po = pendingPOs.find(p => p.id === poId)
-    if (!po) { setLignes([{ articleId: "", articleNom: "", unite: "", quantiteCommandee: 0, quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: "" }]); return }
+    if (!po) { setLignes([{ ...RECEP_EMPTY_LIGNE }]); return }
     setFournisseurId(po.fournisseurId)
     setLignes([{
       articleId: po.articleId,
@@ -1087,6 +1099,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
       prixFacture: String(po.prixUnitaire),
       dlc: calcDLC(po.articleId),   // auto-fill DLC from shelf life
       motifReliquat: "",
+      uniteMode: "base",
     }])
   }
 
@@ -1102,6 +1115,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
           updated[i].unite = art.unite
           updated[i].prixAchat = String(art.prixAchat)
           updated[i].prixFacture = String(art.prixAchat)
+          updated[i].uniteMode = "base"
           // Auto-fill DLC from shelfLifeJours if defined
           if (art.shelfLifeJours) {
             const d = new Date()
@@ -1126,19 +1140,22 @@ function MagasinierReceptionTab({ user }: { user: User }) {
       purchaseOrderId: source === "purchase_order" ? selectedPOId : undefined,
       fournisseurNom: fournisseurs.find(f => f.id === fournisseurId)?.nom ?? "",
       source,
-      lignes: filled.map(l => ({
-        articleId: l.articleId,
-        articleNom: l.articleNom,
-        quantiteCommandee: l.quantiteCommandee,
-        quantiteRecue: Number(l.quantiteRecue),
-        quantiteFacturee: Number(l.quantiteRecue),
-        prixAchat: Number(l.prixAchat) || undefined,
-        prixFacture: Number(l.prixFacture) || undefined,
-        ecartQte: Number(l.quantiteRecue) - l.quantiteCommandee,
-        ecartPrix: (Number(l.prixFacture) || 0) - (Number(l.prixAchat) || 0),
-        motifReliquat: l.motifReliquat || undefined,
-      })),
-      statut: filled.some(l => Number(l.quantiteRecue) < l.quantiteCommandee) ? "partielle" : "validée",
+      lignes: filled.map(l => {
+        const qteBase = qtyBaseRecue(l, articles.find(a => a.id === l.articleId))
+        return {
+          articleId: l.articleId,
+          articleNom: l.articleNom,
+          quantiteCommandee: l.quantiteCommandee,
+          quantiteRecue: qteBase,
+          quantiteFacturee: qteBase,
+          prixAchat: Number(l.prixAchat) || undefined,
+          prixFacture: Number(l.prixFacture) || undefined,
+          ecartQte: qteBase - l.quantiteCommandee,
+          ecartPrix: (Number(l.prixFacture) || 0) - (Number(l.prixAchat) || 0),
+          motifReliquat: l.motifReliquat || undefined,
+        }
+      }),
+      statut: filled.some(l => qtyBaseRecue(l, articles.find(a => a.id === l.articleId)) < l.quantiteCommandee) ? "partielle" : "validée",
       operateurId: user.id,
       notes: notes || undefined,
     }
@@ -1147,10 +1164,11 @@ function MagasinierReceptionTab({ user }: { user: User }) {
     const allArticles = store.getArticles()
     filled.forEach(l => {
       const idx = allArticles.findIndex(a => a.id === l.articleId)
+      const qteBase = qtyBaseRecue(l, allArticles[idx])
       if (idx >= 0) {
         allArticles[idx] = {
           ...allArticles[idx],
-          stockDisponible: allArticles[idx].stockDisponible + Number(l.quantiteRecue),
+          stockDisponible: allArticles[idx].stockDisponible + qteBase,
           prixAchat: Number(l.prixFacture) || allArticles[idx].prixAchat,
         }
       }
@@ -1164,7 +1182,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
           unite: l.unite,
           dateReception: store.today(),
           dlc: l.dlc,
-          quantite: Number(l.quantiteRecue),
+          quantite: qteBase,
           fournisseurNom: fournisseurs.find(f => f.id === fournisseurId)?.nom ?? "",
           operateurNom: user.name,
         })
@@ -1183,7 +1201,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
     setSaving(false)
     setSaved(true)
     setShowForm(false)
-    setLignes([{ articleId: "", articleNom: "", unite: "", quantiteCommandee: 0, quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: "" }])
+    setLignes([{ ...RECEP_EMPTY_LIGNE }])
     setNotes("")
     setSelectedPOId("")
     setTimeout(() => setSaved(false), 3000)
@@ -1258,7 +1276,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
           <div className="grid grid-cols-2 gap-2">
             {(["purchase_order", "manuel"] as const).map(s => (
               <button key={s} type="button"
-                onClick={() => { setSource(s); setSelectedPOId(""); setLignes([{ articleId: "", articleNom: "", unite: "", quantiteCommandee: 0, quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: "" }]) }}
+                onClick={() => { setSource(s); setSelectedPOId(""); setLignes([{ ...RECEP_EMPTY_LIGNE }]) }}
                 className={`py-2 rounded-xl text-xs font-bold border transition-all ${source === s ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600 border-slate-200"}`}>
                 {s === "purchase_order" ? "Depuis PO" : "Saisie manuelle"}
               </button>
@@ -1297,7 +1315,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
               <p className="text-xs font-bold text-slate-700">Articles recus</p>
               {source === "manuel" && (
                 <button type="button"
-                  onClick={() => setLignes(p => [...p, { articleId: "", articleNom: "", unite: "", quantiteCommandee: 0, quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: "" }])}
+                  onClick={() => setLignes(p => [...p, { ...RECEP_EMPTY_LIGNE }])}
                   className="text-xs text-green-600 font-bold flex items-center gap-1">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1322,16 +1340,52 @@ function MagasinierReceptionTab({ user }: { user: User }) {
                   </div>
                 )}
 
+                {/* Réception par unité de base (kg...) ou par nombre d'UM (ex:
+                    Caisse) — uniquement si l'article a une UM commerciale
+                    définie. La quantité est toujours convertie en unité de
+                    base à l'enregistrement (cf. qtyBaseRecue). */}
+                {(() => {
+                  const art = articles.find(a => a.id === l.articleId)
+                  if (!art?.um || !art.colisageParUM) return null
+                  const isUM = l.uniteMode === art.um
+                  return (
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => updateLigne(i, { uniteMode: "base" })}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border-2 transition-colors ${!isUM ? "border-green-600 bg-green-600 text-white" : "border-slate-200 text-slate-600"}`}>
+                        Quantité ({art.unite})
+                      </button>
+                      <button type="button" onClick={() => updateLigne(i, { uniteMode: art.um! })}
+                        className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold border-2 transition-colors ${isUM ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 text-blue-600"}`}>
+                        Nbr {art.um} <span className="font-normal opacity-80">(= {art.colisageParUM}{art.unite})</span>
+                      </button>
+                    </div>
+                  )
+                })()}
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Qte recue * ({l.unite})</label>
-                    <input type="number" min="0" value={l.quantiteRecue}
-                      onChange={e => updateLigne(i, { quantiteRecue: e.target.value })}
-                      className="w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-400"
-                      placeholder="0" />
-                    {l.quantiteCommandee > 0 && Number(l.quantiteRecue) < l.quantiteCommandee && Number(l.quantiteRecue) > 0 && (
-                      <p className="text-[10px] text-amber-600 mt-0.5">Reliquat: {l.quantiteCommandee - Number(l.quantiteRecue)} {l.unite}</p>
-                    )}
+                    {(() => {
+                      const art = articles.find(a => a.id === l.articleId)
+                      const isUM = !!(art?.um && art.colisageParUM && l.uniteMode === art.um)
+                      const qteBase = qtyBaseRecue(l, art)
+                      return (
+                        <>
+                          <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">
+                            Qte recue * ({isUM ? art!.um : l.unite})
+                          </label>
+                          <input type="number" min="0" step={isUM ? "1" : "0.5"} value={l.quantiteRecue}
+                            onChange={e => updateLigne(i, { quantiteRecue: e.target.value })}
+                            className="w-full px-2.5 py-2 rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-400"
+                            placeholder="0" />
+                          {isUM && Number(l.quantiteRecue) > 0 && (
+                            <p className="text-[10px] text-blue-600 mt-0.5 font-semibold">= {qteBase} {l.unite}</p>
+                          )}
+                          {l.quantiteCommandee > 0 && qteBase < l.quantiteCommandee && qteBase > 0 && (
+                            <p className="text-[10px] text-amber-600 mt-0.5">Reliquat: {(l.quantiteCommandee - qteBase).toFixed(2)} {l.unite}</p>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                   <div>
                     <label className="text-[10px] font-semibold text-slate-600 block mb-0.5">Prix facture (DH/{l.unite})</label>
@@ -1361,7 +1415,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
                 </div>
 
                 {/* Motif reliquat if qty received < commanded */}
-                {l.quantiteCommandee > 0 && Number(l.quantiteRecue) < l.quantiteCommandee && (
+                {l.quantiteCommandee > 0 && qtyBaseRecue(l, articles.find(a => a.id === l.articleId)) < l.quantiteCommandee && (
                   <input type="text" value={l.motifReliquat}
                     onChange={e => updateLigne(i, { motifReliquat: e.target.value })}
                     placeholder="Motif reliquat (ex: manque stock fournisseur)"

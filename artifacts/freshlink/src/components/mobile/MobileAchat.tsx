@@ -59,6 +59,15 @@ interface BesoinSKU {
   lancerDA: boolean       // true when besoinNet > 0 → must create Purchase Order
 }
 
+// Exclut les articles désactivés globalement (BOArticles → actif=false) —
+// souvent d'anciens doublons de catalogue jamais supprimés. Mobile Commercial
+// les filtre déjà (allArticlesDedup) ; Mobile Achat ne le faisait pas encore,
+// d'où des doublons visibles côté acheteur (ex: "Abricot beldi 10kg" en
+// double) alors qu'un seul apparaissait côté prévendeur.
+function onlyActiveArticles(list: Article[]): Article[] {
+  return list.filter(a => a.actif !== false)
+}
+
 // Computes DA table:
 //   besoinNet = qteCommandee - stockDispo
 //   besoinNet > 0  → LANCER DA (red, purchase required)
@@ -538,7 +547,7 @@ export default function MobileAchat({ user }: Props) {
   }
 
   useEffect(() => {
-    const arts = store.getArticles()
+    const arts = onlyActiveArticles(store.getArticles())
     setArticles(arts)
     setFournisseurs(store.getFournisseurs())
     setClients(store.getClients())
@@ -567,10 +576,11 @@ export default function MobileAchat({ user }: Props) {
     // local ci-dessus, puis mise à jour silencieuse dès que Supabase répond.
     import("@/lib/supabase/db").then(async db => {
       try {
-        const [freshArts, freshFourns, { clients: freshClients }] = await Promise.all([
+        const [freshArtsRaw, freshFourns, { clients: freshClients }] = await Promise.all([
           db.fetchArticles(), db.fetchFournisseurs(), db.fetchClients(),
         ])
-        if (freshArts?.length) { setArticles(freshArts); setBesoinSKU(calcBesoinSKU(freshArts)) }
+        const freshArts = onlyActiveArticles(freshArtsRaw ?? [])
+        if (freshArts.length) { setArticles(freshArts); setBesoinSKU(calcBesoinSKU(freshArts)) }
         if (freshFourns?.length) setFournisseurs(freshFourns)
         if (freshClients?.length) setClients(freshClients)
       } catch { /* offline */ }
@@ -706,7 +716,7 @@ export default function MobileAchat({ user }: Props) {
     setSending(false)
     setLignes([EMPTY_LIGNE()])
     setFournisseurId("")
-    setArticles(store.getArticles()) // refresh PA
+    setArticles(onlyActiveArticles(store.getArticles())) // refresh PA
     setTimeout(() => setSuccess(false), 3500)
   }
 
@@ -1634,7 +1644,7 @@ export default function MobileAchat({ user }: Props) {
                 <h3 className="text-sm font-bold text-foreground">Mes Bons d&apos;Achat</h3>
                 <p className="text-xs text-muted-foreground">{myBons.length} bon(s) enregistre(s)</p>
               </div>
-              <button onClick={() => setArticles(store.getArticles())}
+              <button onClick={() => setArticles(onlyActiveArticles(store.getArticles()))}
                 className="p-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors">
                 <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
