@@ -512,6 +512,7 @@ function ReceptionTab({
 }) {
   const [selected, setSelected]     = useState<ReceptionItem | null>(null)
   const [qtesRecues, setQtesRecues] = useState<Record<string, string>>({})
+  const [uniteMode, setUniteMode]   = useState<Record<string, string>>({})
   const [prixRecus, setPrixRecus]   = useState<Record<string, string>>({})
   const [motifs, setMotifs]         = useState<Record<string, string>>({})
   const [caisseGros,   setCaisseGros]   = useState<Record<string, string>>({})
@@ -542,6 +543,16 @@ function ReceptionTab({
       - Number(chariot[artId]      ?? 0) * TARE_CHARIOT
     )
 
+  // Convertit la saisie brute vers l'unite de base (kg) — soit directe, soit
+  // via nb d'UM (ex: 3 Caisse x 15kg = 45kg) selon le mode choisi pour cet article.
+  const qtyBaseRecue = (articleId: string): number => {
+    const raw = Number(qtesRecues[articleId] ?? 0) || 0
+    const art = articles.find(a => a.id === articleId)
+    const mode = uniteMode[articleId] ?? "base"
+    if (art?.um && art.colisageParUM && mode === art.um) return raw * art.colisageParUM
+    return raw
+  }
+
   const openItem = (item: ReceptionItem) => {
     setSelected(item)
     setError("")
@@ -560,6 +571,7 @@ function ReceptionTab({
       init[l.articleId] = reste > 0 ? String(reste) : ""
     })
     setQtesRecues(init)
+    setUniteMode({})
     setPrixRecus({})
     setMotifs({})
     setCaisseGros({})
@@ -575,7 +587,7 @@ function ReceptionTab({
     try {
       let totalGros = 0, totalDemi = 0, totalDollar = 0, totalChariot = 0
       const lignes = selected.lignes.map(l => {
-        const brut = Number(qtesRecues[l.articleId]   ?? 0)
+        const brut = qtyBaseRecue(l.articleId)
         const net  = calcNet(l.articleId, brut)
         const g    = Number(caisseGros[l.articleId]   ?? 0)
         const d    = Number(caisseDemi[l.articleId]   ?? 0)
@@ -697,10 +709,12 @@ function ReceptionTab({
 
         {/* Article lines */}
         {selected.lignes.map(l => {
-          const brut  = Number(qtesRecues[l.articleId] ?? 0)
-          const net   = calcNet(l.articleId, brut)
           const art   = articles.find(a => a.id === l.articleId)
+          const brut  = qtyBaseRecue(l.articleId)
+          const net   = calcNet(l.articleId, brut)
           const unite = l.unite || art?.unite || "kg"
+          const hasUM = !!(art?.um && art.colisageParUM)
+          const modeUM = hasUM && uniteMode[l.articleId] === art!.um
           return (
             <div key={l.articleId} className="bg-card rounded-xl border border-border p-4 flex flex-col gap-3">
               {/* Article header */}
@@ -720,18 +734,35 @@ function ReceptionTab({
                 </div>
               </div>
 
-              {/* Quantite recue brut */}
+              {/* Quantite recue brut — saisie directe en unite de base, ou en nb d'UM (Caisse...) */}
               <div>
+                {hasUM && (
+                  <div className="flex gap-2 mb-1.5">
+                    <button type="button"
+                      onClick={() => setUniteMode(p => ({ ...p, [l.articleId]: "base" }))}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!modeUM ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                      Quantite ({unite})
+                    </button>
+                    <button type="button"
+                      onClick={() => setUniteMode(p => ({ ...p, [l.articleId]: art!.um! }))}
+                      className={`flex-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${modeUM ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                      Nbr {art!.um} (= {art!.colisageParUM}{unite})
+                    </button>
+                  </div>
+                )}
                 <label className="block text-xs font-semibold text-foreground mb-1.5">
-                  Quantite recue (brut) <span className="text-muted-foreground font-normal">({unite})</span>
+                  {modeUM ? `Nbr ${art!.um} recus (brut)` : "Quantite recue (brut)"} <span className="text-muted-foreground font-normal">({modeUM ? art!.um : unite})</span>
                 </label>
                 <input
-                  type="number" inputMode="decimal" min="0"
+                  type="number" inputMode="decimal" min="0" step={modeUM ? 1 : 0.5}
                   value={qtesRecues[l.articleId] ?? ""}
                   onChange={e => setQtesRecues(p => ({ ...p, [l.articleId]: e.target.value }))}
-                  placeholder={`Max ${QTE(l.quantite)}`}
+                  placeholder={modeUM ? "0" : `Max ${QTE(l.quantite)}`}
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 />
+                {modeUM && Number(qtesRecues[l.articleId] ?? 0) > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1">= {QTE(brut)} {unite} (brut, avant tare)</p>
+                )}
               </div>
 
               {/* Caisses tare — 4 types */}
