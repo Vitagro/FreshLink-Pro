@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { store, type Commande, type LigneCommande } from "@/lib/store"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { store, type Commande, type LigneCommande, type Client, type Article, type BonPreparation, type LignePreparation, type BonLivraison, type LigneBL } from "@/lib/store"
 import type { User } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
@@ -181,6 +181,130 @@ function timeOnly(iso?: string): string | undefined {
   } catch { return undefined }
 }
 
+// ── Import commandes — types & helpers ────────────────────────────────────────
+// Modèle attendu du fichier importé : une ligne par (Date × Client × Article),
+// colonnes Date / Client / Telephone / Secteur / Article / Unite / Quantite /
+// PrixVente — regroupées ici en une Commande par (Date, Client).
+interface ImportRawLigne {
+  date: string
+  client: string
+  telephone: string
+  secteur: string
+  articleNom: string
+  unite: string
+  quantite: number
+  prixVente: number
+}
+interface ImportPreview {
+  nbLignes: number
+  nbCommandes: number
+  clientsExistants: number
+  clientsACreer: Map<string, Client>
+  articlesExistants: number
+  articlesACreer: Map<string, Article>
+  commandes: { date: string; clientNom: string; clientId: string; lignes: LigneCommande[] }[]
+}
+
+function normImportName(s: string): string {
+  return (s ?? "").toString()
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().trim().replace(/\s+/g, " ")
+}
+
+// Pure date-string arithmetic — deliberately avoids new Date(dateStr) + local
+// setDate/toISOString, which round-trips through the browser's local
+// timezone and can silently shift the result by a day depending on where
+// the browser/server happens to be running (verified: rolled back a full
+// day on a non-Morocco-timezone test machine).
+function addDaysISO(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number)
+  const utcMs = Date.UTC(y, m - 1, d) + n * 86_400_000
+  return new Date(utcMs).toISOString().slice(0, 10)
+}
+
+function parseImportRows(rows: Record<string, unknown>[]): ImportRawLigne[] {
+  return rows
+    .map(r => ({
+      date: String(r.Date ?? r.date ?? "").slice(0, 10),
+      client: String(r.Client ?? r.client ?? "").trim(),
+      telephone: String(r.Telephone ?? r.telephone ?? ""),
+      secteur: String(r.Secteur ?? r.secteur ?? ""),
+      articleNom: String(r.Article ?? r.article ?? "").trim(),
+      unite: String(r.Unite ?? r.unite ?? "kg"),
+      quantite: Number(r.Quantite ?? r.quantite ?? 0) || 0,
+      prixVente: Number(r.PrixVente ?? r.prixVente ?? r["Prix Vente"] ?? 0) || 0,
+    }))
+    .filter(r => r.date && r.client && r.articleNom && r.quantite > 0)
+}
+
+function buildImportPreview(raw: ImportRawLigne[], user: User): ImportPreview {
+  const existingClients = store.getClients()
+  const existingArticles = store.getArticles()
+  const clientIndex = new Map<string, Client>()
+  existingClients.forEach(c => { const n = normImportName(c.nom); if (n && !clientIndex.has(n)) clientIndex.set(n, c) })
+  const articleIndex = new Map<string, Article>()
+  existingArticles.forEach(a => { const n = normImportName(a.nom); if (n && !articleIndex.has(n)) articleIndex.set(n, a) })
+
+  const clientsACreer = new Map<string, Client>()
+  const articlesACreer = new Map<string, Article>()
+  const groups = new Map<string, { date: string; clientNom: string; clientId: string; lignes: LigneCommande[] }>()
+
+  for (const r of raw) {
+    const cKey = normImportName(r.client)
+    let client = clientIndex.get(cKey) ?? clientsACreer.get(cKey)
+    if (!client) {
+      client = {
+        id: store.genId("VF"),
+        nom: r.client,
+        secteur: r.secteur || "Import",
+        zone: r.secteur || "",
+        type: "autre",
+        taille: "150-300kg",
+        typeProduits: "moyenne",
+        rotation: "journalier",
+        telephone: r.telephone || "",
+        email: "",
+        adresse: "",
+        createdBy: user.id,
+        createdAt: new Date().toISOString(),
+      }
+      clientsACreer.set(cKey, client)
+      clientIndex.set(cKey, client)
+    }
+
+    const aKey = normImportName(r.articleNom)
+    let article = articleIndex.get(aKey) ?? articlesACreer.get(aKey)
+    if (!article) {
+      article = {
+        id: store.genId("VF"),
+        nom: r.articleNom, nomAr: "", famille: "Autres", unite: r.unite || "kg",
+        actif: true, prixAchat: 0, pvMethode: "manuel", pvValeur: r.prixVente,
+        stockDisponible: 0, stockDefect: 0,
+      }
+      articlesACreer.set(aKey, article)
+      articleIndex.set(aKey, article)
+    }
+
+    const groupKey = `${r.date}|||${client.id}`
+    let g = groups.get(groupKey)
+    if (!g) { g = { date: r.date, clientNom: client.nom, clientId: client.id, lignes: [] }; groups.set(groupKey, g) }
+    g.lignes.push({
+      articleId: article.id, articleNom: article.nom, unite: article.unite,
+      quantite: r.quantite, prixUnitaire: r.prixVente, prixVente: r.prixVente, total: r.quantite * r.prixVente,
+    })
+  }
+
+  return {
+    nbLignes: raw.length,
+    nbCommandes: groups.size,
+    clientsExistants: [...groups.values()].filter(g => !clientsACreer.has(normImportName(g.clientNom))).length,
+    clientsACreer,
+    articlesExistants: existingArticles.length,
+    articlesACreer,
+    commandes: [...groups.values()],
+  }
+}
+
 // ── Composant principal ───────────────────────────────────────────────────────
 
 export default function BOCommandesUnifiees({ user }: Props) {
@@ -209,6 +333,108 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const [noClientId, setNoClientId]       = useState("")
   const [noHeure, setNoHeure]             = useState("08:00")
   const [noLignes, setNoLignes]           = useState<{ articleId: string; quantite: string; prixVente: string }[]>([{ articleId: "", quantite: "", prixVente: "" }])
+
+  // ── Import commandes (Excel) ────────────────────────────────────────────────
+  const [showImport, setShowImport]       = useState(false)
+  const [importParsing, setImportParsing] = useState(false)
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null)
+  const [importError, setImportError]     = useState("")
+  const [importStatut, setImportStatut]   = useState<"en_attente" | "valide" | "livre">("en_attente")
+  const [importCommitting, setImportCommitting] = useState(false)
+  const importFileRef = useRef<HTMLInputElement>(null)
+
+  const handleImportFile = async (file: File) => {
+    setImportParsing(true); setImportError(""); setImportPreview(null)
+    try {
+      const XLSX = await import("xlsx")
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" })
+      const raw = parseImportRows(rows)
+      if (raw.length === 0) { setImportError("Aucune ligne valide trouvée (colonnes attendues : Date, Client, Article, Quantite, PrixVente)."); return }
+      setImportPreview(buildImportPreview(raw, user))
+    } catch (e) {
+      setImportError(`Erreur de lecture du fichier : ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setImportParsing(false)
+    }
+  }
+
+  const confirmImport = async () => {
+    if (!importPreview) return
+    if (!hasPermission(user.role, "creer_commande")) { logAction(user, "creer_commande", "denied"); return }
+    setImportCommitting(true)
+    try {
+      const db = await import("@/lib/supabase/db").catch(() => null)
+
+      // 1. Nouveaux clients
+      const newClients = [...importPreview.clientsACreer.values()]
+      newClients.forEach(c => store.addClient(c))
+      if (db) await Promise.all(newClients.map(c => db.upsertClient(c).catch(() => {})))
+
+      // 2. Nouveaux articles
+      const newArticles = [...importPreview.articlesACreer.values()]
+      if (newArticles.length) store.saveArticles([...store.getArticles(), ...newArticles])
+      if (db) await Promise.all(newArticles.map(a => db.upsertArticle(a).catch(() => {})))
+
+      // 3. Commandes (+ Préparation/BL générés si statut "livre" — historique déjà abouti)
+      for (const g of importPreview.commandes) {
+        const cmd: Commande = {
+          id: store.genCommande(), date: g.date, createdAt: new Date().toISOString(),
+          createdVia: "backoffice",
+          commercialId: user.id, commercialNom: `${user.name} (Import)`,
+          clientId: g.clientId, clientNom: g.clientNom,
+          secteur: "", zone: "", gpsLat: 0, gpsLng: 0,
+          lignes: g.lignes, heurelivraison: "", statut: importStatut,
+          emailDestinataire: store.getEmailConfig().commercial,
+        }
+        store.addCommande(cmd)
+        if (db) await db.upsertCommande(cmd).catch(() => {})
+
+        if (importStatut === "livre") {
+          const lignesBP: LignePreparation[] = g.lignes.map(l => ({
+            articleId: l.articleId, articleNom: l.articleNom, unite: l.unite,
+            qtesParClient: { [g.clientId]: l.quantite }, qteCommandee: l.quantite,
+            qtePrepared: l.quantite, valide: true,
+            qtesPreparedParClient: { [g.clientId]: l.quantite },
+          }))
+          const bp: BonPreparation = {
+            id: store.genId("BP"), nom: `Prep import ${g.date}`, date: g.date,
+            mode: "par_client", type: "stockage", format: "numerique",
+            clientIds: [g.clientId], lignes: lignesBP, statut: "valide",
+            createdBy: user.id, validatedAt: new Date().toISOString(), validatedBy: user.id,
+          }
+          store.addBonPreparation(bp)
+          if (db) await db.upsertBonPreparation(bp).catch(() => {})
+
+          const lignesBL: LigneBL[] = g.lignes.map(l => ({
+            articleNom: l.articleNom, unite: l.unite, quantite: l.quantite,
+            prixUnitaire: l.prixUnitaire, total: l.total,
+          }))
+          const montantTotal = lignesBL.reduce((s, l) => s + l.total, 0)
+          const bl: BonLivraison = {
+            id: store.genId("BL"), date: addDaysISO(g.date, 1), tripId: "",
+            commandeId: cmd.id, commandeIds: [cmd.id], clientId: g.clientId, clientNom: g.clientNom,
+            secteur: "", zone: "", livreurNom: "", prevendeurNom: cmd.commercialNom,
+            lignes: lignesBL, montantTotal, tva: 0, montantTTC: montantTotal,
+            statut: "émis", statutLivraison: "livre",
+          }
+          store.addBonLivraison(bl)
+          if (db) await db.upsertBonLivraison(bl).catch(() => {})
+        }
+      }
+
+      logAction(user, "creer_commande", "success", { type: "import", label: `${importPreview.nbCommandes} commande(s) importée(s)` })
+      setMsg({ ok: true, text: `✅ Import terminé : ${importPreview.nbCommandes} commande(s), ${newClients.length} nouveau(x) client(s), ${newArticles.length} nouvel(aux) article(s).` })
+      setShowImport(false); setImportPreview(null)
+      load()
+    } catch (e) {
+      setImportError(`Erreur lors de l'import : ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setImportCommitting(false)
+    }
+  }
 
   const saveNewOrder = async () => {
     if (!hasPermission(user.role, "creer_commande")) { logAction(user, "creer_commande", "denied"); return }
@@ -636,6 +862,34 @@ export default function BOCommandesUnifiees({ user }: Props) {
     XLSX.writeFile(wb, `commandes_client_article${periode}.xlsx`)
   }
 
+  // ── Export détaillé — une ligne par (commande × article), TOUS les champs ──
+  // utiles à un ré-import (Date/Client/Telephone/Secteur/Article/Unite/
+  // Quantite/PrixVente) + contexte (Numero, Statut, Source, Prévendeur,
+  // Zone/Categorie, Heure commande, Heure livraison souhaitée).
+  const exportDetaille = () => {
+    if (filtered.length === 0) return
+    logAction(user, "exporter_donnees", "success", { type: "commandes_detail", label: `${filtered.length} commande(s)` })
+    import("xlsx").then(XLSX => {
+      const rows: Record<string, unknown>[] = []
+      filtered.forEach(c => {
+        c.lignes.forEach(l => {
+          rows.push({
+            Numero: c.numero, Date: c.date, "Heure commande": c.heureCommande ?? "",
+            "Heure livraison": c.heurelivraison ?? "", Client: c.nom_client, Telephone: c.telephone,
+            Secteur: c.zone ?? "", Categorie: c.categorie ?? "", Prevendeur: c.prevendeur, Source: c.source,
+            Statut: c.statut, Article: l.nom, Unite: l.unite, Quantite: l.quantite, PrixVente: l.prix,
+            "Total ligne": l.total, "Montant commande": c.montant,
+          })
+        })
+      })
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Commandes détaillées")
+      const periode = filterDateDebut || filterDateFin ? `_${filterDateDebut || "debut"}_${filterDateFin || "fin"}` : `_${new Date().toISOString().slice(0, 10)}`
+      XLSX.writeFile(wb, `commandes_detail${periode}.xlsx`)
+    })
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4 max-w-7xl mx-auto">
@@ -655,6 +909,27 @@ export default function BOCommandesUnifiees({ user }: Props) {
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
             Nouvelle commande
+          </button>}
+          {hasPermission(user.role, "creer_commande") && <button
+            onClick={() => { setShowImport(true); setImportPreview(null); setImportError("") }}
+            title="Importer un fichier Excel de commandes (Date, Client, Article, Quantite, PrixVente) — crée automatiquement les clients/articles manquants"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+            </svg>
+            Importer
+          </button>}
+          {hasPermission(user.role, "exporter_donnees") && <button
+            onClick={exportDetaille}
+            disabled={filtered.length === 0}
+            title="Exporte le détail complet des commandes filtrées : une ligne par commande × article, tous les champs (date, client, secteur, statut, prévendeur, prix...)"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v11a2 2 0 01-2 2z" />
+            </svg>
+            Exporter détaillé
           </button>}
           {hasPermission(user.role, "exporter_donnees") && <button
             onClick={exportParClientArticle}
@@ -706,6 +981,82 @@ export default function BOCommandesUnifiees({ user }: Props) {
           )
         })}
       </div>
+
+      {/* ── Modal : import commandes (Excel) ── */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={e => e.target === e.currentTarget && setShowImport(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <h3 className="font-bold text-slate-800">Importer des commandes</h3>
+              <button onClick={() => setShowImport(false)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            </div>
+            <div className="p-5 flex flex-col gap-4">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 leading-relaxed">
+                Fichier Excel avec une ligne par <strong>Client × Article</strong>. Colonnes attendues :
+                <code className="block mt-1 px-2 py-1 rounded bg-white border border-slate-200 font-mono text-[11px]">
+                  Date | Client | Telephone | Secteur | Article | Unite | Quantite | PrixVente
+                </code>
+                Les clients/articles introuvables dans l&apos;ERP sont créés automatiquement.
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  ref={importFileRef}
+                  type="file" accept=".xlsx,.xls,.csv"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
+                  className="text-sm flex-1"
+                />
+                {importParsing && <span className="text-xs text-slate-500">Lecture...</span>}
+              </div>
+
+              {importError && (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{importError}</div>
+              )}
+
+              {importPreview && (
+                <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                      <p className="text-[11px] text-slate-500">Commandes détectées</p>
+                      <p className="text-lg font-bold text-slate-800">{importPreview.nbCommandes}</p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                      <p className="text-[11px] text-slate-500">Lignes article</p>
+                      <p className="text-lg font-bold text-slate-800">{importPreview.nbLignes}</p>
+                    </div>
+                    <div className={`rounded-xl border px-3 py-2 ${importPreview.clientsACreer.size > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
+                      <p className="text-[11px] text-slate-500">Nouveaux clients à créer</p>
+                      <p className="text-lg font-bold text-slate-800">{importPreview.clientsACreer.size}</p>
+                    </div>
+                    <div className={`rounded-xl border px-3 py-2 ${importPreview.articlesACreer.size > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
+                      <p className="text-[11px] text-slate-500">Nouveaux articles à créer</p>
+                      <p className="text-lg font-bold text-slate-800">{importPreview.articlesACreer.size}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-slate-600">Statut de ces commandes</label>
+                    <select value={importStatut} onChange={e => setImportStatut(e.target.value as typeof importStatut)}
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                      <option value="en_attente">En attente (nouvelles commandes à traiter normalement)</option>
+                      <option value="valide">Validée</option>
+                      <option value="livre">Déjà livrée (historique — génère aussi Préparation + BL, livraison = date commande + 1)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={confirmImport}
+                    disabled={importCommitting}
+                    className="w-full py-3 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors disabled:opacity-60"
+                  >
+                    {importCommitting ? "Import en cours..." : `Confirmer l'import (${importPreview.nbCommandes} commande(s))`}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal : nouvelle commande (création manuelle) ── */}
       {showNew && (
