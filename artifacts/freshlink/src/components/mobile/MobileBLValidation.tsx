@@ -151,10 +151,14 @@ function buildBLHtml(bl: BonLivraison, company: { nom?: string; adresse?: string
   .sig-label { font-size:10px; font-weight:700; text-transform:uppercase; color:#6b7280; margin-bottom:4px; }
   .sig-line { border-bottom:1px solid #d1d5db; height:48px; }
   .footer { margin-top:16px; font-size:10px; color:#9ca3af; text-align:center; }
-  @media print { @page { margin: 8mm; size: A5 portrait; } body { padding:0; } }
+  .back-btn { display:flex; align-items:center; gap:6px; margin-bottom:12px;
+    padding:9px 16px; border-radius:10px; border:none; background:#1a4f2a; color:#fff;
+    font-family:Arial,sans-serif; font-size:13px; font-weight:700; cursor:pointer; }
+  @media print { @page { margin: 8mm; size: A5 portrait; } body { padding:0; } .no-print { display:none !important; } }
 </style>
 </head>
 <body>
+  <button class="back-btn no-print" onclick="window.close()">← Retour</button>
   <div class="header">
     ${company.logo ? `<img src="${company.logo}" style="height:50px;margin-bottom:8px" />` : ""}
     <div class="co-name">${company.nom ?? "Vita Fresh"}</div>

@@ -232,10 +232,21 @@ tr.subtotal td{font-weight:800;color:#15803d}
 `
 }
 
+// Bouton "Retour" injecté en tête de chaque document imprimable — ces documents
+// s'ouvrent dans une fenêtre/onglet séparé sans aucun chrome d'appli (pas de
+// barre de nav), donc sans ce bouton l'utilisateur (surtout sur mobile) n'a
+// aucun moyen de revenir à l'écran précédent une fois la boîte d'impression
+// fermée. Masqué à l'impression via .no-print (déjà défini dans baseCss).
+const BACK_BUTTON_HTML = `<button class="no-print" onclick="window.close()" style="display:flex;align-items:center;gap:6px;margin:0 0 14px;padding:9px 16px;border-radius:10px;border:none;background:#1a4f2a;color:#fff;font-family:Inter,Arial,sans-serif;font-size:13px;font-weight:700;cursor:pointer">← Retour</button>`
+
 function open(html: string, w = 850, h = 1150) {
   if (typeof window === "undefined") return
   const win = window.open("", "_blank", `width=${w},height=${h}`)
-  if (win) { win.document.write(html); win.document.close() }
+  if (win) {
+    const withBack = html.replace("<body>", `<body>${BACK_BUTTON_HTML}`)
+    win.document.write(withBack)
+    win.document.close()
+  }
 }
 function dl(html: string, filename: string) {
   if (typeof window === "undefined") return
