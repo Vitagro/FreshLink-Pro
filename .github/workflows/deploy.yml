@@ -91,11 +91,11 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "mkdir -p '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_API_RELEASE_DIR }}'"
-          sshpass -e scp -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
+          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz"
-          sshpass -e scp -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
+          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz"
           $SSH "tar -xzf '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz' -C '${{ env.REMOTE_SPA_RELEASE_DIR }}' && rm '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz'"
           $SSH "tar -xzf '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz' -C '${{ env.REMOTE_API_RELEASE_DIR }}' && rm '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz'"
@@ -104,7 +104,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "rm -rf '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_DIR }}' '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
           $SSH "rm -rf '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_DIR }}' '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_RELEASE_DIR }}' '${{ env.REMOTE_API_DIR }}' && mkdir -p '${{ env.REMOTE_API_DIR }}/tmp'"
 
@@ -112,7 +112,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           cat > erp.htaccess <<EOF
           PassengerAppRoot ${{ env.REMOTE_API_DIR }}
           PassengerAppType node
@@ -146,7 +146,7 @@ jobs:
           RewriteCond %{REQUEST_FILENAME} !-d
           RewriteRule ^ /index.html [L]
           EOF
-          sshpass -e scp -P "${{ secrets.SSH_PORT }}" erp.htaccess \
+          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" erp.htaccess \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_DIR }}/.htaccess"
           $SSH "touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
 
@@ -170,7 +170,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "rm -rf '${{ env.REMOTE_SPA_DIR }}' && mv '${{ env.REMOTE_SPA_BACKUP_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
           $SSH "rm -rf '${{ env.REMOTE_API_DIR }}' && mv '${{ env.REMOTE_API_BACKUP_DIR }}' '${{ env.REMOTE_API_DIR }}' && touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
           echo "::error::Deploy failed health check — rolled back to previous release."

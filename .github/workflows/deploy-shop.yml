@@ -45,9 +45,9 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "mkdir -p '${{ env.REMOTE_RELEASE_DIR }}'"
-          sshpass -e scp -P "${{ secrets.SSH_PORT }}" shop-deploy.tar.gz \
+          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" shop-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_RELEASE_DIR }}/shop-deploy.tar.gz"
           $SSH "tar -xzf '${{ env.REMOTE_RELEASE_DIR }}/shop-deploy.tar.gz' -C '${{ env.REMOTE_RELEASE_DIR }}' && rm '${{ env.REMOTE_RELEASE_DIR }}/shop-deploy.tar.gz'"
 
@@ -55,7 +55,7 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "rm -rf '${{ env.REMOTE_BACKUP_DIR }}' && mv '${{ env.REMOTE_APP_DIR }}' '${{ env.REMOTE_BACKUP_DIR }}' && mv '${{ env.REMOTE_RELEASE_DIR }}' '${{ env.REMOTE_APP_DIR }}'"
 
       - name: Health check
@@ -74,6 +74,6 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "rm -rf '${{ env.REMOTE_APP_DIR }}' && mv '${{ env.REMOTE_BACKUP_DIR }}' '${{ env.REMOTE_APP_DIR }}'"
           echo "::error::Deploy failed health check — rolled back to previous release."
