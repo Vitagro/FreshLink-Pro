@@ -81,6 +81,10 @@ export default function MobileCommercial({ user }: Props) {
   // local : force le recalcul des habitudes (sinon un client choisi avant la
   // fin du fetch gardait des habitudes vides).
   const [habitsRefresh, setHabitsRefresh] = useState(0)
+  // Diagnostic habitudes : nb de commandes trouvées pour le client + dernière
+  // erreur de lecture Supabase (affichés quand la liste reste vide).
+  const [clientCmdCount, setClientCmdCount] = useState(0)
+  const [syncReadError, setSyncReadError] = useState<string | null>(null)
   const [lignes, setLignes] = useState<LigneForm[]>([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
 
   // Vendeur selector — only admins / resp_commercial can pick a different vendeur
@@ -352,6 +356,7 @@ export default function MobileCommercial({ user }: Props) {
       } catch { /* offline — localStorage already shown */ }
       // Les commandes Supabase sont maintenant dans le store local (fusion
       // faite par fetchCommandes) : force le recalcul des habitudes.
+      setSyncReadError(db.getLastSupabaseError?.() ?? null)
       setHabitsRefresh(v => v + 1)
     })
   }, [])
@@ -391,6 +396,7 @@ export default function MobileCommercial({ user }: Props) {
     const pastCmds = allCmds
       .filter(c => c.clientId === selectedClientId)
       .sort((a, b) => a.date.localeCompare(b.date))   // oldest first so dernierQte = latest
+    setClientCmdCount(pastCmds.length)
 
     if (pastCmds.length === 0) {
       setClientHabits({})
@@ -399,9 +405,11 @@ export default function MobileCommercial({ user }: Props) {
     }
 
     const habitsMap: Record<string, { count: number; lastDate: string; qteTotal: number; dernierQte: number; dernierQteUM?: number; dernierUM?: string }> = {}
+    const nomByArtId: Record<string, string> = {}
     pastCmds.forEach(cmd => {
       cmd.lignes.forEach(l => {
         if (!l.articleId) return
+        if (l.articleNom) nomByArtId[l.articleId] = l.articleNom
         if (!habitsMap[l.articleId]) habitsMap[l.articleId] = { count: 0, lastDate: "", qteTotal: 0, dernierQte: 0 }
         const qte = l.quantite ?? 0
         habitsMap[l.articleId].count    += 1
@@ -421,10 +429,26 @@ export default function MobileCommercial({ user }: Props) {
         }
       })
     })
-    // Only keep habits for articles that still exist in the catalog
+    // Only keep habits for articles that still exist in the catalog.
+    // Fallback : si l'article a été réimporté avec un NOUVEL id, l'ancien id
+    // des commandes ne matche plus — on retrouve l'article par son NOM pour
+    // ne pas perdre l'habitude (cause classique de "habitudes vides").
     const validMap: typeof habitsMap = {}
     Object.entries(habitsMap).forEach(([artId, h]) => {
-      if (articles.some(a => a.id === artId)) validMap[artId] = h
+      if (articles.some(a => a.id === artId)) { validMap[artId] = h; return }
+      const nom = nomByArtId[artId]
+      const match = nom ? articles.find(a => a.nom === nom) : undefined
+      if (!match) return
+      const prev = validMap[match.id]
+      if (!prev) { validMap[match.id] = h; return }
+      validMap[match.id] = {
+        ...prev,
+        count: prev.count + h.count,
+        qteTotal: prev.qteTotal + h.qteTotal,
+        ...(h.lastDate > prev.lastDate
+          ? { lastDate: h.lastDate, dernierQte: h.dernierQte, dernierQteUM: h.dernierQteUM, dernierUM: h.dernierUM }
+          : {}),
+      }
     })
     setClientHabits(validMap)
     setShowMissedAlert(false)
@@ -1597,7 +1621,11 @@ export default function MobileCommercial({ user }: Props) {
                 <p className="text-xs text-muted-foreground">
                   {Object.keys(clientHabits).length > 0
                     ? `${Object.keys(clientHabits).length} article(s) commandes regulierement`
-                    : "Ce client n'a pas encore de commandes repetees"}
+                    : clientCmdCount > 0
+                      ? `${clientCmdCount} commande(s) trouvee(s) mais aucun article ne correspond au catalogue actuel`
+                      : syncReadError
+                        ? `Aucune commande chargee — erreur de sync : ${syncReadError}`
+                        : "Aucune commande passee trouvee pour ce client"}
                 </p>
               </div>
               {Object.keys(clientHabits).length > 0 && (
@@ -1839,49 +1867,46 @@ export default function MobileCommercial({ user }: Props) {
                     {habitCount >= 2 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">{habitCount}x client</span>}
                   </div>
                 </div>
-                <span className="text-sm font-bold text-primary shrink-0">{pv} DH</span>
+                {/* Fin de ligne : prix + (si coché) choix Quantité / Nbr UM —
+                    stepper en mode UM (défaut : 1 UM), saisie libre en qté. */}
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className="text-sm font-bold text-primary">{pv} DH</span>
+                  {inCart && hasUM && (
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => setGridMode(a, "base")}
+                        className={`px-2 py-0.5 rounded-lg text-[9px] font-bold border transition-colors ${!isUMMode ? "border-green-600 bg-green-600 text-white" : "border-border text-muted-foreground"}`}>
+                        Qté ({a.unite})
+                      </button>
+                      <button type="button" onClick={() => setGridMode(a, a.um!)}
+                        className={`px-2 py-0.5 rounded-lg text-[9px] font-bold border transition-colors ${isUMMode ? "border-blue-600 bg-blue-600 text-white" : "border-border text-blue-700"}`}>
+                        Nbr {a.um}
+                      </button>
+                    </div>
+                  )}
+                  {inCart && (isUMMode ? (
+                    <div className="flex items-center gap-1.5">
+                      <button type="button" onClick={() => decArticleQty(a)} disabled={qty === 0}
+                        className="w-7 h-7 rounded-full bg-muted text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-transform">
+                        −
+                      </button>
+                      <span className="w-6 text-center text-sm font-black text-foreground">{qty}</span>
+                      <button type="button" onClick={() => incArticleQty(a)}
+                        className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold text-base flex items-center justify-center active:scale-95 transition-transform">
+                        +
+                      </button>
+                    </div>
+                  ) : (
+                    <input type="number" min="0" step="0.5" inputMode="decimal"
+                      value={ligneQty}
+                      onChange={e => setGridQtyDirect(a, mode, e.target.value)}
+                      placeholder="0"
+                      className="w-20 px-2 py-1 rounded-lg border border-border bg-background text-sm text-center font-black text-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
+                  ))}
+                  {inCart && isUMMode && qty > 0 && a.colisageParUM && (
+                    <span className="text-[10px] font-semibold text-muted-foreground">= {qty * a.colisageParUM} {a.unite}</span>
+                  )}
+                </div>
                 </label>
-
-                {/* Choix Quantité / Nbr UM une fois l'article coché — stepper en
-                    mode UM (défaut : 1 UM), saisie libre en quantité de base. */}
-                {inCart && (
-                  <div className="px-4 pb-3 -mt-1 flex items-center gap-2 flex-wrap">
-                    {hasUM && (
-                      <div className="flex gap-1">
-                        <button type="button" onClick={() => setGridMode(a, "base")}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${!isUMMode ? "border-green-600 bg-green-600 text-white" : "border-border text-muted-foreground"}`}>
-                          Quantité ({a.unite})
-                        </button>
-                        <button type="button" onClick={() => setGridMode(a, a.um!)}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${isUMMode ? "border-blue-600 bg-blue-600 text-white" : "border-border text-blue-700"}`}>
-                          Nbr {a.um}
-                        </button>
-                      </div>
-                    )}
-                    {isUMMode ? (
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => decArticleQty(a)} disabled={qty === 0}
-                          className="w-7 h-7 rounded-full bg-muted text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-transform">
-                          −
-                        </button>
-                        <span className="w-6 text-center text-sm font-black text-foreground">{qty}</span>
-                        <button type="button" onClick={() => incArticleQty(a)}
-                          className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold text-base flex items-center justify-center active:scale-95 transition-transform">
-                          +
-                        </button>
-                        {qty > 0 && a.colisageParUM && (
-                          <span className="text-[10px] font-semibold text-muted-foreground">= {qty * a.colisageParUM} {a.unite}</span>
-                        )}
-                      </div>
-                    ) : (
-                      <input type="number" min="0" step="0.5" inputMode="decimal"
-                        value={ligneQty}
-                        onChange={e => setGridQtyDirect(a, mode, e.target.value)}
-                        placeholder="0"
-                        className="w-24 px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-center font-black text-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
-                    )}
-                  </div>
-                )}
               </div>
             )
           })}
