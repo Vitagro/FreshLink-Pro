@@ -18,7 +18,7 @@ interface LigneForm {
   uniteMode: string   // "base" = article.unite, or art.um label = UM mode
 }
 
-type CommTab = "nouvelle" | "mes_commandes" | "habitudes"
+type CommTab = "nouvelle" | "mes_commandes"
 type ArticleSort = "rotation" | "stock" | "tous" | "famille"
 
 // How many ms before a commande becomes locked (1 hour)
@@ -962,15 +962,6 @@ export default function MobileCommercial({ user }: Props) {
             </span>
           )}
         </button>
-        <button onClick={() => setCommTab("habitudes")}
-          className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${commTab === "habitudes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
-          Habitudes
-          {Object.keys(clientHabits).length > 0 && (
-            <span className="w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center bg-amber-500">
-              {Object.keys(clientHabits).length}
-            </span>
-          )}
-        </button>
       </div>
 
       {commTab === "nouvelle" && (<>
@@ -1396,6 +1387,169 @@ export default function MobileCommercial({ user }: Props) {
               className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50"
               style={{ background: "oklch(0.38 0.2 260)" }}>{editingClientId ? "Enregistrer" : "Créer le client"}</button>
           </div>
+        </div>
+      )}
+
+      {/* HABITUDES D'ACHAT du client sélectionné — écran 1 */}
+      {selectedClientId && (
+        <div className="bg-card rounded-xl border border-border flex flex-col overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Habitudes d&apos;achat / عادات الشراء</h3>
+                <p className="text-xs text-muted-foreground">
+                  {Object.keys(clientHabits).length > 0
+                    ? `${Object.keys(clientHabits).length} article(s) commandes regulierement`
+                    : "Ce client n'a pas encore de commandes repetees"}
+                </p>
+              </div>
+              {Object.keys(clientHabits).length > 0 && (
+                <button
+                  onClick={autoFillPanier}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Auto-panier
+                </button>
+              )}
+            </div>
+            {Object.keys(clientHabits).length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-background">
+                <svg className="w-4 h-4 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={habitudeSearch}
+                  onChange={e => setHabitudeSearch(e.target.value)}
+                  placeholder="Filtrer les articles..."
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                {habitudeSearch && (
+                  <button onClick={() => setHabitudeSearch("")} className="text-muted-foreground hover:text-foreground">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {Object.keys(clientHabits).length > 0 && (
+            <div className="divide-y divide-border max-h-80 overflow-y-auto">
+              {Object.entries(clientHabits)
+                .filter(([artId]) => {
+                  const art = articles.find(a => a.id === artId)
+                  if (!art) return false
+                  if (!habitudeSearch.trim()) return true
+                  const q = habitudeSearch.trim().toLowerCase()
+                  return (art.nom ?? "").toLowerCase().includes(q) || (art.nomAr ?? "").includes(q)
+                })
+                .sort(([, a], [, b]) => b.count - a.count)
+                .map(([artId, hab]) => {
+                  const art = articles.find(a => a.id === artId)
+                  if (!art) return null
+                  const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
+                  const inCart = lignes.some(l => l.articleId === artId)
+                  const stockOk = art.stockDisponible > 0
+                  return (
+                    <div key={artId} className="flex items-center gap-3 px-4 py-3">
+                      <img
+                        src={resolveArticlePhoto(art)}
+                        alt={`${art.nom} habitude`}
+                        className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
+                        onError={e => { e.currentTarget.src = "https://placehold.co/40x40/e2e8f0/64748b?text=Art" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-foreground truncate">{art.nom}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">
+                            {hab.count}x commande(s)
+                          </span>
+                          {showStockBadges && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg ${stockOk ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                              {stockOk ? `${art.stockDisponible} ${art.unite} dispo` : "Rupture"}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted-foreground">
+                            Derniere: {hab.lastDate}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-sm font-bold text-primary">{pv} DH</span>
+                        <button
+                          onClick={() => {
+                            const hasUM = !!(hab.dernierQteUM && hab.dernierUM && art.um && hab.dernierUM === art.um)
+                            const dq = hab.dernierQte ?? 0
+                            const prefillQty = hasUM ? String(hab.dernierQteUM) : dq > 0 ? String(dq) : ""
+                            const prefillMode = hasUM ? art.um! : "base"
+                            if (inCart) {
+                              const idx = lignes.findIndex(l => l.articleId === artId)
+                              if (idx >= 0) setLignes(prev => prev.filter((_, j) => j !== idx))
+                            } else {
+                              setLignes(prev => [...prev, { articleId: artId, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${inCart ? "bg-red-50 text-red-600 border border-red-200" : "text-white"}`}
+                          style={inCart ? {} : { background: "oklch(0.65 0.17 145)" }}>
+                          {inCart ? "Retirer" : "+ Panier"}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ALERTE — articles non commandés depuis longtemps — écran 1 */}
+      {selectedClientId && missedArticles.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl overflow-hidden">
+          <button onClick={() => setShowMissedAlert(s => !s)}
+            className="w-full flex items-center justify-between px-4 py-3">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-sm font-bold text-amber-800">
+                {missedArticles.length} article(s) non commandes depuis longtemps
+              </p>
+            </div>
+            <svg className={`w-4 h-4 text-amber-600 transition-transform ${showMissedAlert ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showMissedAlert && (
+            <div className="px-4 pb-4 flex flex-col gap-2">
+              <p className="text-xs text-amber-700">Ces articles ont ete commandes par ce client mais pas recemment. Voulez-vous les ajouter ?</p>
+              {missedArticles.map(art => (
+                <div key={art.id} className="flex items-center justify-between bg-white rounded-xl border border-amber-200 px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{art.nom}</p>
+                    {art.nomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{art.nomAr}</p>}
+                    <p className="text-xs text-muted-foreground">
+                      Derniere commande : {clientHabits[art.id]?.lastDate ?? "—"}
+                      {" "}· {clientHabits[art.id]?.count}x commande(s)
+                    </p>
+                  </div>
+                  <button onClick={() => {
+                    const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
+                    const hab = clientHabits[art.id]
+                    const hasUM = !!(hab?.dernierQteUM && hab?.dernierUM && art.um && hab.dernierUM === art.um)
+                    const dq = hab?.dernierQte ?? 0
+                    const prefillQty = hasUM ? String(hab!.dernierQteUM) : dq > 0 ? String(dq) : ""
+                    const prefillMode = hasUM ? art.um! : "base"
+                    setLignes(prev => [...prev, { articleId: art.id, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
+                  }}
+                    className="ml-3 px-3 py-1.5 rounded-xl text-xs font-bold text-white shrink-0"
+                    style={{ background: "oklch(0.65 0.17 145)" }}>
+                    + Ajouter
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -2003,56 +2157,6 @@ export default function MobileCommercial({ user }: Props) {
         </div>
       </div>
 
-      {/* Articles not ordered recently — shown before confirm */}
-      {selectedClientId && missedArticles.length > 0 && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl overflow-hidden">
-          <button onClick={() => setShowMissedAlert(s => !s)}
-            className="w-full flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-sm font-bold text-amber-800">
-                {missedArticles.length} article(s) non commandes depuis longtemps
-              </p>
-            </div>
-            <svg className={`w-4 h-4 text-amber-600 transition-transform ${showMissedAlert ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {showMissedAlert && (
-            <div className="px-4 pb-4 flex flex-col gap-2">
-              <p className="text-xs text-amber-700">Ces articles ont ete commandes par ce client mais pas recemment. Voulez-vous les ajouter ?</p>
-              {missedArticles.map(art => (
-                <div key={art.id} className="flex items-center justify-between bg-white rounded-xl border border-amber-200 px-3 py-2.5">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{art.nom}</p>
-                    {art.nomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{art.nomAr}</p>}
-                    <p className="text-xs text-muted-foreground">
-                      Derniere commande : {clientHabits[art.id]?.lastDate ?? "—"}
-                      {" "}· {clientHabits[art.id]?.count}x commande(s)
-                    </p>
-                  </div>
-                  <button onClick={() => {
-                    const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
-                    const hab = clientHabits[art.id]
-                    const hasUM = !!(hab?.dernierQteUM && hab?.dernierUM && art.um && hab.dernierUM === art.um)
-                    const dq = hab?.dernierQte ?? 0
-                    const prefillQty = hasUM ? String(hab!.dernierQteUM) : dq > 0 ? String(dq) : ""
-                    const prefillMode = hasUM ? art.um! : "base"
-                    setLignes(prev => [...prev, { articleId: art.id, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
-                  }}
-                    className="ml-3 px-3 py-1.5 rounded-xl text-xs font-bold text-white shrink-0"
-                    style={{ background: "oklch(0.65 0.17 145)" }}>
-                    + Ajouter
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Submit */}
       <button onClick={handleSubmit}
         disabled={sending || !selectedClientId || !heurelivraison || lignes.some(l => !l.articleId || !l.quantite)}
@@ -2110,144 +2214,6 @@ export default function MobileCommercial({ user }: Props) {
 
       {/* END nouvelle commande tab */}
       </>)}
-
-      {/* ── HABITUDES TAB ─────────────────────────────────────────────────── */}
-      {(commTab as string) === "habitudes" && (
-        <div className="flex flex-col gap-3">
-          {/* Header */}
-          <div className="bg-card rounded-xl border border-border p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-foreground">Habitudes d&apos;achat / عادات الشراء</h3>
-                <p className="text-xs text-muted-foreground">
-                  {selectedClientId
-                    ? `${Object.keys(clientHabits).length} article(s) commandes regulierement`
-                    : "Selectionnez un client pour voir ses habitudes"}
-                </p>
-              </div>
-              {selectedClientId && Object.keys(clientHabits).length > 0 && (
-                <button
-                  onClick={() => { autoFillPanier(); setCommTab("nouvelle") }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Auto-panier
-                </button>
-              )}
-            </div>
-
-            {/* Search */}
-            {selectedClientId && Object.keys(clientHabits).length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-background">
-                <svg className="w-4 h-4 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  value={habitudeSearch}
-                  onChange={e => setHabitudeSearch(e.target.value)}
-                  placeholder="Filtrer les articles..."
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-                {habitudeSearch && (
-                  <button onClick={() => setHabitudeSearch("")} className="text-muted-foreground hover:text-foreground">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Habits list */}
-          {!selectedClientId ? (
-            <div className="bg-card rounded-xl border border-border p-10 text-center">
-              <svg className="w-10 h-10 mx-auto text-muted-foreground mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <p className="text-sm font-semibold text-muted-foreground">Selectionnez un client</p>
-              <p className="text-xs text-muted-foreground mt-1">Les habitudes d&apos;achat s&apos;affichent apres avoir choisi un client</p>
-            </div>
-          ) : Object.keys(clientHabits).length === 0 ? (
-            <div className="bg-card rounded-xl border border-border p-10 text-center">
-              <svg className="w-10 h-10 mx-auto text-muted-foreground mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-              <p className="text-sm font-semibold text-muted-foreground">Aucune habitude enregistree</p>
-              <p className="text-xs text-muted-foreground mt-1">Ce client n&apos;a pas encore de commandes repetees</p>
-            </div>
-          ) : (
-            <div className="bg-card rounded-xl border border-border overflow-hidden">
-              <div className="divide-y divide-border">
-                {Object.entries(clientHabits)
-                  .filter(([artId]) => {
-                    const art = articles.find(a => a.id === artId)
-                    if (!art) return false
-                    if (!habitudeSearch.trim()) return true
-                    const q = habitudeSearch.trim().toLowerCase()
-                    return (art.nom ?? "").toLowerCase().includes(q) || (art.nomAr ?? "").includes(q)
-                  })
-                  .sort(([, a], [, b]) => b.count - a.count)
-                  .map(([artId, hab]) => {
-                    const art = articles.find(a => a.id === artId)
-                    if (!art) return null
-                    const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
-                    const inCart = lignes.some(l => l.articleId === artId)
-                    const stockOk = art.stockDisponible > 0
-                    return (
-                      <div key={artId} className="flex items-center gap-3 px-4 py-3">
-                        <img
-                          src={resolveArticlePhoto(art)}
-                          alt={`${art.nom} habitude`}
-                          className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
-                          onError={e => { e.currentTarget.src = "https://placehold.co/40x40/e2e8f0/64748b?text=Art" }}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-foreground truncate">{art.nom}</p>
-                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">
-                              {hab.count}x commande(s)
-                            </span>
-                            {showStockBadges && (
-                              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg ${stockOk ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                                {stockOk ? `${art.stockDisponible} ${art.unite} dispo` : "Rupture"}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-muted-foreground">
-                              Derniere: {hab.lastDate}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
-                          <span className="text-sm font-bold text-primary">{pv} DH</span>
-                          <button
-                            onClick={() => {
-                              const hasUM = !!(hab.dernierQteUM && hab.dernierUM && art.um && hab.dernierUM === art.um)
-                              const dq = hab.dernierQte ?? 0
-                              const prefillQty = hasUM ? String(hab.dernierQteUM) : dq > 0 ? String(dq) : ""
-                              const prefillMode = hasUM ? art.um! : "base"
-                              if (inCart) {
-                                const idx = lignes.findIndex(l => l.articleId === artId)
-                                if (idx >= 0) setLignes(prev => prev.filter((_, j) => j !== idx))
-                              } else {
-                                setLignes(prev => [...prev, { articleId: artId, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
-                                setCommTab("nouvelle")
-                                if (selectedClientId) setOrderStep(2)
-                              }
-                            }}
-                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${inCart ? "bg-red-50 text-red-600 border border-red-200" : "text-white"}`}
-                            style={inCart ? {} : { background: "oklch(0.65 0.17 145)" }}>
-                            {inCart ? "Retirer" : "Commander"}
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── MES COMMANDES TAB ─────────────────────────────────────── */}
       {commTab === "mes_commandes" && (
