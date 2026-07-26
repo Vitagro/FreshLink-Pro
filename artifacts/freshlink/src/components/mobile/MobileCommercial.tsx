@@ -148,6 +148,9 @@ export default function MobileCommercial({ user }: Props) {
 
   // Tab state
   const [commTab, setCommTab] = useState<CommTab>("nouvelle")
+  // Prise de commande en 2 écrans : 1 = choix du client + créneau de
+  // livraison uniquement, 2 = articles + panier + validation.
+  const [orderStep, setOrderStep] = useState<1 | 2>(1)
   const [habitudeSearch, setHabitudeSearch] = useState("")
 
   // Client habits: articleId -> { count, lastDate, qteTotal, dernierQte, dernierQteUM, dernierUM } — computed when client changes
@@ -803,6 +806,7 @@ export default function MobileCommercial({ user }: Props) {
     // Reset form for next order — do NOT clear everything, just articles
     setLignes([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
     setHeureLivraison("")
+    setOrderStep(1)
     // Keep client selected so prevendeur can quickly add another order for same client
     // but clear the client after 4s so they can pick another
     refreshMyCommandes()
@@ -865,6 +869,7 @@ export default function MobileCommercial({ user }: Props) {
     if (newLignes.length > 0) {
       setLignes(newLignes)
       setCommTab("nouvelle")
+      setOrderStep(2) // client déjà choisi + panier pré-rempli → direct aux articles
     }
   }
 
@@ -944,7 +949,7 @@ export default function MobileCommercial({ user }: Props) {
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted">
-        <button onClick={() => { setCommTab("nouvelle"); setEditCmd(null) }}
+        <button onClick={() => { setCommTab("nouvelle"); setEditCmd(null); setOrderStep(1) }}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${commTab === "nouvelle" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Nouvelle commande
         </button>
@@ -997,6 +1002,18 @@ export default function MobileCommercial({ user }: Props) {
           </div>
         </div>
       )}
+
+      {/* ── ÉCRAN 1/2 : choix du client + créneau de livraison ─────────────── */}
+      {orderStep === 1 && (<>
+
+      {/* Stepper */}
+      <div className="flex items-center gap-2 px-1">
+        <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white" style={{ background: "oklch(0.38 0.2 260)" }}>1</span>
+        <span className="text-sm font-bold text-foreground">Client &amp; heure de livraison</span>
+        <span className="flex-1 border-t border-dashed border-border" />
+        <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black bg-muted text-muted-foreground">2</span>
+        <span className="text-xs text-muted-foreground">Articles</span>
+      </div>
 
       {/* VENDEUR SELECTOR — admin / resp_commercial only */}
       {isAdmin && (
@@ -1435,6 +1452,44 @@ export default function MobileCommercial({ user }: Props) {
           {gpsLat ? "GPS capturé" : "GPS non capturé"}
         </button>
         {/* Coordinates intentionally hidden from prevendeur screen */}
+      </div>
+
+      {/* Continuer vers l'écran 2 (articles) */}
+      <button
+        onClick={() => setOrderStep(2)}
+        disabled={!selectedClientId || !heurelivraison}
+        className="w-full py-4 rounded-xl font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+        style={{ background: "oklch(0.38 0.2 260)" }}>
+        Continuer — choisir les articles / متابعة
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+      </button>
+      {(!selectedClientId || !heurelivraison) && (
+        <p className="text-[11px] text-muted-foreground text-center -mt-1">
+          {!selectedClientId ? "Choisissez d'abord un client." : "Renseignez l'heure de livraison."}
+        </p>
+      )}
+
+      {/* END écran 1 */}
+      </>)}
+
+      {/* ── ÉCRAN 2/2 : articles + panier + validation ─────────────────────── */}
+      {orderStep === 2 && (<>
+
+      {/* Récap client + retour */}
+      <div className="bg-card rounded-xl border border-border p-3 flex items-center gap-3">
+        <button onClick={() => setOrderStep(1)}
+          className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground shrink-0">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-foreground truncate">
+            {clients.find(c => c.id === selectedClientId)?.nom ?? "—"}
+          </p>
+          <p className="text-xs text-muted-foreground">Livraison : {heurelivraison || "—"}</p>
+        </div>
+        <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0" style={{ background: "oklch(0.38 0.2 260)" }}>2</span>
       </div>
 
       {/* INLINE ARTICLE SELECTOR ─────────────────────────────────────────── */}
@@ -2008,7 +2063,11 @@ export default function MobileCommercial({ user }: Props) {
           : <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>Enregistrer la commande / تسجيل الطلبية</>}
       </button>
 
-      {/* ── VISITE SANS COMMANDE ───────────────────────────────────── */}
+      {/* END écran 2 */}
+      </>)}
+
+      {/* ── VISITE SANS COMMANDE — écran 1 uniquement ───────────────── */}
+      {orderStep === 1 && (
       <div className="bg-card rounded-xl border border-border p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <div>
@@ -2047,6 +2106,7 @@ export default function MobileCommercial({ user }: Props) {
           </div>
         )}
       </div>
+      )}
 
       {/* END nouvelle commande tab */}
       </>)}
@@ -2172,6 +2232,7 @@ export default function MobileCommercial({ user }: Props) {
                               } else {
                                 setLignes(prev => [...prev, { articleId: artId, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
                                 setCommTab("nouvelle")
+                                if (selectedClientId) setOrderStep(2)
                               }
                             }}
                             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${inCart ? "bg-red-50 text-red-600 border border-red-200" : "text-white"}`}

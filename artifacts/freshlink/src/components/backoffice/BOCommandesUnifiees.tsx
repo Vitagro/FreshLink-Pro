@@ -394,7 +394,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
 
         if (importStatut === "livre") {
           const lignesBP: LignePreparation[] = g.lignes.map(l => ({
-            articleId: l.articleId, articleNom: l.articleNom, unite: l.unite,
+            articleId: l.articleId, articleNom: l.articleNom, unite: l.unite ?? "kg",
             qtesParClient: { [g.clientId]: l.quantite }, qteCommandee: l.quantite,
             qtePrepared: l.quantite, valide: true,
             qtesPreparedParClient: { [g.clientId]: l.quantite },
