@@ -1437,119 +1437,6 @@ export default function MobileCommercial({ user }: Props) {
         </div>
       )}
 
-      {/* HABITUDES D'ACHAT du client sélectionné — écran 1 */}
-      {selectedClientId && (
-        <div className="bg-card rounded-xl border border-border flex flex-col overflow-hidden">
-          <div className="px-4 py-3 border-b border-border flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-foreground">Habitudes d&apos;achat / عادات الشراء</h3>
-                <p className="text-xs text-muted-foreground">
-                  {Object.keys(clientHabits).length > 0
-                    ? `${Object.keys(clientHabits).length} article(s) commandes regulierement`
-                    : "Ce client n'a pas encore de commandes repetees"}
-                </p>
-              </div>
-              {Object.keys(clientHabits).length > 0 && (
-                <button
-                  onClick={autoFillPanier}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Auto-panier
-                </button>
-              )}
-            </div>
-            {Object.keys(clientHabits).length > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-background">
-                <svg className="w-4 h-4 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-                <input
-                  type="text"
-                  value={habitudeSearch}
-                  onChange={e => setHabitudeSearch(e.target.value)}
-                  placeholder="Filtrer les articles..."
-                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-                />
-                {habitudeSearch && (
-                  <button onClick={() => setHabitudeSearch("")} className="text-muted-foreground hover:text-foreground">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          {Object.keys(clientHabits).length > 0 && (
-            <div className="divide-y divide-border max-h-80 overflow-y-auto">
-              {Object.entries(clientHabits)
-                .filter(([artId]) => {
-                  const art = articles.find(a => a.id === artId)
-                  if (!art) return false
-                  if (!habitudeSearch.trim()) return true
-                  const q = habitudeSearch.trim().toLowerCase()
-                  return (art.nom ?? "").toLowerCase().includes(q) || (art.nomAr ?? "").includes(q)
-                })
-                .sort(([, a], [, b]) => b.count - a.count)
-                .map(([artId, hab]) => {
-                  const art = articles.find(a => a.id === artId)
-                  if (!art) return null
-                  const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
-                  const inCart = lignes.some(l => l.articleId === artId)
-                  const stockOk = art.stockDisponible > 0
-                  return (
-                    <div key={artId} className="flex items-center gap-3 px-4 py-3">
-                      <img
-                        src={resolveArticlePhoto(art)}
-                        alt={`${art.nom} habitude`}
-                        className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
-                        onError={e => { e.currentTarget.src = "https://placehold.co/40x40/e2e8f0/64748b?text=Art" }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground truncate">{art.nom}</p>
-                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">
-                            {hab.count}x commande(s)
-                          </span>
-                          {showStockBadges && (
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg ${stockOk ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
-                              {stockOk ? `${art.stockDisponible} ${art.unite} dispo` : "Rupture"}
-                            </span>
-                          )}
-                          <span className="text-[10px] text-muted-foreground">
-                            Derniere: {hab.lastDate}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-sm font-bold text-primary">{pv} DH</span>
-                        <button
-                          onClick={() => {
-                            const hasUM = !!(hab.dernierQteUM && hab.dernierUM && art.um && hab.dernierUM === art.um)
-                            const dq = hab.dernierQte ?? 0
-                            const prefillQty = hasUM ? String(hab.dernierQteUM) : dq > 0 ? String(dq) : ""
-                            const prefillMode = hasUM ? art.um! : "base"
-                            if (inCart) {
-                              const idx = lignes.findIndex(l => l.articleId === artId)
-                              if (idx >= 0) setLignes(prev => prev.filter((_, j) => j !== idx))
-                            } else {
-                              setLignes(prev => [...prev, { articleId: artId, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
-                            }
-                          }}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${inCart ? "bg-red-50 text-red-600 border border-red-200" : "text-white"}`}
-                          style={inCart ? {} : { background: "oklch(0.65 0.17 145)" }}>
-                          {inCart ? "Retirer" : "+ Panier"}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ALERTE — articles non commandés depuis longtemps — écran 1 */}
       {selectedClientId && missedArticles.length > 0 && (
         <div className="bg-amber-50 border border-amber-300 rounded-2xl overflow-hidden">
@@ -1692,6 +1579,119 @@ export default function MobileCommercial({ user }: Props) {
         </div>
         <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0" style={{ background: "oklch(0.38 0.2 260)" }}>2</span>
       </div>
+
+      {/* HABITUDES D'ACHAT du client sélectionné — écran 2 */}
+      {selectedClientId && (
+        <div className="bg-card rounded-xl border border-border flex flex-col overflow-hidden">
+          <div className="px-4 py-3 border-b border-border flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-foreground">Habitudes d&apos;achat / عادات الشراء</h3>
+                <p className="text-xs text-muted-foreground">
+                  {Object.keys(clientHabits).length > 0
+                    ? `${Object.keys(clientHabits).length} article(s) commandes regulierement`
+                    : "Ce client n'a pas encore de commandes repetees"}
+                </p>
+              </div>
+              {Object.keys(clientHabits).length > 0 && (
+                <button
+                  onClick={autoFillPanier}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Auto-panier
+                </button>
+              )}
+            </div>
+            {Object.keys(clientHabits).length > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-background">
+                <svg className="w-4 h-4 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={habitudeSearch}
+                  onChange={e => setHabitudeSearch(e.target.value)}
+                  placeholder="Filtrer les articles..."
+                  className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+                />
+                {habitudeSearch && (
+                  <button onClick={() => setHabitudeSearch("")} className="text-muted-foreground hover:text-foreground">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          {Object.keys(clientHabits).length > 0 && (
+            <div className="divide-y divide-border max-h-80 overflow-y-auto">
+              {Object.entries(clientHabits)
+                .filter(([artId]) => {
+                  const art = articles.find(a => a.id === artId)
+                  if (!art) return false
+                  if (!habitudeSearch.trim()) return true
+                  const q = habitudeSearch.trim().toLowerCase()
+                  return (art.nom ?? "").toLowerCase().includes(q) || (art.nomAr ?? "").includes(q)
+                })
+                .sort(([, a], [, b]) => b.count - a.count)
+                .map(([artId, hab]) => {
+                  const art = articles.find(a => a.id === artId)
+                  if (!art) return null
+                  const pv = store.computePrixEffectif(art, clients.find(c => c.id === selectedClientId))
+                  const inCart = lignes.some(l => l.articleId === artId)
+                  const stockOk = art.stockDisponible > 0
+                  return (
+                    <div key={artId} className="flex items-center gap-3 px-4 py-3">
+                      <img
+                        src={resolveArticlePhoto(art)}
+                        alt={`${art.nom} habitude`}
+                        className="w-10 h-10 rounded-xl object-cover border border-border shrink-0"
+                        onError={e => { e.currentTarget.src = "https://placehold.co/40x40/e2e8f0/64748b?text=Art" }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-foreground truncate">{art.nom}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">
+                            {hab.count}x commande(s)
+                          </span>
+                          {showStockBadges && (
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-lg ${stockOk ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                              {stockOk ? `${art.stockDisponible} ${art.unite} dispo` : "Rupture"}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-muted-foreground">
+                            Derniere: {hab.lastDate}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        <span className="text-sm font-bold text-primary">{pv} DH</span>
+                        <button
+                          onClick={() => {
+                            const hasUM = !!(hab.dernierQteUM && hab.dernierUM && art.um && hab.dernierUM === art.um)
+                            const dq = hab.dernierQte ?? 0
+                            const prefillQty = hasUM ? String(hab.dernierQteUM) : dq > 0 ? String(dq) : ""
+                            const prefillMode = hasUM ? art.um! : "base"
+                            if (inCart) {
+                              const idx = lignes.findIndex(l => l.articleId === artId)
+                              if (idx >= 0) setLignes(prev => prev.filter((_, j) => j !== idx))
+                            } else {
+                              setLignes(prev => [...prev, { articleId: artId, quantite: prefillQty, prixVente: String(pv), uniteMode: prefillMode }])
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${inCart ? "bg-red-50 text-red-600 border border-red-200" : "text-white"}`}
+                          style={inCart ? {} : { background: "oklch(0.65 0.17 145)" }}>
+                          {inCart ? "Retirer" : "+ Panier"}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* INLINE ARTICLE SELECTOR ─────────────────────────────────────────── */}
       <div className="bg-card rounded-xl border border-border flex flex-col overflow-hidden">
@@ -2116,9 +2116,29 @@ export default function MobileCommercial({ user }: Props) {
                       <label className="text-xs font-bold text-slate-800">
                         Qte ({ligne.uniteMode === art?.um ? art?.um : art?.unite || "unite"}) / الكمية
                       </label>
-                      <input type="number" min="0" step={ligne.uniteMode === art?.um ? "1" : "0.5"}
-                        value={ligne.quantite} onChange={e => updateLigne(i, "quantite", e.target.value)}
-                        className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0" />
+                      {ligne.uniteMode === art?.um ? (
+                        /* Mode UM : saisie par colis entiers → steppers − / + */
+                        <div className="flex items-center gap-1.5">
+                          <button type="button"
+                            onClick={() => updateLigne(i, "quantite", String(Math.max(0, (Number(ligne.quantite) || 0) - 1)))}
+                            className="w-9 h-9 rounded-xl border-2 border-blue-300 bg-blue-50 text-blue-700 text-lg font-black shrink-0 flex items-center justify-center active:scale-95">
+                            −
+                          </button>
+                          <input type="number" min="0" step="1"
+                            value={ligne.quantite} onChange={e => updateLigne(i, "quantite", e.target.value)}
+                            className="w-full min-w-0 px-1 py-2 rounded-xl border border-border bg-background text-sm font-bold text-slate-900 text-center focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0" />
+                          <button type="button"
+                            onClick={() => updateLigne(i, "quantite", String((Number(ligne.quantite) || 0) + 1))}
+                            className="w-9 h-9 rounded-xl text-white text-lg font-black shrink-0 flex items-center justify-center active:scale-95"
+                            style={{ background: "oklch(0.45 0.18 240)" }}>
+                            +
+                          </button>
+                        </div>
+                      ) : (
+                        <input type="number" min="0" step="0.5"
+                          value={ligne.quantite} onChange={e => updateLigne(i, "quantite", e.target.value)}
+                          className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary" placeholder="0" />
+                      )}
                     </div>
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-1.5">
