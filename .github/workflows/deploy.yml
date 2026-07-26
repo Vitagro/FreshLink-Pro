@@ -87,32 +87,38 @@ jobs:
             sleep 5
           done
 
+      # Hostinger SSH connait des pannes par fenetres de plusieurs minutes :
+      # retry_any rejoue une commande idempotente sur tout echec ; retry_conn
+      # ne rejoue que sur erreur de connexion ssh (exit 255) pour ne jamais
+      # rejouer une bascule partiellement executee.
       - name: Upload new releases (does not touch the live app yet)
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          $SSH "mkdir -p '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_API_RELEASE_DIR }}'"
-          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
+          retry_any() { for i in 1 2 3 4 5; do "$@" && return 0; echo "Echec (essai $i/5) — nouvelle tentative dans 60s..."; [ $i -lt 5 ] && sleep 60; done; return 1; }
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          retry_any $SSH "mkdir -p '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_API_RELEASE_DIR }}'"
+          retry_any sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -P "${{ secrets.SSH_PORT }}" spa-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz"
-          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
+          retry_any sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -P "${{ secrets.SSH_PORT }}" api-deploy.tar.gz \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz"
-          $SSH "tar -xzf '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz' -C '${{ env.REMOTE_SPA_RELEASE_DIR }}' && rm '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz'"
-          $SSH "tar -xzf '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz' -C '${{ env.REMOTE_API_RELEASE_DIR }}' && rm '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz'"
+          retry_any $SSH "tar -xzf '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz' -C '${{ env.REMOTE_SPA_RELEASE_DIR }}' && rm -f '${{ env.REMOTE_SPA_RELEASE_DIR }}/spa-deploy.tar.gz'"
+          retry_any $SSH "tar -xzf '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz' -C '${{ env.REMOTE_API_RELEASE_DIR }}' && rm -f '${{ env.REMOTE_API_RELEASE_DIR }}/api-deploy.tar.gz'"
 
       - name: Swap into place (backup current releases first)
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          $SSH "rm -rf '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_DIR }}' '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
-          $SSH "rm -rf '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_DIR }}' '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_RELEASE_DIR }}' '${{ env.REMOTE_API_DIR }}' && mkdir -p '${{ env.REMOTE_API_DIR }}/tmp'"
+          retry_conn() { for i in 1 2 3 4 5; do "$@"; rc=$?; [ "$rc" -ne 255 ] && return "$rc"; echo "Connexion SSH impossible (essai $i/5) — nouvelle tentative dans 60s..."; [ $i -lt 5 ] && sleep 60; done; return 255; }
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          retry_conn $SSH "rm -rf '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_DIR }}' '${{ env.REMOTE_SPA_BACKUP_DIR }}' && mv '${{ env.REMOTE_SPA_RELEASE_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
+          retry_conn $SSH "rm -rf '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_DIR }}' '${{ env.REMOTE_API_BACKUP_DIR }}' && mv '${{ env.REMOTE_API_RELEASE_DIR }}' '${{ env.REMOTE_API_DIR }}' && mkdir -p '${{ env.REMOTE_API_DIR }}/tmp'"
 
       - name: Write .htaccess (Passenger config + secrets) and restart
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           cat > erp.htaccess <<EOF
           PassengerAppRoot ${{ env.REMOTE_API_DIR }}
           PassengerAppType node
@@ -146,9 +152,10 @@ jobs:
           RewriteCond %{REQUEST_FILENAME} !-d
           RewriteRule ^ /index.html [L]
           EOF
-          sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -P "${{ secrets.SSH_PORT }}" erp.htaccess \
+          retry_any() { for i in 1 2 3 4 5; do "$@" && return 0; echo "Echec (essai $i/5) — nouvelle tentative dans 60s..."; [ $i -lt 5 ] && sleep 60; done; return 1; }
+          retry_any sshpass -e scp -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -P "${{ secrets.SSH_PORT }}" erp.htaccess \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_SPA_DIR }}/.htaccess"
-          $SSH "touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
+          retry_any $SSH "touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
 
       - name: Health check
         id: health
@@ -170,7 +177,8 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          $SSH "rm -rf '${{ env.REMOTE_SPA_DIR }}' && mv '${{ env.REMOTE_SPA_BACKUP_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
-          $SSH "rm -rf '${{ env.REMOTE_API_DIR }}' && mv '${{ env.REMOTE_API_BACKUP_DIR }}' '${{ env.REMOTE_API_DIR }}' && touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
+          retry_conn() { for i in 1 2 3 4 5; do "$@"; rc=$?; [ "$rc" -ne 255 ] && return "$rc"; echo "Connexion SSH impossible (essai $i/5) — nouvelle tentative dans 60s..."; [ $i -lt 5 ] && sleep 60; done; return 255; }
+          SSH="sshpass -e ssh -o ConnectTimeout=15 -o ConnectionAttempts=10 -o StrictHostKeyChecking=accept-new -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          retry_conn $SSH "rm -rf '${{ env.REMOTE_SPA_DIR }}' && mv '${{ env.REMOTE_SPA_BACKUP_DIR }}' '${{ env.REMOTE_SPA_DIR }}'"
+          retry_conn $SSH "rm -rf '${{ env.REMOTE_API_DIR }}' && mv '${{ env.REMOTE_API_BACKUP_DIR }}' '${{ env.REMOTE_API_DIR }}' && touch '${{ env.REMOTE_API_DIR }}/tmp/restart.txt'"
           echo "::error::Deploy failed health check — rolled back to previous release."
