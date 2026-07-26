@@ -85,6 +85,9 @@ export default function MobileCommercial({ user }: Props) {
   // erreur de lecture Supabase (affichés quand la liste reste vide).
   const [clientCmdCount, setClientCmdCount] = useState(0)
   const [syncReadError, setSyncReadError] = useState<string | null>(null)
+  // Échantillon d'articles des anciennes commandes introuvables dans le
+  // catalogue (nom + début d'id) — affiché pour diagnostiquer sur place.
+  const [habitsUnmatched, setHabitsUnmatched] = useState<string[]>([])
   const [lignes, setLignes] = useState<LigneForm[]>([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
 
   // Vendeur selector — only admins / resp_commercial can pick a different vendeur
@@ -430,15 +433,23 @@ export default function MobileCommercial({ user }: Props) {
       })
     })
     // Only keep habits for articles that still exist in the catalog.
-    // Fallback : si l'article a été réimporté avec un NOUVEL id, l'ancien id
-    // des commandes ne matche plus — on retrouve l'article par son NOM pour
+    // Fallback : si l'article a été réimporté / re-migré avec un NOUVEL id,
+    // l'ancien id des commandes ne matche plus — on retrouve l'article par
+    // son NOM NORMALISÉ (minuscules, sans accents ni espaces multiples) pour
     // ne pas perdre l'habitude (cause classique de "habitudes vides").
+    const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim()
+    const byNormName = new Map<string, Article>()
+    articles.forEach(a => { if (a.nom) byNormName.set(norm(a.nom), a) })
+    const unmatched: string[] = []
     const validMap: typeof habitsMap = {}
     Object.entries(habitsMap).forEach(([artId, h]) => {
       if (articles.some(a => a.id === artId)) { validMap[artId] = h; return }
       const nom = nomByArtId[artId]
-      const match = nom ? articles.find(a => a.nom === nom) : undefined
-      if (!match) return
+      const match = nom ? byNormName.get(norm(nom)) : undefined
+      if (!match) {
+        unmatched.push(`${nom || "sans nom"} (${artId.slice(0, 8)})`)
+        return
+      }
       const prev = validMap[match.id]
       if (!prev) { validMap[match.id] = h; return }
       validMap[match.id] = {
@@ -450,6 +461,7 @@ export default function MobileCommercial({ user }: Props) {
           : {}),
       }
     })
+    setHabitsUnmatched(unmatched.slice(0, 4))
     setClientHabits(validMap)
     setShowMissedAlert(false)
   }, [selectedClientId, articles, habitsRefresh])
@@ -1622,7 +1634,9 @@ export default function MobileCommercial({ user }: Props) {
                   {Object.keys(clientHabits).length > 0
                     ? `${Object.keys(clientHabits).length} article(s) commandes regulierement`
                     : clientCmdCount > 0
-                      ? `${clientCmdCount} commande(s) trouvee(s) mais aucun article ne correspond au catalogue actuel`
+                      ? habitsUnmatched.length > 0
+                        ? `${clientCmdCount} commande(s) trouvee(s) — articles introuvables au catalogue : ${habitsUnmatched.join(", ")}`
+                        : `${clientCmdCount} commande(s) trouvee(s) mais sans lignes d'articles exploitables`
                       : syncReadError
                         ? `Aucune commande chargee — erreur de sync : ${syncReadError}`
                         : "Aucune commande passee trouvee pour ce client"}
