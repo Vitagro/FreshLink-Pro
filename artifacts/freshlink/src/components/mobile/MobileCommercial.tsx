@@ -74,6 +74,9 @@ export default function MobileCommercial({ user }: Props) {
   // lien "Modifier" permet de le rouvrir si l'horaire doit exceptionnellement
   // changer pour cette commande.
   const [showHeureEdit, setShowHeureEdit] = useState(false)
+  // Affiché quand on choisit un client SANS créneau enregistré : on reste sur
+  // l'écran 1 et on demande explicitement l'heure de livraison.
+  const [noSlotNotice, setNoSlotNotice] = useState(false)
   const [lignes, setLignes] = useState<LigneForm[]>([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
 
   // Vendeur selector — only admins / resp_commercial can pick a different vendeur
@@ -560,11 +563,38 @@ export default function MobileCommercial({ user }: Props) {
     try { localStorage.setItem(LAST_HEURE_KEY, newClient.heureLivraison) } catch { /* noop */ }
     setClients(store.getClients())
     setSelectedClientId(client.id)
+    // Même logique que pickClient : créneau connu → direct aux articles,
+    // sinon on le signale et on demande l'heure sur l'écran 1.
+    if (client.defaultHeureLivraison) {
+      setHeureLivraison(client.defaultHeureLivraison)
+      setNoSlotNotice(false)
+      setOrderStep(2)
+    } else {
+      setHeureLivraison("")
+      setNoSlotNotice(true)
+    }
     setShowAddClient(false)
     setShowHeureLivraison(false)
     setNewClient({ nom: "", secteur: user.secteur || "", zone: "Casablanca", type: "marchand", typeAutre: "",
       taille: "150-300kg", typeProduits: "moyenne", rotation: "journalier",
       telephone: "", email: "", adresse: "", categorie: "marchand", heureLivraison: newClient.heureLivraison })
+  }
+
+  // Choix d'un client : si un créneau (defaultHeureLivraison) est déjà
+  // enregistré on saute directement à l'écran 2 (articles) ; sinon on reste
+  // sur l'écran 1 avec un avertissement demandant l'heure de livraison.
+  const pickClient = (clientId: string) => {
+    setSelectedClientId(clientId)
+    setShowClientDropdown(false)
+    const cl = clients.find(c => c.id === clientId)
+    if (cl?.defaultHeureLivraison) {
+      setHeureLivraison(cl.defaultHeureLivraison)
+      setNoSlotNotice(false)
+      setOrderStep(2)
+    } else {
+      setHeureLivraison("")
+      setNoSlotNotice(true)
+    }
   }
 
   // Returns the quantity in BASE units (kg/piece/...) regardless of input mode
@@ -1147,7 +1177,7 @@ export default function MobileCommercial({ user }: Props) {
           ) : filteredClients.map(c => {
             const dist = gpsLat && c.gpsLat ? distKm(gpsLat, gpsLng!, c.gpsLat, c.gpsLng!) : null
             return (
-              <button key={c.id} onClick={() => { setSelectedClientId(c.id); setShowClientDropdown(false) }}
+              <button key={c.id} onClick={() => pickClient(c.id)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all border ${selectedClientId === c.id ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/60"}`}>
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                   {c.nom[0]}
@@ -1219,6 +1249,23 @@ export default function MobileCommercial({ user }: Props) {
           </div>
         )}
       </div>
+
+      {/* AVERTISSEMENT — client sans créneau enregistré */}
+      {noSlotNotice && selectedClientId && !heurelivraison && (
+        <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl bg-amber-50 border border-amber-300">
+          <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <div>
+            <p className="text-sm font-bold text-amber-800">Aucun creneau de livraison enregistre pour ce client</p>
+            <p className="text-xs text-amber-700 mt-0.5">
+              Renseignez l&apos;heure de livraison ci-dessous, puis appuyez sur Continuer.
+              Elle sera memorisee pour les prochaines commandes de ce client.
+              {" "}/ لم يتم تسجيل وقت التسليم لهذا الزبون — حدّدوه أسفله
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ADD/EDIT CLIENT FORM */}
       {showAddClient && (
