@@ -138,6 +138,9 @@ jobs:
           SetEnv FIREBASE_SERVICE_ACCOUNT_JSON "${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}"
 
           RewriteEngine On
+          # Lien de mise a jour de l'app mobile : sert toujours le dernier APK
+          RewriteRule ^apk$ https://github.com/Vitagro/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk [R=302,L]
+          RewriteRule ^maj$ https://github.com/Vitagro/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk [R=302,L]
           RewriteCond %{REQUEST_URI} !^/api/
           RewriteCond %{REQUEST_FILENAME} !-f
           RewriteCond %{REQUEST_FILENAME} !-d

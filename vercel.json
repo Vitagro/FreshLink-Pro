@@ -7,10 +7,6 @@
       "maxDuration": 30
     }
   },
-  "redirects": [
-    { "source": "/apk", "destination": "https://github.com/Vitagro/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk", "permanent": false },
-    { "source": "/maj", "destination": "https://github.com/Vitagro/FreshLink-Mobile/releases/latest/download/FreshLinkPro.apk", "permanent": false }
-  ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
