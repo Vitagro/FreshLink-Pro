@@ -77,6 +77,10 @@ export default function MobileCommercial({ user }: Props) {
   // Affiché quand on choisit un client SANS créneau enregistré : on reste sur
   // l'écran 1 et on demande explicitement l'heure de livraison.
   const [noSlotNotice, setNoSlotNotice] = useState(false)
+  // Incrémenté quand les commandes Supabase ont été fusionnées dans le store
+  // local : force le recalcul des habitudes (sinon un client choisi avant la
+  // fin du fetch gardait des habitudes vides).
+  const [habitsRefresh, setHabitsRefresh] = useState(0)
   const [lignes, setLignes] = useState<LigneForm[]>([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
 
   // Vendeur selector — only admins / resp_commercial can pick a different vendeur
@@ -346,6 +350,9 @@ export default function MobileCommercial({ user }: Props) {
         if (cFromSB?.length) setClients(cFromSB)
         if (arts?.length) setArticles(arts)
       } catch { /* offline — localStorage already shown */ }
+      // Les commandes Supabase sont maintenant dans le store local (fusion
+      // faite par fetchCommandes) : force le recalcul des habitudes.
+      setHabitsRefresh(v => v + 1)
     })
   }, [])
 
@@ -421,7 +428,7 @@ export default function MobileCommercial({ user }: Props) {
     })
     setClientHabits(validMap)
     setShowMissedAlert(false)
-  }, [selectedClientId, articles])
+  }, [selectedClientId, articles, habitsRefresh])
 
   const getGPS = () => {
     setGpsLoading(true)
@@ -1778,12 +1785,19 @@ export default function MobileCommercial({ user }: Props) {
             const pv = store.computePrixEffectif(a, clients.find(c => c.id === selectedClientId))
             const globalCount = globalRotation[a.id] ?? 0
             const habitCount = clientHabits[a.id]?.count ?? 0
+            const hasUM = !!(a.um && a.colisageParUM)
+            const mode = gridModeFor(a)
+            const isUMMode = hasUM && mode === a.um
+            const ligneQty = lignes.find(l => l.articleId === a.id)?.quantite ?? ""
+            const qty = qtyInPanier(a.id)
             return (
-              <label key={a.id}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${inCart ? "bg-primary/5" : "hover:bg-muted/50"}`}>
+              <div key={a.id} className={`transition-colors ${inCart ? "bg-primary/5" : "hover:bg-muted/50"}`}>
+                <label className="flex items-center gap-3 px-4 py-3 cursor-pointer">
                 <input type="checkbox" checked={inCart} readOnly={false}
                   onChange={e => {
                     const checked = e.target.checked
+                    // Défaut au cochage : 1 UM (ex: 1 caisse) si l'article en a une
+                    const defMode = gridUnitMode[a.id] ?? (a.um ?? "base")
                     // Mise à jour fonctionnelle UNIQUE : évite la perte d'articles quand on coche
                     // plusieurs articles rapidement (le closure `lignes` serait périmé entre 2 clics).
                     setLignes(prev => {
@@ -1792,10 +1806,10 @@ export default function MobileCommercial({ user }: Props) {
                         const emptyIdx = prev.findIndex(l => !l.articleId)
                         if (emptyIdx >= 0) {
                           const updated = [...prev]
-                          updated[emptyIdx] = { ...updated[emptyIdx], articleId: a.id, prixVente: String(pv), uniteMode: a.um ?? "base", quantite: "1" }
+                          updated[emptyIdx] = { ...updated[emptyIdx], articleId: a.id, prixVente: String(pv), uniteMode: defMode, quantite: "1" }
                           return updated
                         }
-                        return [...prev, { articleId: a.id, quantite: "1", prixVente: String(pv), uniteMode: a.um ?? "base" }]
+                        return [...prev, { articleId: a.id, quantite: "1", prixVente: String(pv), uniteMode: defMode }]
                       }
                       // décocher : retirer la ligne ; garder au moins une ligne vide
                       const next = prev.filter(l => l.articleId !== a.id)
@@ -1826,7 +1840,49 @@ export default function MobileCommercial({ user }: Props) {
                   </div>
                 </div>
                 <span className="text-sm font-bold text-primary shrink-0">{pv} DH</span>
-              </label>
+                </label>
+
+                {/* Choix Quantité / Nbr UM une fois l'article coché — stepper en
+                    mode UM (défaut : 1 UM), saisie libre en quantité de base. */}
+                {inCart && (
+                  <div className="px-4 pb-3 -mt-1 flex items-center gap-2 flex-wrap">
+                    {hasUM && (
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => setGridMode(a, "base")}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${!isUMMode ? "border-green-600 bg-green-600 text-white" : "border-border text-muted-foreground"}`}>
+                          Quantité ({a.unite})
+                        </button>
+                        <button type="button" onClick={() => setGridMode(a, a.um!)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-colors ${isUMMode ? "border-blue-600 bg-blue-600 text-white" : "border-border text-blue-700"}`}>
+                          Nbr {a.um}
+                        </button>
+                      </div>
+                    )}
+                    {isUMMode ? (
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={() => decArticleQty(a)} disabled={qty === 0}
+                          className="w-7 h-7 rounded-full bg-muted text-foreground font-bold text-base flex items-center justify-center disabled:opacity-30 active:scale-95 transition-transform">
+                          −
+                        </button>
+                        <span className="w-6 text-center text-sm font-black text-foreground">{qty}</span>
+                        <button type="button" onClick={() => incArticleQty(a)}
+                          className="w-7 h-7 rounded-full bg-primary text-primary-foreground font-bold text-base flex items-center justify-center active:scale-95 transition-transform">
+                          +
+                        </button>
+                        {qty > 0 && a.colisageParUM && (
+                          <span className="text-[10px] font-semibold text-muted-foreground">= {qty * a.colisageParUM} {a.unite}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <input type="number" min="0" step="0.5" inputMode="decimal"
+                        value={ligneQty}
+                        onChange={e => setGridQtyDirect(a, mode, e.target.value)}
+                        placeholder="0"
+                        className="w-24 px-2 py-1.5 rounded-lg border border-border bg-background text-sm text-center font-black text-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
+                    )}
+                  </div>
+                )}
+              </div>
             )
           })}
         </div>
