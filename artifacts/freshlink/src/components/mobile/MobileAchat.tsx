@@ -223,6 +223,10 @@ export default function MobileAchat({ user }: Props) {
   const [showAllFamilies, setShowAllFamilies] = useState(false)
   const [openFamilies, setOpenFamilies] = useState<Set<string>>(new Set())
 
+  // Zone filtering for articles
+  const [zones, setZones] = useState<string[]>([])
+  const [zoneFilter, setZoneFilter] = useState("")
+
   // Global rotation: times each article was purchased across all achats
   const globalRotation = useMemo(() => {
     const map: Record<string, number> = {}
@@ -244,11 +248,15 @@ export default function MobileAchat({ user }: Props) {
       const q = artSearch.trim().toLowerCase()
       list = list.filter(a => a.nom.toLowerCase().includes(q) || a.nomAr?.includes(q) || a.famille?.toLowerCase().includes(q))
     }
+    // Filter by zone if selected
+    if (zoneFilter) {
+      list = list.filter(a => a.zones?.includes(zoneFilter))
+    }
     if (artSort === "rotation") list.sort((a, b) => (globalRotation[b.id] ?? 0) - (globalRotation[a.id] ?? 0))
     else if (artSort === "stock") list.sort((a, b) => a.stockDisponible - b.stockDisponible) // lowest stock first = urgent
     else list.sort((a, b) => a.nom.localeCompare(b.nom))
     return list
-  }, [articles, artSearch, artSort, globalRotation, specialites, showAllFamilies])
+  }, [articles, artSearch, artSort, globalRotation, specialites, showAllFamilies, zoneFilter])
 
   // Familles présentes parmi les PO en attente (pour les puces de filtre).
   const poFamilies = useMemo(() => {
@@ -259,6 +267,15 @@ export default function MobileAchat({ user }: Props) {
     })
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [pendingPOs, articles])
+
+  // Zones available in articles
+  const availableZones = useMemo(() => {
+    const set = new Set<string>()
+    articles.forEach(a => {
+      if (a.zones) a.zones.forEach(z => set.add(z))
+    })
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [articles])
 
   const filteredPOs = useMemo(() => {
     let list = [...pendingPOs]
@@ -551,6 +568,7 @@ export default function MobileAchat({ user }: Props) {
     setArticles(arts)
     setFournisseurs(store.getFournisseurs())
     setClients(store.getClients())
+    setZones(store.getZones())
     const cfg = store.getEmailConfig()
     setEmailDest(cfg.achat)
     setBesoinSKU(calcBesoinSKU(arts))
@@ -1310,7 +1328,31 @@ export default function MobileAchat({ user }: Props) {
               {s.label}
             </button>
           ))}
+          {zoneFilter && (
+            <button onClick={() => setZoneFilter("")}
+              className="shrink-0 px-2 py-1.5 rounded-xl text-xs font-bold bg-orange-100 text-orange-700 hover:bg-orange-200">
+              ✕ {zoneFilter}
+            </button>
+          )}
         </div>
+
+        {/* Zone filter chips */}
+        {availableZones.length > 0 && (
+          <div className="flex gap-2 px-3 py-2 border-b border-border overflow-x-auto flex-wrap">
+            {availableZones.map(zone => (
+              <button
+                key={zone}
+                onClick={() => setZoneFilter(zoneFilter === zone ? "" : zone)}
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                  zoneFilter === zone
+                    ? "bg-orange-500 text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70"
+                }`}>
+                📍 {zone}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Accordion par famille */}
         {(() => {
