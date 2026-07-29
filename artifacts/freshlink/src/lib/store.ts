@@ -4779,6 +4779,14 @@ const storeExtensions = {
 // Merge extensions onto the store object (safe spread — no type magic needed)
 Object.assign(store, storeExtensions)
 
+// Type declaration: inform TypeScript that zones methods are now on store
+declare const store: typeof store & {
+  getZones(): string[]
+  saveZones(zones: string[]): void
+  addZone(zoneName: string): void
+  removeZone(zoneName: string): void
+}
+
 
 
 
