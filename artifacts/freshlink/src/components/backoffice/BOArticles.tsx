@@ -70,8 +70,10 @@ function findDuplicateArticle(all: Article[], nom: string, nomAr: string, exclud
 const UM_OPTIONS = ["Caisse", "Demi caisse", "Carton", "Palette", "Sac", "Plateau", "Botte", "Pièce"]
 
 export default function BOArticles({ user }: { user: { id: string; name: string } }) {
-  const [tab, setTab] = useState<"articles" | "caisses">("articles")
+  const [tab, setTab] = useState<"articles" | "caisses" | "zones">("articles")
   const [articles, setArticles] = useState<Article[]>([])
+  const [zones, setZones] = useState<string[]>([])
+  const [newZone, setNewZone] = useState("")
   const [search, setSearch] = useState("")
   const [famille, setFamille] = useState("")
   const [view, setView] = useState<"grid" | "table">("grid")
@@ -107,6 +109,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
     um: "", colisageParUM: undefined,
     stockDisponible: 0, stockDefect: 0, prixAchat: 0,
     pvMethode: "pourcentage", pvValeur: 60, photo: "",
+    zones: [],
   }
   const [form, setForm] = useState(EMPTY_FORM)
   const [photoUploading, setPhotoUploading] = useState(false)
@@ -117,6 +120,8 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    // Charger les zones
+    setZones(store.getZones())
     // Chargement local immédiat — pas d'auto-sync !
     // L'auto-sync de TOUT le localStorage à l'ouverture causait des régressions :
     // - Anciens IDs (a1, a2...) repoussés vers Supabase
@@ -172,10 +177,10 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   }
 
   // ── Supabase sync helpers ─────────────────────────────────────────────────
-  const syncArticleToSupabase = async (article: Article) => {
+  const syncArticleToSupabase = async (article: Article): Promise<boolean> => {
     try {
       const { id, ...payload } = article
-      await fetch("/api/sync-write", {
+      const res = await fetch("/api/sync-write", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -183,8 +188,20 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
           upserts: [{ id, payload, updated_at: new Date().toISOString() }],
         }),
       })
+
+      const json = await res.json() as { ok?: boolean; errors?: string[] }
+
+      if (!res.ok || !json.ok) {
+        const errorMsg = json.errors?.join(", ") || `HTTP ${res.status}`
+        console.error("[BOArticles] syncArticleToSupabase failed:", errorMsg)
+        return false
+      }
+
+      console.log("[BOArticles] Article synced:", id)
+      return true
     } catch (e) {
       console.error("[BOArticles] syncArticleToSupabase error:", e)
+      return false
     }
   }
 
@@ -318,11 +335,12 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
       um: a.um || "", colisageParUM: a.colisageParUM,
       stockDisponible: a.stockDisponible, stockDefect: a.stockDefect,
       prixAchat: a.prixAchat, pvMethode: a.pvMethode, pvValeur: a.pvValeur, photo: a.photo || "",
+      zones: a.zones || [],
     })
     setShowForm(true)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.nom) return
     const session = store.getSession()
     if (!hasPermission(session?.role, "modifier_article")) { logAction(session, "modifier_article", "denied", { type: "article", label: form.nom }); return }
@@ -350,7 +368,12 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
       store.saveArticles(all)
       saved = newArt
     }
-    if (saved) syncArticleToSupabase(saved)
+    if (saved) {
+      const syncOk = await syncArticleToSupabase(saved)
+      if (!syncOk) {
+        console.warn("[BOArticles] Sync to Supabase failed, but article saved locally")
+      }
+    }
     setArticles(store.getArticles())
     setShowForm(false)
     setEditArt(null)
@@ -455,16 +478,78 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   return (
     <div className="flex flex-col gap-5">
 
+      {/* Toolbar: Refresh + Clear Cache */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => {
+          setArticles(store.getArticles())
+          setZones(store.getZones())
+        }} className="px-4 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold">
+          🔄 Actualiser
+        </button>
+        <button onClick={() => {
+          if (window.confirm("Vider tout le cache localStorage? Tous les articles locaux seront supprimés.")) {
+            localStorage.clear()
+            window.location.reload()
+          }
+        }} className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold">
+          🗑️ Vider Cache
+        </button>
+      </div>
+
       {/* Tab switcher */}
       <div className="flex items-center gap-2 p-1 bg-muted rounded-2xl w-fit">
-        {(["articles", "caisses"] as const).map(t => (
+        {(["articles", "caisses", "zones"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2 rounded-xl text-sm font-semibold transition-all ${tab === t ? "text-white shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             style={tab === t ? { background: "oklch(0.38 0.2 260)" } : {}}>
-            {t === "articles" ? "Articles / المنتجات" : "Caisses vides / الصناديق"}
+            {t === "articles" ? "Articles / المنتجات" : t === "caisses" ? "Caisses vides / الصناديق" : "Zones / المناطق"}
           </button>
         ))}
       </div>
+
+      {/* ════ ZONES TAB ════ */}
+      {tab === "zones" && (
+        <div className="flex flex-col gap-4">
+          <div>
+            <h3 className="font-bold text-foreground text-lg">Gestion des zones d'achat</h3>
+            <p className="text-sm text-muted-foreground">Créez et gérez vos propres zones</p>
+          </div>
+          <div className="flex gap-2">
+            <input type="text" placeholder="Nom de la zone (ex: Zone Nord)" value={newZone}
+              onChange={e => setNewZone(e.target.value)}
+              className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              onKeyDown={e => {
+                if (e.key === "Enter" && newZone.trim()) {
+                  store.addZone(newZone.trim())
+                  setZones(store.getZones())
+                  setNewZone("")
+                }
+              }} />
+            <button onClick={() => {
+              if (newZone.trim()) {
+                store.addZone(newZone.trim())
+                setZones(store.getZones())
+                setNewZone("")
+              }
+            }} className="px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold">
+              Ajouter
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {zones.map(zone => (
+              <div key={zone} className="flex items-center justify-between gap-2 p-3 rounded-xl border border-border bg-muted/50">
+                <span className="font-medium text-sm">{zone}</span>
+                <button onClick={() => {
+                  store.removeZone(zone)
+                  setZones(store.getZones())
+                }} className="text-red-500 hover:text-red-600 text-sm font-semibold">
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ════ CAISSES VIDES TAB ════ */}
       {tab === "caisses" && (
@@ -998,6 +1083,29 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
               <input type="number" min={0} step={0.01} value={form.pvValeur}
                 onChange={e => setForm(f => ({ ...f, pvValeur: Number(e.target.value) }))}
                 className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary" />
+            </div>
+            {/* ── ZONES D'ACHAT ── */}
+            <div className="flex flex-col gap-1 sm:col-span-2">
+              <label className="text-xs font-semibold">Zones d'achat</label>
+              {zones.length === 0 ? (
+                <p className="text-xs text-muted-foreground">Aucune zone créée. Allez à l'onglet "Zones" pour en créer.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {zones.map(zone => (
+                    <label key={zone} className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={(form.zones || []).includes(zone)}
+                        onChange={e => setForm(f => ({
+                          ...f,
+                          zones: e.target.checked
+                            ? [...(f.zones || []), zone]
+                            : (f.zones || []).filter(z => z !== zone)
+                        }))}
+                        className="rounded" />
+                      <span className="text-sm">{zone}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
             {/* ── PHOTO IMPORT (Fichier / Drag-Drop / URL) ── */}
             <div className="flex flex-col gap-2 sm:col-span-2">

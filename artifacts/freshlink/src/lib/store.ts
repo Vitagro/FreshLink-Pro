@@ -363,6 +363,8 @@ export interface Article {
   // ── Pricing concurrentiel (module Pricing) ───────────────────────────────
   pvImbattable?: number        // PV imbattable conseillé (calculé vs concurrent), diffusé à la force de vente
   pvImbattableMaj?: string     // date ISO de la dernière diffusion à la force de vente
+  // ── Zones d'achat ─────────────────────────────────────────────────────────
+  zones?: string[]  // ex: ["zone_nord", "zone_sud"] — zones d'achat disponibles
 }
 
 // Catalogue de charges applicables par article (coût de revient).
@@ -2922,34 +2924,11 @@ export const store = {
     const byId = new Map<string, Article>()
     for (const a of normalized) byId.set(a.id, a)
 
-    // Déduplication par NOM (FR) normalisé — fusionne les doublons à id différent
-    // (ex: PO achat affichait "Tomate" 2 fois : une ligne FR seule, une FR+AR).
-    // On garde l'enregistrement le plus complet et on récupère les champs
-    // manquants depuis les doublons écartés (nomAr, photo, famille, prixAchat).
-    const normNom = (s: string) =>
-      s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim()
-    const score = (a: Article) =>
-      (a.nomAr ? 2 : 0) + (a.photo ? 1 : 0) + (a.famille ? 1 : 0) +
-      (a.prixAchat > 0 ? 1 : 0) + (a.stockDisponible > 0 ? 1 : 0) +
-      (a.marketplaceActif ? 1 : 0)
-    const byNom = new Map<string, Article>()
-    for (const a of byId.values()) {
-      const key = normNom(a.nom)
-      if (!key) { byNom.set(a.id, a); continue } // pas de nom → ne pas fusionner
-      const prev = byNom.get(key)
-      if (!prev) { byNom.set(key, a); continue }
-      // garder le plus complet ; compléter ses trous depuis l'autre
-      const keep = score(a) > score(prev) ? a : prev
-      const drop = keep === a ? prev : a
-      byNom.set(key, {
-        ...keep,
-        nomAr:   keep.nomAr   || drop.nomAr,
-        photo:   keep.photo   || drop.photo,
-        famille: keep.famille || drop.famille,
-        prixAchat: keep.prixAchat > 0 ? keep.prixAchat : drop.prixAchat,
-      })
-    }
-    return [...byNom.values()]
+    // DISABLED: Name-based deduplication caused data loss during edits
+    // When user modified article names, collisions with other articles triggered
+    // cascading article deletions. Keeping only ID-based deduplication is safer.
+    // TODO: Re-enable with proper merge logic that preserves ALL fields if data quality issues resurface
+    return [...byId.values()]
   },
   saveArticles: (a: Article[]) => setLS("fl_articles", a),
 
@@ -4759,6 +4738,41 @@ const storeExtensions = {
   generateApiKey: (): string => {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     return "fl_" + Array.from({ length: 40 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
+  },
+
+  // ── Zones Management ──────────────────────────────────────────────────────
+  getZones: (): string[] => {
+    try {
+      const data = getLS<{ zones: string[] }>("fl_zones_config", { zones: [] })
+      return data?.zones || []
+    } catch {
+      return []
+    }
+  },
+  saveZones: (zones: string[]) => {
+    try {
+      setLS("fl_zones_config", { zones })
+    } catch (e) {
+      console.error("[store] saveZones error:", e)
+    }
+  },
+  addZone: (zoneName: string) => {
+    const zones = store.getZones()
+    if (!zones.includes(zoneName)) {
+      zones.push(zoneName)
+      store.saveZones(zones)
+    }
+  },
+  removeZone: (zoneName: string) => {
+    const zones = store.getZones().filter(z => z !== zoneName)
+    store.saveZones(zones)
+    // Remove zone from all articles
+    const arts = store.getArticles()
+    const updated = arts.map(a => ({
+      ...a,
+      zones: (a.zones || []).filter(z => z !== zoneName)
+    }))
+    store.saveArticles(updated)
   },
 }
 
