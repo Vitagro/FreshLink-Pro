@@ -266,7 +266,7 @@ function fmtDate(d?: string) {
 // Filigrane (logo d'arrière-plan) sur le BL — s'affiche derrière le contenu, sur chaque page imprimée
 function watermarkHtml(cfg: { logoFondBL?: string; logoFondBLActif?: boolean }) {
   if (!cfg.logoFondBLActif || !cfg.logoFondBL) return ""
-  return `<img src="${cfg.logoFondBL}" onerror="this.style.display='none'" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:65%;height:65%;opacity:0.09;z-index:0;pointer-events:none;object-fit:contain"/>`
+  return `<img src="${cfg.logoFondBL}" onerror="this.style.display='none'" style="position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;height:60%;opacity:0.12;z-index:0;pointer-events:none;object-fit:contain;-webkit-print-color-adjust:exact;print-color-adjust:exact"/>`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -740,23 +740,23 @@ ${!isFacture ? watermarkHtml(cfg) : ""}
 </div>
 <div class="info-grid">
   <div class="info-card">
-    <div class="ic-title">Client / Destinataire</div>
+    <div class="ic-title">العميل / المستقبل<br/>Client / Destinataire</div>
     <div class="ic-val">${bl.clientNom}</div>
     <div class="ic-sub">${bl.clientAdresse ?? ""}</div>
     ${sICE && bl.clientIce?`<div class="ic-sub">ICE: ${bl.clientIce}</div>`:""}
-    ${bl.clientModalitePaiement?`<div class="ic-sub">Modalité: ${bl.clientModalitePaiement}</div>`:""}
+    ${bl.clientModalitePaiement?`<div class="ic-sub">Modalité / طريقة الدفع: ${bl.clientModalitePaiement}</div>`:""}
   </div>
   <div class="info-card">
-    <div class="ic-title">Expédition</div>
+    <div class="ic-title">الشحن / الإرسال<br/>Expédition</div>
     <div class="ic-val">${companyNom}</div>
-    <div class="ic-sub">Date: ${dateStr}</div>
-    <div class="ic-sub">Livreur: ${bl.livreurNom ?? "—"}</div>
+    <div class="ic-sub">تاريخ / Date: ${dateStr}</div>
+    <div class="ic-sub">السائق / Livreur: ${bl.livreurNom ?? "—"}</div>
   </div>
 </div>
 <table>
   <thead><tr>
-    <th style="width:34%">Désignation</th><th>Unité</th>
-    <th class="r">Qté livrée</th><th class="r">Nb UM</th><th class="r">Prix U. HT</th><th class="r">Total HT</th>
+    <th style="width:34%">الوصف / Désignation</th><th>الوحدة / Unité</th>
+    <th class="r">الكمية المسلمة / Qté livrée</th><th class="r">عدد الوحدات / Nb UM</th><th class="r">السعر / Prix U. HT</th><th class="r">الإجمالي / Total HT</th>
   </tr></thead>
   <tbody>
   ${bl.lignes.map(l => {
@@ -768,19 +768,19 @@ ${!isFacture ? watermarkHtml(cfg) : ""}
   </tbody>
 </table>
 <div class="totals"><div class="totals-inner">
-  <div class="tot-row"><span class="lbl">Total articles</span><span class="val">${nbArticlesDistincts}</span></div>
-  ${poidsTotalKg > 0 ? `<div class="tot-row"><span class="lbl">Poids total</span><span class="val">${poidsTotalKg.toFixed(1)} kg</span></div>` : ""}
-  <div class="tot-row"><span class="lbl">Total HT</span><span class="val">${fmtDH(bl.totalHT)}</span></div>
-  <div class="tot-row"><span class="lbl">TVA (${tva}%)</span><span class="val">${fmtDH(montantTVA)}</span></div>
-  <div class="tot-row tot-final"><span class="lbl">TOTAL TTC</span><span class="val">${fmtDH(bl.totalTTC)}</span></div>
-  ${droitTimbre > 0 ? `<div class="tot-row"><span class="lbl">Droit de timbre (${fiscalCfg.tauxDroitTimbre}%)</span><span class="val">${fmtDH(droitTimbre)}</span></div>
-  <div class="tot-row tot-final"><span class="lbl">TOTAL À PAYER</span><span class="val">${fmtDH(totalAvecTimbre)}</span></div>` : ""}
+  <div class="tot-row"><span class="lbl">إجمالي المقالات / Total articles</span><span class="val">${nbArticlesDistincts}</span></div>
+  ${poidsTotalKg > 0 ? `<div class="tot-row"><span class="lbl">الوزن الإجمالي / Poids total</span><span class="val">${poidsTotalKg.toFixed(1)} kg</span></div>` : ""}
+  <div class="tot-row"><span class="lbl">المجموع قبل الضريبة / Total HT</span><span class="val">${fmtDH(bl.totalHT)}</span></div>
+  <div class="tot-row"><span class="lbl">الضريبة على القيمة المضافة / TVA (${tva}%)</span><span class="val">${fmtDH(montantTVA)}</span></div>
+  <div class="tot-row tot-final"><span class="lbl">الإجمالي شامل الضريبة / TOTAL TTC</span><span class="val">${fmtDH(bl.totalTTC)}</span></div>
+  ${droitTimbre > 0 ? `<div class="tot-row"><span class="lbl">حق الطابع / Droit de timbre (${fiscalCfg.tauxDroitTimbre}%)</span><span class="val">${fmtDH(droitTimbre)}</span></div>
+  <div class="tot-row tot-final"><span class="lbl">الإجمالي المستحق / TOTAL À PAYER</span><span class="val">${fmtDH(totalAvecTimbre)}</span></div>` : ""}
 </div></div>
-${bl.notesBL?`<div class="notice"><strong>Notes:</strong> ${bl.notesBL}</div>`:""}
-${isFacture?`<div class="notice" style="margin-top:8px"><strong>Document :</strong> Facture${showLegal?" — valant pièce comptable (mentions légales incluses)":""}.</div>`:""}
+${bl.notesBL?`<div class="notice"><strong>ملاحظات / Notes:</strong> ${bl.notesBL}</div>`:""}
+${isFacture?`<div class="notice" style="margin-top:8px"><strong>الوثيقة / Document :</strong> فاتورة / Facture${showLegal?" — valant pièce comptable (mentions légales incluses)":""}.</div>`:""}
 <div class="sig-grid">
-  <div class="sig-box"><div class="sig-lbl">Signature Livreur</div><div class="sig-line">${bl.livreurNom??"—"}</div></div>
-  <div class="sig-box"><div class="sig-lbl">Signature Client &amp; Cachet</div><div class="sig-line">${bl.clientNom}</div></div>
+  <div class="sig-box"><div class="sig-lbl">توقيع السائق / Signature Livreur</div><div class="sig-line">${bl.livreurNom??"—"}</div></div>
+  <div class="sig-box"><div class="sig-lbl">توقيع العميل والختم / Signature Client &amp; Cachet</div><div class="sig-line">${bl.clientNom}</div></div>
 </div>
 <div class="mentions">${piedDePage}</div>
 </div><script>window.onload=()=>{window.print()}</script></body></html>`
