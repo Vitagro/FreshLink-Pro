@@ -976,6 +976,20 @@ export default function BOBonLivraison({ user }: { user: User }) {
   const [factureTo, setFactureTo] = useState("")
   const [selectedFacture, setSelectedFacture] = useState<Set<string>>(new Set())
 
+  // ── Print multiple BL selection ────────────────────────────────────────────
+  const [selectedPrint, setSelectedPrint] = useState<Set<string>>(new Set())
+  const [filterSecteur, setFilterSecteur] = useState("")
+  const togglePrintSel = (blId: string) => {
+    const newSet = new Set(selectedPrint)
+    if (newSet.has(blId)) newSet.delete(blId)
+    else newSet.add(blId)
+    setSelectedPrint(newSet)
+  }
+  const selectAllForPrint = () => {
+    setSelectedPrint(new Set(displayed.map(b => b.id)))
+  }
+  const clearPrintSel = () => setSelectedPrint(new Set())
+
   // ── Print customization ────────────────────────────────────────────────────
   // Pré-rempli depuis la fiche société (BO > Paramètres) au lieu de partir
   // vide — l'utilisateur n'a plus qu'à adapter ce qui diffère, pas tout
@@ -1681,6 +1695,81 @@ export default function BOBonLivraison({ user }: { user: User }) {
           </div>
         )}
 
+        {/* ── Panneau Impression groupée (multi-BL) ────────────────────────── */}
+        {displayed.length > 0 && (
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+              <div>
+                <p className="text-sm font-black text-blue-800">Impression groupée — sélectionnez plusieurs BL</p>
+                <p className="text-xs text-blue-600 mt-0.5">Imprimez plusieurs bons de livraison en même temps, par secteur, livreur ou zone.</p>
+              </div>
+              <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded-full">{displayed.length} BL disponible{displayed.length !== 1 ? "s" : ""}</span>
+            </div>
+
+            {/* Groupement rapide par livreur/secteur */}
+            <div className="mb-3">
+              <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">Groupement rapide :</p>
+              <div className="flex gap-2 flex-wrap">
+                {[...new Set(displayed.map(b => b.livreurNom).filter(Boolean))].map(livreur => (
+                  <button key={livreur}
+                    onClick={() => setSelectedPrint(new Set(displayed.filter(b => b.livreurNom === livreur).map(b => b.id)))}
+                    className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-300 rounded-xl hover:bg-blue-100 transition-colors">
+                    Par livreur: {livreur}
+                  </button>
+                ))}
+                {[...new Set(displayed.map(b => {
+                  const c = store.getClients().find(x => x.id === b.clientId)
+                  return c?.secteur || ""
+                }).filter(Boolean))].map(secteur => (
+                  <button key={secteur}
+                    onClick={() => setSelectedPrint(new Set(displayed.filter(b => {
+                      const c = store.getClients().find(x => x.id === b.clientId)
+                      return c?.secteur === secteur
+                    }).map(b => b.id)))}
+                    className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-300 rounded-xl hover:bg-blue-100 transition-colors">
+                    Par secteur: {secteur}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sélection manuelle */}
+            <div className="flex gap-2 mb-3">
+              <button onClick={selectAllForPrint}
+                className="flex-1 px-3 py-2 text-xs font-bold text-blue-700 bg-white border border-blue-300 rounded-xl hover:bg-blue-100 transition-colors">
+                Tout sélectionner ({displayed.length})
+              </button>
+              <button onClick={clearPrintSel}
+                className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-red-500 bg-white border border-slate-200 rounded-xl transition-colors">
+                Vider
+              </button>
+            </div>
+
+            {/* Récap + action */}
+            <div className="flex items-center justify-between gap-3 flex-wrap border-t border-blue-200 pt-3">
+              <div className="text-sm text-blue-800">
+                <strong>{selectedPrint.size}</strong> BL sélectionné{selectedPrint.size !== 1 ? "s" : ""}
+              </div>
+              <button onClick={() => {
+                // Print all selected BLs
+                [...selectedPrint].forEach(blId => {
+                  const bl = bls.find(b => b.id === blId)
+                  if (bl) {
+                    setTimeout(() => handlePrint(bl), 100)
+                  }
+                })
+                clearPrintSel()
+              }} disabled={selectedPrint.size === 0}
+                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-40">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Imprimer la sélection ({selectedPrint.size})
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* KPIs */}
         <div className="flex gap-3 mt-4 flex-wrap">
           {[
@@ -1735,31 +1824,35 @@ export default function BOBonLivraison({ user }: { user: User }) {
             </button>
           </div>
           <button onClick={() => setShowAdvFilters(f => !f)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${showAdvFilters || filterTrip || filterClient || filterLivreur || filterArticle ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+            className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${showAdvFilters || filterTrip || filterClient || filterLivreur || filterArticle || filterSecteur ? "bg-blue-600 text-white border-blue-600" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" />
             </svg>
             Filtres avances
-            {(filterTrip || filterClient || filterLivreur || filterArticle) && (
+            {(filterTrip || filterClient || filterLivreur || filterArticle || filterSecteur) && (
               <span className="ml-1 w-5 h-5 bg-white text-blue-600 rounded-full text-[10px] font-black flex items-center justify-center">
-                {[filterTrip, filterClient, filterLivreur, filterArticle].filter(Boolean).length}
+                {[filterTrip, filterClient, filterLivreur, filterArticle, filterSecteur].filter(Boolean).length}
               </span>
             )}
           </button>
-          {(filterTrip || filterClient || filterLivreur || filterArticle) && (
-            <button onClick={() => { setFilterTrip(""); setFilterClient(""); setFilterLivreur(""); setFilterArticle("") }}
+          {(filterTrip || filterClient || filterLivreur || filterArticle || filterSecteur) && (
+            <button onClick={() => { setFilterTrip(""); setFilterClient(""); setFilterLivreur(""); setFilterArticle(""); setFilterSecteur("") }}
               className="px-3 py-2 text-xs font-semibold text-slate-500 hover:text-red-500 transition-colors">
               Effacer filtres
             </button>
           )}
         </div>
         {showAdvFilters && (
-          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-3">
             {[
               { label: "Par Trip",    val: filterTrip,    set: setFilterTrip,    opts: allTrips },
               { label: "Par Client",  val: filterClient,  set: setFilterClient,  opts: allClients },
               { label: "Par Livreur", val: filterLivreur, set: setFilterLivreur, opts: allLivreurs },
               { label: "Par Article", val: filterArticle, set: setFilterArticle, opts: allArticles },
+              { label: "Par Secteur", val: filterSecteur, set: setFilterSecteur, opts: [...new Set(bls.map(b => {
+                const c = store.getClients().find(x => x.id === b.clientId)
+                return c?.secteur || ""
+              }).filter(Boolean))] },
             ].map(f => (
               <div key={f.label} className="flex flex-col gap-1">
                 <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">{f.label}</label>
@@ -1797,6 +1890,11 @@ export default function BOBonLivraison({ user }: { user: User }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="px-4 py-3 text-center">
+                      <input type="checkbox" checked={selectedPrint.size === displayed.length && displayed.length > 0}
+                        onChange={e => e.target.checked ? selectAllForPrint() : clearPrintSel()}
+                        className="w-4 h-4 accent-blue-600" />
+                    </th>
                     {["Numero", "Client", "Date", "Livreur", "Articles", "Total TTC", "Statut", "QC",
                       ...(mainTab === "historique" ? ["Facture"] : []),
                       "Actions"].map(h => (
@@ -1807,8 +1905,13 @@ export default function BOBonLivraison({ user }: { user: User }) {
                 <tbody className="divide-y divide-slate-100">
                   {displayed.map(bl => {
                     const isFacture = (bl as unknown as { factureCreee?: boolean }).factureCreee
+                    const isPrintSelected = selectedPrint.has(bl.id)
                     return (
-                    <tr key={bl.id} className={`hover:bg-slate-50 transition-colors ${isFacture ? "bg-emerald-50/30" : ""}`}>
+                    <tr key={bl.id} className={`hover:bg-slate-50 transition-colors ${isFacture ? "bg-emerald-50/30" : ""} ${isPrintSelected ? "bg-blue-50" : ""}`}>
+                      <td className="px-4 py-3 text-center">
+                        <input type="checkbox" checked={isPrintSelected} onChange={() => togglePrintSel(bl.id)}
+                          className="w-4 h-4 accent-blue-600" />
+                      </td>
                       <td className="px-4 py-3">
                         <span className="font-mono text-xs font-bold text-slate-700">
                           {/* Affichage: "Bon de livraison N° 26042" au lieu de "BL-BL-26042" */}
