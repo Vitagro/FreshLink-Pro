@@ -4184,6 +4184,41 @@ export const store = {
     if (idx >= 0) { arr[idx] = { ...arr[idx], ...updates }; store.saveHRTemplates(arr) }
   },
   deleteHRTemplate: (id: string) => store.saveHRTemplates(store.getHRTemplates().filter(t => t.id !== id)),
+
+  // ── Zones Management ──────────────────────────────────────────────────────
+  getZones: (): string[] => {
+    try {
+      const data = getLS<{ zones: string[] }>("fl_zones_config", { zones: [] })
+      return data?.zones || []
+    } catch {
+      return []
+    }
+  },
+  saveZones: (zones: string[]) => {
+    try {
+      setLS("fl_zones_config", { zones })
+    } catch (e) {
+      console.error("[store] saveZones error:", e)
+    }
+  },
+  addZone: (zoneName: string) => {
+    const zones = store.getZones()
+    if (!zones.includes(zoneName)) {
+      zones.push(zoneName)
+      store.saveZones(zones)
+    }
+  },
+  removeZone: (zoneName: string) => {
+    const zones = store.getZones().filter(z => z !== zoneName)
+    store.saveZones(zones)
+    // Remove zone from all articles
+    const arts = store.getArticles()
+    const updated = arts.map(a => ({
+      ...a,
+      zones: (a.zones || []).filter(z => z !== zoneName)
+    }))
+    store.saveArticles(updated)
+  },
 }
 
 // ============================================================
@@ -4739,53 +4774,10 @@ const storeExtensions = {
     const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     return "fl_" + Array.from({ length: 40 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
   },
-
-  // ── Zones Management ──────────────────────────────────────────────────────
-  getZones: (): string[] => {
-    try {
-      const data = getLS<{ zones: string[] }>("fl_zones_config", { zones: [] })
-      return data?.zones || []
-    } catch {
-      return []
-    }
-  },
-  saveZones: (zones: string[]) => {
-    try {
-      setLS("fl_zones_config", { zones })
-    } catch (e) {
-      console.error("[store] saveZones error:", e)
-    }
-  },
-  addZone: (zoneName: string) => {
-    const zones = store.getZones()
-    if (!zones.includes(zoneName)) {
-      zones.push(zoneName)
-      store.saveZones(zones)
-    }
-  },
-  removeZone: (zoneName: string) => {
-    const zones = store.getZones().filter(z => z !== zoneName)
-    store.saveZones(zones)
-    // Remove zone from all articles
-    const arts = store.getArticles()
-    const updated = arts.map(a => ({
-      ...a,
-      zones: (a.zones || []).filter(z => z !== zoneName)
-    }))
-    store.saveArticles(updated)
-  },
 }
 
 // Merge extensions onto the store object (safe spread — no type magic needed)
 Object.assign(store, storeExtensions)
-
-// Type declaration: inform TypeScript that zones methods are now on store
-declare const store: typeof store & {
-  getZones(): string[]
-  saveZones(zones: string[]): void
-  addZone(zoneName: string): void
-  removeZone(zoneName: string): void
-}
 
 
 
