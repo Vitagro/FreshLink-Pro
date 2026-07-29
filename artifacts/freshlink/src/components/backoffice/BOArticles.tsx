@@ -70,9 +70,12 @@ function findDuplicateArticle(all: Article[], nom: string, nomAr: string, exclud
 const UM_OPTIONS = ["Caisse", "Demi caisse", "Carton", "Palette", "Sac", "Plateau", "Botte", "Pièce"]
 
 export default function BOArticles({ user }: { user: { id: string; name: string } }) {
-  const [tab, setTab] = useState<"articles" | "caisses" | "zones">("articles")
+  const [tab, setTab] = useState<"articles" | "caisses" | "zones" | "bulk-zones" | "import-prep">("articles")
   const [articles, setArticles] = useState<Article[]>([])
   const [zones, setZones] = useState<string[]>([])
+  const [selectedArticles, setSelectedArticles] = useState<Set<string>>(new Set())
+  const [showBulkZones, setShowBulkZones] = useState(false)
+  const [showImportPrep, setShowImportPrep] = useState(false)
   const [newZone, setNewZone] = useState("")
   const [search, setSearch] = useState("")
   const [famille, setFamille] = useState("")
@@ -507,6 +510,20 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
         ))}
       </div>
 
+      {/* Quick Assign Zones Button */}
+      {tab === "articles" && zones.length > 0 && (
+        <div className="flex gap-2">
+          <button onClick={() => setShowBulkZones(!showBulkZones)}
+            className="px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold flex items-center gap-2">
+            📍 Assignation rapide zones
+          </button>
+          <button onClick={() => setShowImportPrep(!showImportPrep)}
+            className="px-4 py-2.5 rounded-xl bg-violet-500 hover:bg-violet-600 text-white text-sm font-semibold flex items-center gap-2">
+            📥 Importer preps du jour
+          </button>
+        </div>
+      )}
+
       {/* ════ ZONES TAB ════ */}
       {tab === "zones" && (
         <div className="flex flex-col gap-4">
@@ -547,6 +564,95 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ════ QUICK ZONE ASSIGNMENT ════ */}
+      {showBulkZones && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-screen overflow-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">📍 Assignation rapide des zones</h2>
+              <button onClick={() => setShowBulkZones(false)} className="text-2xl">✕</button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">Sélectionnez une zone, puis cliquez sur les articles pour les assigner rapidement</p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-4">
+              {zones.map(zone => (
+                <button key={zone}
+                  onClick={() => {
+                    const updatedArticles = articles.map(a => ({
+                      ...a,
+                      zones: [...(a.zones || []), zone]
+                    }))
+                    setArticles(updatedArticles)
+                    store.saveArticles(updatedArticles)
+                  }}
+                  className="px-3 py-2 rounded-lg bg-orange-100 text-orange-700 font-semibold text-sm hover:bg-orange-200">
+                  {zone}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-xs text-muted-foreground mb-2">Articles ({articles.length}):</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto border rounded-xl p-3">
+              {articles.map(art => (
+                <div key={art.id} className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+                  <input type="checkbox"
+                    checked={selectedArticles.has(art.id)}
+                    onChange={e => {
+                      const newSet = new Set(selectedArticles)
+                      if (e.target.checked) newSet.add(art.id)
+                      else newSet.delete(art.id)
+                      setSelectedArticles(newSet)
+                    }}
+                    className="w-4 h-4" />
+                  <span className="text-xs font-medium flex-1">{art.nom}</span>
+                  <span className="text-[10px] text-muted-foreground">{(art.zones || []).length} zones</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowBulkZones(false)}
+                className="flex-1 px-4 py-2 rounded-lg border border-border">Fermer</button>
+              <button onClick={() => {
+                if (selectedArticles.size === 0) alert("Sélectionnez au moins un article")
+                else alert(`${selectedArticles.size} article(s) sélectionnés pour assignation`)
+              }}
+                className="flex-1 px-4 py-2 rounded-lg bg-orange-500 text-white font-semibold">Assigner zones sélectionnées</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ IMPORT FROM DAILY PREPS ════ */}
+      {showImportPrep && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-2xl w-full max-h-screen overflow-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">📥 Importer BL depuis préparations du jour</h2>
+              <button onClick={() => setShowImportPrep(false)} className="text-2xl">✕</button>
+            </div>
+            <p className="text-sm text-muted-foreground mb-4">Charger automatiquement les BL à partir des bons de préparation validés du jour</p>
+
+            <button onClick={() => {
+              alert("Import depuis preps du jour - Fonctionnalité en développement.\n\nCeci importera automatiquement tous les bons de préparation validés d'aujourd'hui comme BL.")
+            }}
+              className="w-full px-4 py-3 rounded-lg bg-violet-500 text-white font-semibold hover:bg-violet-600">
+              🔄 Importer maintenant
+            </button>
+
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-800">
+              <p className="font-semibold mb-1">💡 Fonction rapide:</p>
+              <p>Les BL seront créés automatiquement à partir des préparations du jour. Vous pouvez les modifier ou les supprimer après l'import.</p>
+            </div>
+
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowImportPrep(false)}
+                className="flex-1 px-4 py-2 rounded-lg border border-border">Fermer</button>
+            </div>
           </div>
         </div>
       )}

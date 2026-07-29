@@ -1697,39 +1697,70 @@ export default function BOBonLivraison({ user }: { user: User }) {
 
         {/* ── Panneau Impression groupée (multi-BL) ────────────────────────── */}
         {displayed.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-2xl">
-            <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <div className="mt-4 p-5 bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-2xl shadow-md">
+            <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
               <div>
-                <p className="text-sm font-black text-blue-800">Impression groupée — sélectionnez plusieurs BL</p>
-                <p className="text-xs text-blue-600 mt-0.5">Imprimez plusieurs bons de livraison en même temps, par secteur, livreur ou zone.</p>
+                <p className="text-lg font-black text-blue-900">🖨️ IMPRESSION GROUPÉE</p>
+                <p className="text-sm text-blue-700 mt-1">Sélectionnez plusieurs BL et imprimez-les d'un coup (groupé par livreur, secteur, ou manuellement)</p>
               </div>
-              <span className="text-xs font-bold text-blue-700 bg-blue-100 px-2 py-1 rounded-full">{displayed.length} BL disponible{displayed.length !== 1 ? "s" : ""}</span>
+              <div className="flex gap-2 items-center">
+                <span className="text-xs font-bold text-blue-700 bg-white px-3 py-1.5 rounded-full shadow-sm">{selectedPrint.size} sélectionné{selectedPrint.size !== 1 ? "s" : ""}</span>
+                <span className="text-xs font-bold text-white bg-blue-600 px-3 py-1.5 rounded-full">{displayed.length} disponible</span>
+              </div>
             </div>
 
             {/* Groupement rapide par livreur/secteur */}
-            <div className="mb-3">
-              <p className="text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">Groupement rapide :</p>
-              <div className="flex gap-2 flex-wrap">
-                {[...new Set(displayed.map(b => b.livreurNom).filter(Boolean))].map(livreur => (
-                  <button key={livreur}
-                    onClick={() => setSelectedPrint(new Set(displayed.filter(b => b.livreurNom === livreur).map(b => b.id)))}
-                    className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-300 rounded-xl hover:bg-blue-100 transition-colors">
-                    Par livreur: {livreur}
-                  </button>
-                ))}
+            <div className="mb-4 p-4 bg-white rounded-xl border border-blue-200">
+              <p className="text-xs font-bold text-blue-900 uppercase tracking-wide mb-3">⚡ Sélection rapide (un clic) :</p>
+              <div className="space-y-3">
+                {/* Livreurs */}
+                {[...new Set(displayed.map(b => b.livreurNom).filter(Boolean))].length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500 mb-2">👤 Par Livreur:</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {[...new Set(displayed.map(b => b.livreurNom).filter(Boolean))].map(livreur => {
+                        const count = displayed.filter(b => b.livreurNom === livreur).length
+                        return (
+                          <button key={livreur}
+                            onClick={() => setSelectedPrint(new Set(displayed.filter(b => b.livreurNom === livreur).map(b => b.id)))}
+                            className="px-3 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors shadow-sm">
+                            {livreur} ({count})
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+                {/* Secteurs */}
                 {[...new Set(displayed.map(b => {
                   const c = store.getClients().find(x => x.id === b.clientId)
                   return c?.secteur || ""
-                }).filter(Boolean))].map(secteur => (
-                  <button key={secteur}
-                    onClick={() => setSelectedPrint(new Set(displayed.filter(b => {
-                      const c = store.getClients().find(x => x.id === b.clientId)
-                      return c?.secteur === secteur
-                    }).map(b => b.id)))}
-                    className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-300 rounded-xl hover:bg-blue-100 transition-colors">
-                    Par secteur: {secteur}
-                  </button>
-                ))}
+                }).filter(Boolean))].length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-slate-500 mb-2">📍 Par Secteur:</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {[...new Set(displayed.map(b => {
+                        const c = store.getClients().find(x => x.id === b.clientId)
+                        return c?.secteur || ""
+                      }).filter(Boolean))].map(secteur => {
+                        const count = displayed.filter(b => {
+                          const c = store.getClients().find(x => x.id === b.clientId)
+                          return c?.secteur === secteur
+                        }).length
+                        return (
+                          <button key={secteur}
+                            onClick={() => setSelectedPrint(new Set(displayed.filter(b => {
+                              const c = store.getClients().find(x => x.id === b.clientId)
+                              return c?.secteur === secteur
+                            }).map(b => b.id)))}
+                            className="px-3 py-2 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-700 rounded-lg transition-colors shadow-sm">
+                            {secteur} ({count})
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
