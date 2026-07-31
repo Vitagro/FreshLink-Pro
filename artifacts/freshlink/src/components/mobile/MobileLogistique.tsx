@@ -373,6 +373,35 @@ export default function MobileLogistique({ user }: Props) {
     refresh()
   }
 
+  // ── Trip tab: le livreur démarre/termine sa tournée depuis le mobile ───────
+  const startTrip = (trip: Trip) => {
+    const saisie = window.prompt("KM départ (compteur véhicule) :", trip.kmDepart != null ? String(trip.kmDepart) : "")
+    if (saisie === null) return
+    const km = saisie.trim() ? Number(saisie) : trip.kmDepart
+    if (saisie.trim() && (isNaN(km as number) || (km as number) < 0)) { alert("KM invalide."); return }
+    store.updateTrip(trip.id, {
+      statut: "en_cours",
+      heureDepart: new Date().toISOString(),
+      ...(km != null ? { kmDepart: km, kmDepartConfirme: true } : {}),
+    })
+    refresh()
+  }
+
+  const endTrip = (trip: Trip) => {
+    const saisie = window.prompt("KM arrivée (compteur véhicule) :", trip.kmArrivee != null ? String(trip.kmArrivee) : "")
+    if (saisie === null) return
+    const km = saisie.trim() ? Number(saisie) : trip.kmArrivee
+    if (saisie.trim() && (isNaN(km as number) || (km as number) < 0)) { alert("KM invalide."); return }
+    const kmTotal = (km != null && trip.kmDepart != null && km >= trip.kmDepart) ? km - trip.kmDepart : trip.kmTotal
+    store.updateTrip(trip.id, {
+      statut: "terminé",
+      heureFin: new Date().toISOString(),
+      ...(km != null ? { kmArrivee: km } : {}),
+      ...(kmTotal != null ? { kmTotal } : {}),
+    })
+    refresh()
+  }
+
   // ── Trip tab: update BL statut + create BL if not existing ────────────────
   const handleDeliveryUpdate = (commandeId: string, statut: BonLivraison["statutLivraison"], motif?: string, heureReelle?: string) => {
     const commande = store.getCommandes().find(c => c.id === commandeId)
@@ -848,6 +877,31 @@ export default function MobileLogistique({ user }: Props) {
                 <span className="text-xs opacity-60">Total encaissé</span>
                 <span className="font-bold text-sm">{tripStats.totalHT.toLocaleString("fr-MA")} DH HT</span>
               </div>
+
+              {/* Départ / Fin de tournée — action du livreur propriétaire du trip */}
+              {activeTrip && (activeTrip.livreurId === user.id || activeTrip.livreurNom === user.name) && (
+                <div className="pt-2 border-t border-white/10">
+                  {activeTrip.statut === "planifié" && (
+                    <button
+                      onClick={() => startTrip(activeTrip)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-green-500 hover:bg-green-600 transition-colors">
+                      <Icon d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-4 h-4" />
+                      Démarrer la tournée
+                    </button>
+                  )}
+                  {activeTrip.statut === "en_cours" && (
+                    <button
+                      onClick={() => endTrip(activeTrip)}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors">
+                      <Icon d="M9 9h6v6H9z M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-4 h-4" />
+                      Terminer la tournée
+                    </button>
+                  )}
+                  {activeTrip.statut === "terminé" && (
+                    <p className="text-center text-xs opacity-60 py-1">Tournée terminée{activeTrip.kmTotal != null ? ` — ${activeTrip.kmTotal} km` : ""}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Mini-carte du circuit total — vue d'ensemble immédiate, sans
