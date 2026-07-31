@@ -50,6 +50,7 @@ function resolveQty(l: LigneForm, art?: Article): number {
 interface BesoinSKU {
   articleId: string
   articleNom: string
+  articleNomAr: string
   unite: string
   stockDispo: number
   qteCommandee: number    // sum of validated orders for today
@@ -57,6 +58,15 @@ interface BesoinSKU {
   dernierPrixAchat: number
   totalEstime: number     // besoinNet * dernierPrixAchat (0 when covered)
   lancerDA: boolean       // true when besoinNet > 0 → must create Purchase Order
+  um?: string             // libelle UM (ex: "Caisse") si l'article en a une
+  colisageParUM?: number  // quantite en unite de base par UM (ex: 15 kg/caisse)
+}
+
+// Nombre d'UM (caisses...) arrondi au superieur pour couvrir le besoin — on ne
+// peut pas commander une demi-caisse en moins que necessaire.
+function nbUM(qteBase: number, colisageParUM?: number): number | null {
+  if (!colisageParUM || colisageParUM <= 0) return null
+  return Math.ceil(Math.abs(qteBase) / colisageParUM)
 }
 
 // Exclut les articles désactivés globalement (BOArticles → actif=false) —
@@ -83,7 +93,11 @@ function calcBesoinSKU(articles: Article[]): BesoinSKU[] {
       const lancerDA = besoinNet > 0
       return {
         articleId: b.articleId,
-        articleNom: b.articleNom,
+        // b.articleNom (computeBesoinNet) est deja "Nom / NomAr" concatene —
+        // on repart du nom francais seul pour afficher les 2 langues sur des
+        // lignes separees (FR en gras, AR en RTL juste en-dessous).
+        articleNom: art?.nom ?? b.articleNom,
+        articleNomAr: art?.nomAr ?? "",
         unite: b.unite,
         stockDispo: b.stockQty,
         qteCommandee: b.commandeQty,
@@ -91,6 +105,8 @@ function calcBesoinSKU(articles: Article[]): BesoinSKU[] {
         lancerDA,
         dernierPrixAchat: art?.prixAchat ?? 0,
         totalEstime: lancerDA ? besoinNet * (art?.prixAchat ?? 0) : 0,
+        um: art?.um,
+        colisageParUM: art?.colisageParUM,
       }
     })
     .sort((a, b) => b.besoinNet - a.besoinNet) // most urgent first (highest deficit)
@@ -1117,6 +1133,9 @@ export default function MobileAchat({ user }: Props) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <p className="font-bold text-sm text-foreground">{b.articleNom}</p>
+                      {b.articleNomAr && (
+                        <p className="text-xs text-muted-foreground" dir="rtl" lang="ar">{b.articleNomAr}</p>
+                      )}
                     </div>
                     {b.lancerDA ? (
                       <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-black bg-red-500 text-white animate-pulse">
@@ -1155,6 +1174,18 @@ export default function MobileAchat({ user }: Props) {
                       <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-200 text-slate-600 text-xs font-black flex items-center justify-center z-10">=</span>
                     </div>
                   </div>
+
+                  {/* Calcul par UM (ex: Caisse) — conversion de la base (kg...) */}
+                  {b.um && b.colisageParUM && (
+                    <div className="flex items-center justify-between text-xs bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
+                      <span className="text-sky-700 font-medium">
+                        Par {b.um} ({b.colisageParUM} {b.unite}/{b.um})
+                      </span>
+                      <span className="font-black text-sky-800">
+                        {nbUM(b.besoinNet, b.colisageParUM)} {b.um}{Math.abs(nbUM(b.besoinNet, b.colisageParUM) ?? 0) > 1 ? "s" : ""} {b.lancerDA ? "a commander" : "en surplus"}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Cout estime si DA */}
                   {b.lancerDA && b.dernierPrixAchat > 0 && (
@@ -1196,6 +1227,7 @@ export default function MobileAchat({ user }: Props) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
                       Lancer DA — Commander {b.besoinNet} {b.unite}
+                      {b.um && b.colisageParUM ? ` (≈ ${nbUM(b.besoinNet, b.colisageParUM)} ${b.um}${(nbUM(b.besoinNet, b.colisageParUM) ?? 0) > 1 ? "s" : ""})` : ""}
                     </button>
                   )}
                 </div>
