@@ -720,6 +720,10 @@ export interface Trip {
   kmDepart?: number        // saisie obligatoire par le livreur avant de démarrer
   kmArrivee?: number       // saisie obligatoire à l'arrivée
   kmTotal?: number         // auto-calculé: kmArrivee - kmDepart
+  // Horodatage réel du départ/fin de tournée, saisi par le livreur via les
+  // boutons "Démarrer/Terminer la tournée" (mobile Logistique).
+  heureDepart?: string     // ISO — au clic "Démarrer la tournée" (statut → en_cours)
+  heureFin?: string        // ISO — au clic "Terminer la tournée" (statut → terminé)
   // Caisses par article — saisie obligatoire par le contrôleur avant validation
   nbCaissesByArticle?: Record<string, { gros: number; demi: number; articleNom: string }>
   caissesValidees?: boolean  // true une fois le contrôleur a saisi toutes les caisses
@@ -2020,10 +2024,10 @@ export function removeCustomSecteur(nom: string): string[] {
   try { localStorage.setItem(LS_SECTEURS_CUSTOM, JSON.stringify(next)) } catch { /* noop */ }
   return next
 }
-/** Tous les secteurs/zones : prédéfinis + perso + ceux déjà utilisés (clients) */
+/** Tous les secteurs/zones : prédéfinis + perso + ceux déjà utilisés (clients), triés par ordre alphabétique */
 export function getAllSecteurs(usedSecteurs: string[] = []): string[] {
   const set = new Set<string>([...SECTEURS_VENTE, ...getCustomSecteurs(), ...usedSecteurs.filter(Boolean)])
-  return [...set]
+  return [...set].sort((a, b) => a.localeCompare(b, "fr", { sensitivity: "base" }))
 }
 
 // ── Verrou d'édition (anti-falsification des pièces : BL, factures) ───────────
