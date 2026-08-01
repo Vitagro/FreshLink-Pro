@@ -418,6 +418,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
         ),
       },
       { id: "import_externe",    label: "Import Bases Externes", labelAr: "استيراد قواعد البيانات", permKey: "canViewDatabase", icon: <Icon d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4M15 3l2 2-2 2M9 3L7 5l2 2" /> },
+      { id: "deploy_guide",      label: "Guide de deploiement",  labelAr: "دليل النشر",        permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M13 10V3L4 14h7v7l9-11h-7z" /> },
     ],
   },
 ]
@@ -476,7 +477,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   // puis config operationnelle (cutoffs, mobile, depots, integrations), puis
   // outils techniques rarement ouverts (BDD, imports, liens) et enfin les
   // ecrans reserves super-admin (camera) en dernier.
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms", "deploy_guide"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
