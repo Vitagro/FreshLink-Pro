@@ -240,7 +240,12 @@ export default function ForecastPanel() {
               }`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <p className="font-bold text-sm text-foreground">{f.articleNom}</p>
+                    <p className="font-bold text-sm text-foreground">
+                      {f.articleNom}
+                      {articles.find(a => a.id === f.articleId)?.nomAr && (
+                        <span className="ml-1.5 text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">({articles.find(a => a.id === f.articleId)?.nomAr})</span>
+                      )}
+                    </p>
                     {f.trend !== 0 && (
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                         f.trend > 0 ? "bg-green-100 text-green-700 border border-green-300" :

@@ -177,6 +177,8 @@ export default function BoPurchaseOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [demandesAchat, setDemandesAchat] = useState<DemandeAchat[]>([])
   const [articles, setArticles] = useState<Article[]>([])
+  // Nom arabe — PO/DA ne le stockent pas, on le retrouve via l'id.
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [showForm, setShowForm] = useState(false)
   const [poSubmitting, setPoSubmitting] = useState(false)
@@ -526,7 +528,10 @@ export default function BoPurchaseOrders() {
                 {/* Montant */}
                 <div className="rounded-xl p-4 flex items-center justify-between" style={{ background: "oklch(0.38 0.2 260 / 0.08)", border: "1px solid oklch(0.38 0.2 260 / 0.25)" }}>
                   <div>
-                    <p className="text-sm font-semibold text-foreground font-sans">{art?.nom} × {fQuantite} {art?.unite}</p>
+                    <p className="text-sm font-semibold text-foreground font-sans">
+                      {art?.nom} × {fQuantite} {art?.unite}
+                      {art?.nomAr && <span className="ml-1.5 text-muted-foreground font-arabic" dir="rtl" lang="ar">({art.nomAr})</span>}
+                    </p>
                     <p className="text-xs text-muted-foreground font-sans">{selectedFournisseur?.nom} — {fPrix} DH/unité</p>
                   </div>
                   <div className="text-right">
@@ -626,8 +631,10 @@ export default function BoPurchaseOrders() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{po.date}</td>
-                  <td className="px-4 py-3 font-semibold text-foreground">{po.articleNom}
+                  <td className="px-4 py-3 font-semibold text-foreground">
+                    {po.articleNom}
                     <span className="ml-1 text-xs text-muted-foreground font-normal">({po.articleUnite})</span>
+                    {nomArOf(po.articleId) && <span className="block text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{po.fournisseurNom}</td>
                   <td className="px-4 py-3 font-semibold text-foreground">
@@ -783,6 +790,7 @@ export default function BoPurchaseOrders() {
                           <td className="px-4 py-3 text-xs text-muted-foreground">{da.date}</td>
                           <td className="px-4 py-3">
                             <span className="font-semibold text-sm">{da.articleNom}</span>
+                            {nomArOf(da.articleId) && <span className="block text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(da.articleId)}</span>}
                             <span className="block text-[10px] text-muted-foreground">{da.articleUnite}</span>
                           </td>
                           <td className="px-4 py-3 font-bold text-sm">{da.quantite.toLocaleString("fr-MA")} {da.articleUnite}</td>

@@ -748,6 +748,7 @@ export default function BOCategoryPricing({ user }: { user: User }) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-foreground">{art.nom}</p>
+                            {art.nomAr && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{art.nomAr}</span>}
                             {!art.actif && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Inactif</span>}
                           </div>
                           <p className="text-xs text-muted-foreground">{art.famille} · {art.unite}{art.um ? ` / ${art.um}` : ""}</p>
@@ -800,6 +801,7 @@ export default function BOCategoryPricing({ user }: { user: User }) {
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
                             <p className="font-semibold text-foreground">{art.nom}</p>
+                            {art.nomAr && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{art.nomAr}</span>}
                             {!art.actif && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Inactif</span>}
                           </div>
                           <p className="text-xs text-muted-foreground">{art.famille} · {art.unite}{art.um ? ` / ${art.um}` : ""}</p>
@@ -874,6 +876,7 @@ export default function BOCategoryPricing({ user }: { user: User }) {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <p className="font-semibold text-foreground">{art.nom}</p>
+                          {art.nomAr && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{art.nomAr}</span>}
                           {!art.actif && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Inactif</span>}
                         </div>
                         <p className="text-xs text-muted-foreground">{art.famille} · {art.unite}{art.um ? ` / ${art.um}` : ""}</p>

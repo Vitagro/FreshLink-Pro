@@ -915,7 +915,14 @@ export default function BODashboard({ user }: Props) {
                   {topArticlesRetour.map(([id, a], i) => (
                     <div key={id} className="px-4 py-2.5 flex items-center gap-3">
                       <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold flex items-center justify-center shrink-0">{i + 1}</span>
-                      <p className="flex-1 text-sm font-semibold text-foreground">{a.nom}</p>
+                      <p className="flex-1 text-sm font-semibold text-foreground">
+                        {a.nom}
+                        {articles.find(art => art.nom.toLowerCase() === a.nom.toLowerCase())?.nomAr && (
+                          <span className="block text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">
+                            {articles.find(art => art.nom.toLowerCase() === a.nom.toLowerCase())?.nomAr}
+                          </span>
+                        )}
+                      </p>
                       <div className="text-right">
                         <span className="font-bold text-amber-600 text-sm">{KG(a.kg)}</span>
                         <span className="text-xs text-muted-foreground ml-1">· {a.nb}x</span>

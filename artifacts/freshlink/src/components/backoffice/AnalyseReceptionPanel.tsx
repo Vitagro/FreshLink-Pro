@@ -55,6 +55,14 @@ export default function AnalyseReceptionPanel() {
   const [filterArticle, setFilterArticle] = useState("")
   const [filterClient, setFilterClient] = useState("")
   const contentRef = useRef<HTMLDivElement>(null)
+  // Nom arabe par nom d'article — les agrégats de ce panneau n'ont qu'un nom
+  // libre (pas d'articleId), on retrouve le nomAr par correspondance de nom.
+  const nomArByNom = useMemo(() => {
+    const m: Record<string, string> = {}
+    store.getArticles().forEach(a => { if (a.nomAr) m[a.nom.toLowerCase().trim()] = a.nomAr })
+    return m
+  }, [])
+  const nomArOfName = (nom: string) => nomArByNom[String(nom ?? "").toLowerCase().trim()] ?? ""
 
   const changeView = (v: View) => {
     setView(v)
@@ -294,7 +302,10 @@ export default function AnalyseReceptionPanel() {
                     const taux = a.qteCmd > 0 ? Math.round((a.qteRec/a.qteCmd)*100) : 0
                     return (
                       <tr key={a.nom} style={{ background: i%2===0?"#0f1a2e":"#0d1520", borderBottom: "1px solid #1a2535" }}>
-                        <td className="px-3 py-2 font-semibold" style={{ color: "#e2e8f0" }}>{a.nom}</td>
+                        <td className="px-3 py-2 font-semibold" style={{ color: "#e2e8f0" }}>
+                          {a.nom}
+                          {nomArOfName(a.nom) && <span className="block text-xs font-normal font-arabic" dir="rtl" lang="ar" style={{ color: "#64748b" }}>{nomArOfName(a.nom)}</span>}
+                        </td>
                         <td className="px-3 py-2" style={{ color: "#60a5fa" }}>{a.qteRec.toFixed(1)}</td>
                         <td className="px-3 py-2" style={{ color: "#34d399" }}>{a.qteFacture.toFixed(1)}</td>
                         <td className="px-3 py-2 font-bold" style={{ color: ecartQte>0?"#f59e0b":ecartQte<0?"#ef4444":"#10b981" }}>{ecartQte>0?"+":""}{ecartQte.toFixed(1)}</td>
@@ -392,7 +403,10 @@ export default function AnalyseReceptionPanel() {
                     return (
                       <tr key={a.nom} style={{ background: rowBg, borderBottom: "1px solid #1e293b" }}>
                         {/* Article name */}
-                        <td className="px-3 py-2.5 font-semibold" style={{ color: "#f1f5f9" }}>{a.nom}</td>
+                        <td className="px-3 py-2.5 font-semibold" style={{ color: "#f1f5f9" }}>
+                          {a.nom}
+                          {nomArOfName(a.nom) && <span className="block text-xs font-normal font-arabic" dir="rtl" lang="ar" style={{ color: "#64748b" }}>{nomArOfName(a.nom)}</span>}
+                        </td>
 
                         {/* Qte Commandee */}
                         <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: "#94a3b8" }}>
@@ -536,7 +550,10 @@ export default function AnalyseReceptionPanel() {
                     const taux = a.qteCmd > 0 ? Math.round((a.qteRec/a.qteCmd)*100) : 0
                     return (
                       <tr key={a.nom} style={{ background: i%2===0?"#0f1a2e":"#0d1520", borderBottom: "1px solid #1a2535" }}>
-                        <td className="px-3 py-2 font-semibold" style={{ color: "#e2e8f0" }}>{a.nom}</td>
+                        <td className="px-3 py-2 font-semibold" style={{ color: "#e2e8f0" }}>
+                          {a.nom}
+                          {nomArOfName(a.nom) && <span className="block text-xs font-normal font-arabic" dir="rtl" lang="ar" style={{ color: "#64748b" }}>{nomArOfName(a.nom)}</span>}
+                        </td>
                         <td className="px-3 py-2" style={{ color: "#94a3b8" }}>{a.qteCmd.toFixed(1)}</td>
                         <td className="px-3 py-2" style={{ color: "#60a5fa" }}>{a.qteRec.toFixed(1)}</td>
                         <td className="px-3 py-2" style={{ color: reliquat>0?"#f59e0b":"#10b981" }}>{reliquat.toFixed(1)}</td>

@@ -1577,6 +1577,10 @@ export default function BOCommandesUnifiees({ user }: Props) {
                       >
                         <div>
                           <p className="text-sm font-semibold text-slate-800">{l.nom}</p>
+                          {(() => {
+                            const nomAr = store.getArticles().find(a => a.nom.toLowerCase() === l.nom.toLowerCase().trim())?.nomAr
+                            return nomAr ? <p className="text-xs text-slate-400 font-arabic" dir="rtl" lang="ar">{nomAr}</p> : null
+                          })()}
                           <p className="text-xs text-slate-400">{l.quantite} {l.unite}</p>
                         </div>
                         <p className="text-sm font-bold text-green-700">
