@@ -223,7 +223,7 @@ export default function MobilePricing({ user }: Props) {
         {/* Recent entries */}
         <div className="px-4 mt-5">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-bold text-slate-800 text-sm">Derniers relevés / آخر الإدخالات</h2>
+            <h2 className="font-bold text-foreground text-sm">Derniers relevés / آخر الإدخالات</h2>
             {entries.length > 0 && (
               <button onClick={() => setScreen("history")} className="text-[11px] text-blue-600 font-semibold">
                 Voir tout ({entries.length})
@@ -232,7 +232,7 @@ export default function MobilePricing({ user }: Props) {
           </div>
 
           {recent.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 gap-3 text-slate-400">
+            <div className="flex flex-col items-center justify-center py-10 gap-3 text-muted-foreground">
               <svg className="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
@@ -253,10 +253,10 @@ export default function MobilePricing({ user }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-bold text-slate-800 text-sm truncate">{e.articleNom}</p>
-                      {nomArOfName(e.articleNom) && <span className="text-xs text-slate-400 font-arabic truncate" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</span>}
+                      <p className="font-bold text-foreground text-sm truncate">{e.articleNom}</p>
+                      {nomArOfName(e.articleNom) && <span className="text-xs text-muted-foreground font-arabic truncate" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</span>}
                       {e.qualiteGrade && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 shrink-0">
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white border border-border text-muted-foreground shrink-0">
                           {e.qualiteGrade}
                         </span>
                       )}
@@ -265,15 +265,15 @@ export default function MobilePricing({ user }: Props) {
                       {e.type === "fournisseur" ? e.fournisseurNom : e.clientNom}
                       {(e.region || e.clientRegion) && ` — ${e.region ?? e.clientRegion}`}
                     </p>
-                    <p className="text-[10px] text-slate-400">{new Date(e.date).toLocaleDateString("fr-MA")}</p>
+                    <p className="text-[10px] text-muted-foreground">{new Date(e.date).toLocaleDateString("fr-MA")}</p>
                   </div>
                   <div className="text-right shrink-0">
                     <p className={`font-black text-base ${e.type === "fournisseur" ? "text-amber-700" : "text-blue-700"}`}>
                       {e.prixUnitaire.toFixed(2)}
                     </p>
-                    <p className="text-[10px] text-slate-500">MAD/{e.unite}</p>
+                    <p className="text-[10px] text-muted-foreground">MAD/{e.unite}</p>
                     {e.evolution && (
-                      <span className={`text-[10px] font-bold ${e.evolution === "hausse" ? "text-red-500" : e.evolution === "baisse" ? "text-emerald-500" : "text-slate-400"}`}>
+                      <span className={`text-[10px] font-bold ${e.evolution === "hausse" ? "text-red-500" : e.evolution === "baisse" ? "text-emerald-500" : "text-muted-foreground"}`}>
                         {e.evolution === "hausse" ? "↑" : e.evolution === "baisse" ? "↓" : "→"}
                       </span>
                     )}
@@ -293,11 +293,11 @@ export default function MobilePricing({ user }: Props) {
   if (screen === "history") {
     return (
       <div className="flex flex-col gap-0 min-h-full">
-        <div className="px-4 py-4 flex items-center gap-3 bg-white border-b border-slate-200 sticky top-0 z-10">
-          <button onClick={() => setScreen("home")} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500">
+        <div className="px-4 py-4 flex items-center gap-3 bg-white border-b border-border sticky top-0 z-10">
+          <button onClick={() => setScreen("home")} className="p-2 rounded-xl hover:bg-muted text-muted-foreground">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
           </button>
-          <h2 className="font-bold text-slate-800">Historique complet — {entries.length} relevés</h2>
+          <h2 className="font-bold text-foreground">Historique complet — {entries.length} relevés</h2>
         </div>
         <div className="px-4 py-3 flex flex-col gap-2">
           {entries.map(e => (
@@ -305,30 +305,30 @@ export default function MobilePricing({ user }: Props) {
               className={`flex items-start gap-3 px-4 py-3 rounded-2xl border ${e.type === "fournisseur" ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-200"}`}>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-slate-800 text-sm">{e.articleNom}</span>
-                  {nomArOfName(e.articleNom) && <span className="text-xs text-slate-400 font-arabic" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</span>}
+                  <span className="font-bold text-foreground text-sm">{e.articleNom}</span>
+                  {nomArOfName(e.articleNom) && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</span>}
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${e.type === "fournisseur" ? "bg-amber-100 border-amber-300 text-amber-700" : "bg-blue-100 border-blue-300 text-blue-700"}`}>
                     {e.type === "fournisseur" ? "Fourn" : "Client"}
                   </span>
-                  {e.qualiteGrade && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600">{e.qualiteGrade}</span>}
+                  {e.qualiteGrade && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white border border-border text-muted-foreground">{e.qualiteGrade}</span>}
                 </div>
-                <p className="text-xs text-slate-600 mt-0.5">{e.type === "fournisseur" ? e.fournisseurNom : e.clientNom} {e.region || e.clientRegion ? `— ${e.region ?? e.clientRegion}` : ""}</p>
-                {e.marche && <p className="text-[10px] text-slate-400">{e.marche}</p>}
+                <p className="text-xs text-muted-foreground mt-0.5">{e.type === "fournisseur" ? e.fournisseurNom : e.clientNom} {e.region || e.clientRegion ? `— ${e.region ?? e.clientRegion}` : ""}</p>
+                {e.marche && <p className="text-[10px] text-muted-foreground">{e.marche}</p>}
                 <div className="flex items-center gap-3 mt-1">
-                  <span className="text-[10px] text-slate-400">{new Date(e.date).toLocaleDateString("fr-MA")}</span>
-                  <span className="text-[10px] text-slate-400">·</span>
-                  <span className="text-[10px] text-slate-400">{SOURCES.find(s => s.id === e.source)?.emoji} {SOURCES.find(s => s.id === e.source)?.label}</span>
-                  <span className="text-[10px] text-slate-400">·</span>
-                  <span className="text-[10px] text-slate-400">{e.userName}</span>
+                  <span className="text-[10px] text-muted-foreground">{new Date(e.date).toLocaleDateString("fr-MA")}</span>
+                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <span className="text-[10px] text-muted-foreground">{SOURCES.find(s => s.id === e.source)?.emoji} {SOURCES.find(s => s.id === e.source)?.label}</span>
+                  <span className="text-[10px] text-muted-foreground">·</span>
+                  <span className="text-[10px] text-muted-foreground">{e.userName}</span>
                 </div>
-                {e.notes && <p className="text-[10px] text-slate-500 italic mt-0.5">{e.notes}</p>}
+                {e.notes && <p className="text-[10px] text-muted-foreground italic mt-0.5">{e.notes}</p>}
               </div>
               <div className="text-right shrink-0">
                 <p className={`font-black text-lg ${e.type === "fournisseur" ? "text-amber-700" : "text-blue-700"}`}>{e.prixUnitaire.toFixed(2)}</p>
-                <p className="text-[10px] text-slate-500">MAD/{e.unite}</p>
-                {e.prixMin && e.prixMax && <p className="text-[10px] text-slate-400">{e.prixMin}–{e.prixMax}</p>}
+                <p className="text-[10px] text-muted-foreground">MAD/{e.unite}</p>
+                {e.prixMin && e.prixMax && <p className="text-[10px] text-muted-foreground">{e.prixMin}–{e.prixMax}</p>}
                 {e.evolution && (
-                  <span className={`text-xs font-bold ${e.evolution === "hausse" ? "text-red-500" : e.evolution === "baisse" ? "text-emerald-500" : "text-slate-400"}`}>
+                  <span className={`text-xs font-bold ${e.evolution === "hausse" ? "text-red-500" : e.evolution === "baisse" ? "text-emerald-500" : "text-muted-foreground"}`}>
                     {e.evolution === "hausse" ? "↑" : e.evolution === "baisse" ? "↓" : "→"} {e.prixPrecedent ? `vs ${e.prixPrecedent.toFixed(2)}` : ""}
                   </span>
                 )}
@@ -343,7 +343,7 @@ export default function MobilePricing({ user }: Props) {
 
   // --- FORM ---
   return (
-    <div className="flex flex-col gap-0 min-h-full bg-slate-50">
+    <div className="flex flex-col gap-0 min-h-full bg-muted">
 
       {/* Sticky header */}
       <div className={`sticky top-0 z-20 px-4 py-3.5 flex items-center gap-3 border-b ${type === "fournisseur" ? "bg-amber-600" : "bg-blue-600"}`}>
@@ -372,9 +372,9 @@ export default function MobilePricing({ user }: Props) {
       <div className="flex flex-col gap-4 px-4 pt-4 pb-32">
 
         {/* Article */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-visible">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">Article *</h3>
+        <div className="bg-white rounded-2xl border border-border shadow-sm overflow-visible">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="font-bold text-foreground text-xs uppercase tracking-wider">Article *</h3>
           </div>
           <div className="p-4 flex flex-col gap-3">
             <ComboBox
@@ -384,7 +384,7 @@ export default function MobilePricing({ user }: Props) {
                 label: a.nom,
                 sublabel: a.famille,
                 badge: a.unite,
-                badgeColor: "bg-slate-100 text-slate-600",
+                badgeColor: "bg-muted text-muted-foreground",
               }))}
               value={selectedArticle}
               inputValue={articleNom}
@@ -403,20 +403,20 @@ export default function MobilePricing({ user }: Props) {
             />
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] font-semibold text-slate-500 mb-1">Grade qualité</p>
+                <p className="text-[10px] font-semibold text-muted-foreground mb-1">Grade qualité</p>
                 <div className="flex gap-1.5">
                   {GRADES.map(g => (
                     <button key={g} type="button" onClick={() => setGrade(g)}
-                      className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${grade === g ? "bg-slate-900 border-slate-900 text-white" : "border-slate-200 text-slate-400"}`}>
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold border-2 transition-all ${grade === g ? "bg-slate-900 border-slate-900 text-white" : "border-border text-muted-foreground"}`}>
                       {g}
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-500 mb-1">Unité</p>
+                <p className="text-[10px] font-semibold text-muted-foreground mb-1">Unité</p>
                 <select value={unite} onChange={e => setUnite(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-400">
+                  className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-amber-400">
                   {UNITES.map(u => <option key={u}>{u}</option>)}
                 </select>
               </div>
@@ -425,51 +425,51 @@ export default function MobilePricing({ user }: Props) {
         </div>
 
         {/* Price */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">Prix observé *</h3>
+        <div className="bg-white rounded-2xl border border-border shadow-sm">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="font-bold text-foreground text-xs uppercase tracking-wider">Prix observé *</h3>
           </div>
           <div className="p-4 flex flex-col gap-3">
             {/* Main price — big input */}
-            <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center gap-3 px-4 py-4 rounded-2xl bg-muted border border-border">
               <input
                 type="number" inputMode="decimal" step="0.01" min="0"
                 value={prix}
                 onChange={e => setPrix(e.target.value)}
                 placeholder="0.00"
-                className="flex-1 text-3xl font-black text-slate-900 bg-transparent border-0 outline-none w-0 min-w-0"
+                className="flex-1 text-3xl font-black text-foreground bg-transparent border-0 outline-none w-0 min-w-0"
               />
               <div className="text-right shrink-0">
-                <p className="text-sm font-bold text-slate-500">MAD</p>
-                <p className="text-xs text-slate-400">/{unite}</p>
+                <p className="text-sm font-bold text-muted-foreground">MAD</p>
+                <p className="text-xs text-muted-foreground">/{unite}</p>
               </div>
             </div>
             {/* Min / Max */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] font-semibold text-slate-500 mb-1">Prix min (fourchette)</p>
+                <p className="text-[10px] font-semibold text-muted-foreground mb-1">Prix min (fourchette)</p>
                 <input type="number" inputMode="decimal" step="0.01" value={prixMin} onChange={e => setPrixMin(e.target.value)}
-                  placeholder="Ex: 3.50" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  placeholder="Ex: 3.50" className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-500 mb-1">Prix max (fourchette)</p>
+                <p className="text-[10px] font-semibold text-muted-foreground mb-1">Prix max (fourchette)</p>
                 <input type="number" inputMode="decimal" step="0.01" value={prixMax} onChange={e => setPrixMax(e.target.value)}
-                  placeholder="Ex: 4.80" className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  placeholder="Ex: 4.80" className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
               </div>
             </div>
             {/* Date */}
             <div>
-              <p className="text-[10px] font-semibold text-slate-500 mb-1">Date relevé</p>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-1">Date relevé</p>
               <input type="date" value={date} onChange={e => setDate(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
             </div>
           </div>
         </div>
 
         {/* Fournisseur / Client info */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className={`px-4 py-3 border-b border-slate-100 ${type === "fournisseur" ? "" : ""}`}>
-            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">
+        <div className="bg-white rounded-2xl border border-border shadow-sm">
+          <div className={`px-4 py-3 border-b border-border ${type === "fournisseur" ? "" : ""}`}>
+            <h3 className="font-bold text-foreground text-xs uppercase tracking-wider">
               {type === "fournisseur" ? "Fournisseur * / المورد" : "Client * / العميل"}
             </h3>
           </div>
@@ -495,33 +495,33 @@ export default function MobilePricing({ user }: Props) {
             />
             <input type="tel" inputMode="tel" value={tel} onChange={e => setTel(e.target.value)}
               placeholder="+212 6..."
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              className="w-full px-4 py-3 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
             <div className="grid grid-cols-2 gap-2">
               <input value={region} onChange={e => setRegion(e.target.value)}
                 placeholder="Région / المدينة"
-                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                className="px-3 py-2.5 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
               {type === "fournisseur" && (
                 <input value={marche} onChange={e => setMarche(e.target.value)}
                   placeholder="Marché / السوق"
-                  className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  className="px-3 py-2.5 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
               )}
             </div>
           </div>
         </div>
 
         {/* Source + GPS + Photo */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">Source & Localisation</h3>
+        <div className="bg-white rounded-2xl border border-border shadow-sm">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="font-bold text-foreground text-xs uppercase tracking-wider">Source & Localisation</h3>
           </div>
           <div className="p-4 flex flex-col gap-4">
             {/* Source chips */}
             <div>
-              <p className="text-[10px] font-semibold text-slate-500 mb-2">Source de l&apos;information</p>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-2">Source de l&apos;information</p>
               <div className="flex flex-wrap gap-2">
                 {SOURCES.map(s => (
                   <button key={s.id} type="button" onClick={() => setSource(s.id)}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${source === s.id ? "bg-slate-900 border-slate-900 text-white" : "border-slate-200 text-slate-500"}`}>
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${source === s.id ? "bg-slate-900 border-slate-900 text-white" : "border-border text-muted-foreground"}`}>
                     <span>{s.emoji}</span>
                     <span>{s.label}</span>
                   </button>
@@ -531,10 +531,10 @@ export default function MobilePricing({ user }: Props) {
 
             {/* GPS */}
             <div>
-              <p className="text-[10px] font-semibold text-slate-500 mb-2">Position GPS</p>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-2">Position GPS</p>
               <div className="flex items-center gap-3">
                 <button type="button" onClick={handleGPS} disabled={gpsLoading}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${gpsLat ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-slate-50 border-slate-200 text-slate-600"} disabled:opacity-50`}>
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-bold transition-all ${gpsLat ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "bg-muted border-border text-muted-foreground"} disabled:opacity-50`}>
                   {gpsLoading ? (
                     <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                   ) : (
@@ -553,16 +553,16 @@ export default function MobilePricing({ user }: Props) {
 
             {/* Photo */}
             <div>
-              <p className="text-[10px] font-semibold text-slate-500 mb-2">Photo produit / marché</p>
+              <p className="text-[10px] font-semibold text-muted-foreground mb-2">Photo produit / marché</p>
               <div className="flex items-center gap-3">
                 <button type="button" onClick={() => photoRef.current?.click()}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-600">
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-border bg-muted text-sm font-bold text-muted-foreground">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                   {photoUrl ? "Changer photo" : "Prendre photo"}
                 </button>
                 {photoUrl && (
                   <div className="relative">
-                    <img src={photoUrl} alt="preview" className="w-14 h-14 object-cover rounded-xl border border-slate-200" />
+                    <img src={photoUrl} alt="preview" className="w-14 h-14 object-cover rounded-xl border border-border" />
                     <button type="button" onClick={() => setPhotoUrl(undefined)}
                       className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-black">
                       ×
@@ -576,14 +576,14 @@ export default function MobilePricing({ user }: Props) {
         </div>
 
         {/* Notes */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">Notes / ملاحظات</h3>
+        <div className="bg-white rounded-2xl border border-border shadow-sm">
+          <div className="px-4 py-3 border-b border-border">
+            <h3 className="font-bold text-foreground text-xs uppercase tracking-wider">Notes / ملاحظات</h3>
           </div>
           <div className="p-4">
             <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
               placeholder="Remarques sur la qualité, les conditions, la disponibilité..."
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
+              className="w-full px-4 py-3 rounded-xl border border-border bg-muted text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none" />
           </div>
         </div>
       </div>
