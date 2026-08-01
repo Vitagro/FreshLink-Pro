@@ -440,7 +440,13 @@ const NAV_ITEM_MAP: Record<string, NavItem> =
 const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Vue d'ensemble",              labelAr: "نظرة عامة",            ids: ["dashboard", "recap", "rapport_livraison"] },
   { label: "Communication",               labelAr: "التواصل",              ids: ["messagerie", "whatsapp", "feedback"] },
-  { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["achat", "po", "reception", "fournisseurs", "credit_fournisseur", "sourcing", "pa_historique", "gestion_pa", "rapport_marche", "analyse_achat", "analyse_reception", "temps_achat"] },
+  // "Rapport Marché" remonte en tete : c'est le point de depart quotidien de
+  // l'acheteur (besoin net = demande prevendeurs - stock, cf. BORapportMarche)
+  // — il repondait a "qu'est-ce qu'il faut acheter aujourd'hui" mais etait
+  // enterre en position 9, apres des ecrans de reference/analyse consultes
+  // bien moins souvent. Le reste garde son ordre (pipeline achat -> po ->
+  // reception, puis reference/prix, puis analytics retrospectifs).
+  { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["rapport_marche", "achat", "po", "reception", "sourcing", "fournisseurs", "credit_fournisseur", "pa_historique", "gestion_pa", "analyse_achat", "analyse_reception", "temps_achat"] },
   { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["articles", "familles", "stock", "shelf_life", "forecast", "caisses_vides"] },
   // Ordre par frequence d'usage reelle : Commandes (quotidien, volume le
   // plus eleve) → Alertes (suivi quotidien des clients/articles) → gestion
