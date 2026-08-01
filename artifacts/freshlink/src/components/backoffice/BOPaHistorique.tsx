@@ -29,17 +29,19 @@ export default function BOPaHistorique() {
   const [preditLoading, setPreditLoading] = useState(false)
 
   // Référentiels articles / fournisseurs → afficher des NOMS (plus d'IDs saisis)
-  const [refArticles, setRefArticles] = useState<{ id: string; nom: string; famille: string }[]>([])
+  const [refArticles, setRefArticles] = useState<{ id: string; nom: string; nomAr: string; famille: string }[]>([])
   const [refFournisseurs, setRefFournisseurs] = useState<{ id: string; nom: string }[]>([])
   useEffect(() => {
     try {
-      setRefArticles(store.getArticles().map(a => ({ id: a.id, nom: a.nom, famille: a.famille ?? "" })).sort((a, b) => a.nom.localeCompare(b.nom, "fr")))
+      setRefArticles(store.getArticles().map(a => ({ id: a.id, nom: a.nom, nomAr: a.nomAr ?? "", famille: a.famille ?? "" })).sort((a, b) => a.nom.localeCompare(b.nom, "fr")))
       setRefFournisseurs(store.getFournisseurs().map(f => ({ id: f.id, nom: f.nom })).sort((a, b) => a.nom.localeCompare(b.nom, "fr")))
     } catch { /* noop */ }
   }, [])
   const artMap = useMemo(() => Object.fromEntries(refArticles.map(a => [a.id, a.nom])), [refArticles])
+  const artArMap = useMemo(() => Object.fromEntries(refArticles.map(a => [a.id, a.nomAr])), [refArticles])
   const fourMap = useMemo(() => Object.fromEntries(refFournisseurs.map(f => [f.id, f.nom])), [refFournisseurs])
   const artName = (id: string) => artMap[id] ?? id
+  const artNameAr = (id: string) => artArMap[id] ?? ""
   const fourName = (id: string | null) => (id ? (fourMap[id] ?? id) : "—")
 
   const [form, setForm] = useState({
@@ -214,7 +216,10 @@ export default function BOPaHistorique() {
         <div className="flex items-center justify-between mb-2">
           <div>
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Tendance · {seriesForChart.length} pts</p>
-            <p className="text-sm font-bold text-slate-700">{artName(filterArticle.trim())}</p>
+            <p className="text-sm font-bold text-slate-700">
+              {artName(filterArticle.trim())}
+              {artNameAr(filterArticle.trim()) && <span className="ml-1.5 text-xs font-normal text-slate-400 font-arabic" dir="rtl" lang="ar">({artNameAr(filterArticle.trim())})</span>}
+            </p>
           </div>
           <div className={`px-3 py-1 rounded-full text-xs font-black ${trendUp ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>
             {trendUp ? "▲" : "▼"} {Math.abs(variation).toFixed(1)}%
@@ -461,7 +466,10 @@ export default function BOPaHistorique() {
               {entries.slice(0, 200).map(e => (
                 <tr key={e.id} className="hover:bg-slate-50/60">
                   <td className="px-4 py-2.5 text-slate-700">{fmtDate(e.date_marche)}</td>
-                  <td className="px-4 py-2.5 text-slate-800 font-semibold">{artName(e.article_id)}</td>
+                  <td className="px-4 py-2.5 text-slate-800 font-semibold">
+                    {artName(e.article_id)}
+                    {artNameAr(e.article_id) && <span className="block text-xs font-normal text-slate-400 font-arabic" dir="rtl" lang="ar">{artNameAr(e.article_id)}</span>}
+                  </td>
                   <td className="px-4 py-2.5 text-slate-600">{fourName(e.fournisseur_id)}</td>
                   <td className="px-3 py-2.5 text-right font-bold text-slate-900 tabular-nums">{fmtMad(e.pa)}</td>
                   <td className="px-3 py-2.5 text-right text-slate-700 tabular-nums">{e.volume_kg.toLocaleString("fr-MA")}</td>
