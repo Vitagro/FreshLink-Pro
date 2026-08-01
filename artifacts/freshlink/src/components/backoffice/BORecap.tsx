@@ -44,15 +44,17 @@ interface BesoinRow extends BesoinLigneEmail {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function computeStats(date: string): DailyStats {
-  const bonsAchat   = store.getBonsAchat().filter(b => b.date === date)
+function computeStats(dateDebut: string, dateFin: string = dateDebut): DailyStats {
+  const inRange = (d: string) => d >= dateDebut && d <= dateFin
+  const bonsAchat   = store.getBonsAchat().filter(b => inRange(b.date))
   // "refuse" = commande annulée ou supprimée par le commercial (soft-delete,
   // cf. MobileCommercial.handleDeleteCommande) — gardée en historique mais
   // exclue de tout indicatif commercial (CA du jour ici).
-  const commandes   = store.getVisibleCommandes().filter(c => c.date === date && c.statut !== "refuse")
-  const bls         = store.getVisibleBonsLivraison().filter(b => b.date === date)
-  const retours     = store.getRetours().filter(r => r.date === date)
+  const commandes   = store.getVisibleCommandes().filter(c => inRange(c.date) && c.statut !== "refuse")
+  const bls         = store.getVisibleBonsLivraison().filter(b => inRange(b.date))
+  const retours     = store.getRetours().filter(r => inRange(r.date))
   const articles    = store.getArticles()
+  const date = dateDebut === dateFin ? dateDebut : `${dateDebut} → ${dateFin}`
 
   const totalAchats     = bonsAchat.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0)
   const totalCommandes  = commandes.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite * l.prixVente, 0), 0)
@@ -181,6 +183,9 @@ export default function BORecap() {
   const emailCfg      = store.getEmailConfig()
 
   const [selectedDate, setSelectedDate]   = useState(today)
+  // Fin d'intervalle — par defaut egale a selectedDate (un seul jour, comme
+  // avant). Elargir "Au" agrege la synthese sur plusieurs jours.
+  const [selectedDateFin, setSelectedDateFin] = useState(today)
   const [stats, setStats]                 = useState<DailyStats>(() => computeStats(today))
   const [rows, setRows]                   = useState<BesoinRow[]>(() => computeBesoinRows())
   const [activeTab, setActiveTab]         = useState<"recap" | "besoin" | "config">("recap")
@@ -200,6 +205,11 @@ export default function BORecap() {
   const [sendMode, setSendMode] = useState<"consolide" | "par_fournisseur">("consolide")
   const [sendingBesoin, setSendingBesoin] = useState(false)
 
+  // --- Export / Import Besoin d'achat (Excel) ---
+  const besoinImportRef = useRef<HTMLInputElement>(null)
+  const [importingBesoin, setImportingBesoin] = useState(false)
+  const [importBesoinError, setImportBesoinError] = useState("")
+
   // --- Global feedback ---
   const [feedback, setFeedback]           = useState<{ type: "ok" | "err" | "warn"; msg: string } | null>(null)
   const showFeedback = (type: "ok" | "err" | "warn", msg: string) => {
@@ -217,9 +227,9 @@ export default function BORecap() {
   void isEmailJSConfigured
 
   const refreshAll = useCallback(() => {
-    setStats(computeStats(selectedDate))
+    setStats(computeStats(selectedDate, selectedDateFin))
     setRows(computeBesoinRows())
-  }, [selectedDate])
+  }, [selectedDate, selectedDateFin])
 
   useEffect(() => { refreshAll() }, [refreshAll])
 
@@ -357,6 +367,72 @@ export default function BORecap() {
     showFeedback("ok", "Configuration emails sauvegardée.")
   }
 
+  // ── Export / Import besoin d'achat (Excel) ─────────────────────────────────
+
+  const handleExportBesoin = async () => {
+    const XLSX = await import("xlsx")
+    const exportRows = rows.map(r => {
+      const c = r.besoinNet > 0 ? computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM) : { gros: 0, demi: 0 }
+      return {
+        Article: r.articleNom,
+        ArticleAr: r.articleNomAr ?? "",
+        Fournisseur: r.fournisseurNom ?? "",
+        Commandes: r.commandeTotal,
+        Stock: r.stockActuel,
+        Retours: r.retours,
+        "Besoin net": r.besoinNet,
+        Unite: r.unite ?? "",
+        UM: r.um ?? "",
+        "Caisses gros": c.gros,
+        "Caisses demi": c.demi,
+        Selectionne: r.selected ? "oui" : "non",
+      }
+    })
+    const ws = XLSX.utils.json_to_sheet(exportRows)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Besoin d'achat")
+    XLSX.writeFile(wb, `besoin_achat_${selectedDate === selectedDateFin ? selectedDate : `${selectedDate}_${selectedDateFin}`}.xlsx`)
+  }
+
+  const handleImportBesoinFile = async (file: File) => {
+    setImportingBesoin(true); setImportBesoinError("")
+    try {
+      const XLSX = await import("xlsx")
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: "array" })
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const imported = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: "" })
+      if (imported.length === 0) {
+        setImportBesoinError("Fichier vide ou illisible.")
+        return
+      }
+      // On calcule le nombre de correspondances a partir de l'etat courant
+      // (pas dans le callback de setRows, qui s'execute de facon differee et
+      // ne peut donc pas etre lu en synchrone juste apres l'appel).
+      const matched = rows.filter(r =>
+        imported.some(row => String(row.Article ?? "").trim().toLowerCase() === r.articleNom.trim().toLowerCase())
+      ).length
+      setRows(prev => prev.map(r => {
+        const match = imported.find(row => String(row.Article ?? "").trim().toLowerCase() === r.articleNom.trim().toLowerCase())
+        if (!match) return r
+        const besoinNet = Number(match["Besoin net"] ?? match.BesoinNet ?? match["Besoin"] ?? r.besoinNet)
+        const selectedRaw = String(match.Selectionne ?? match["Sélectionné"] ?? "").trim().toLowerCase()
+        const selected = selectedRaw === "" ? r.selected : (selectedRaw === "oui" || selectedRaw === "true" || selectedRaw === "1")
+        return { ...r, besoinNet: Number.isFinite(besoinNet) ? besoinNet : r.besoinNet, selected }
+      }))
+      if (matched === 0) {
+        setImportBesoinError("Aucun article du fichier ne correspond aux articles actuels (colonne « Article » attendue).")
+      } else {
+        showFeedback("ok", `${matched} ligne(s) mise(s) à jour depuis le fichier importé.`)
+      }
+    } catch (e) {
+      setImportBesoinError(`Erreur de lecture du fichier : ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setImportingBesoin(false)
+      if (besoinImportRef.current) besoinImportRef.current.value = ""
+    }
+  }
+
   // ─── Aperçu email besoin ───────────────────────────────────────────────────
 
   const besoinPreviewText = rowsWithBesoin.length > 0
@@ -425,17 +501,27 @@ export default function BORecap() {
       {activeTab === "recap" && (
         <div className="flex flex-col gap-5">
 
-          {/* Date picker */}
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-muted-foreground">Date :</label>
-            <input type="date" value={selectedDate}
+          {/* Date picker — intervalle, par defaut un seul jour */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-sm text-muted-foreground">Du :</label>
+            <input type="date" value={selectedDate} max={selectedDateFin}
               onChange={e => setSelectedDate(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label className="text-sm text-muted-foreground">Au :</label>
+            <input type="date" value={selectedDateFin} min={selectedDate}
+              onChange={e => setSelectedDateFin(e.target.value)}
               className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
             <button onClick={refreshAll}
               className="px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted flex items-center gap-2">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
               Actualiser
             </button>
+            {(selectedDate !== today || selectedDateFin !== today) && (
+              <button onClick={() => { setSelectedDate(today); setSelectedDateFin(today) }}
+                className="px-3 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100">
+                ↺ Aujourd&apos;hui
+              </button>
+            )}
           </div>
 
           {/* KPI cards */}
@@ -556,12 +642,34 @@ export default function BORecap() {
                 Formule : Commandes prévendeurs du jour − Stock disponible − Retours validés
               </p>
             </div>
-            <button onClick={refreshAll}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              Recalculer
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={refreshAll}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                Recalculer
+              </button>
+              <button onClick={handleExportBesoin} disabled={rows.length === 0}
+                title="Exporter le besoin d'achat (Excel)"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-50">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3" /></svg>
+                Exporter
+              </button>
+              <button onClick={() => besoinImportRef.current?.click()} disabled={importingBesoin}
+                title="Importer un fichier Excel pour mettre à jour le besoin net"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-50">
+                {importingBesoin
+                  ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  : <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M17 8l-5-5-5 5M12 3v12" /></svg>
+                }
+                Importer
+              </button>
+              <input ref={besoinImportRef} type="file" accept=".xlsx,.xls" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImportBesoinFile(f) }} />
+            </div>
           </div>
+          {importBesoinError && (
+            <p className="text-xs text-red-600 -mt-2">{importBesoinError}</p>
+          )}
 
           {/* Tableau besoin */}
           {rows.length === 0 ? (

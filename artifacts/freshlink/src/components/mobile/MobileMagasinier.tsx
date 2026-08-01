@@ -1174,7 +1174,7 @@ function ValidationBLTab({
         {/* Actions */}
         <div className="flex gap-2">
           <button onClick={() => handleAction("valider")} disabled={saving}
-            className="flex-1 py-3.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-60 bg-emerald-600">
+            className="flex-1 py-3.5 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 disabled:opacity-60 bg-green-600">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>

@@ -286,8 +286,8 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
     <div className="flex flex-col gap-4">
       {/* Header */}
       <div>
-        <h2 className="text-base font-bold text-slate-800">Qualite IA — Analyse Produit</h2>
-        <p className="text-xs text-slate-500">Capturez une photo pour evaluer la fraicheur et le calibre</p>
+        <h2 className="text-base font-bold text-foreground">Qualite IA — Analyse Produit</h2>
+        <p className="text-xs text-muted-foreground">Capturez une photo pour evaluer la fraicheur et le calibre</p>
       </div>
 
       {/* Article + Fournisseur selectors */}
@@ -302,7 +302,7 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
           <select
             value={selectedFournisseurId}
             onChange={e => setSelectedFournisseurId(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+            className="w-full px-3 py-2.5 rounded-xl border border-border bg-white text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
             <option value="">-- Fournisseur</option>
             {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
           </select>
@@ -310,7 +310,7 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
             type="number" min="0" value={quantiteEnvisagee}
             onChange={e => setQuantiteEnvisagee(e.target.value)}
             placeholder="Qte envisagee"
-            className="px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+            className="px-3 py-2.5 rounded-xl border border-border bg-white text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-green-400" />
         </div>
       </div>
 
@@ -331,15 +331,15 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-sm font-black text-green-700">{min.toFixed(2)} DH</p>
-                <p className="text-[10px] text-slate-500">Min achete</p>
+                <p className="text-[10px] text-muted-foreground">Min achete</p>
               </div>
               <div>
                 <p className="text-sm font-black text-blue-700">{avg.toFixed(2)} DH</p>
-                <p className="text-[10px] text-slate-500">Moyenne</p>
+                <p className="text-[10px] text-muted-foreground">Moyenne</p>
               </div>
               <div>
                 <p className="text-sm font-black text-amber-700">{max.toFixed(2)} DH</p>
-                <p className="text-[10px] text-slate-500">Max paye</p>
+                <p className="text-[10px] text-muted-foreground">Max paye</p>
               </div>
             </div>
             <p className="text-[10px] text-blue-600 mt-1.5 font-semibold">
@@ -354,12 +354,12 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => setCameraMode("capture")}
-            className={`py-2 rounded-xl text-xs font-bold border transition-all ${cameraMode === "capture" ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600 border-slate-200"}`}>
+            className={`py-2 rounded-xl text-xs font-bold border transition-all ${cameraMode === "capture" ? "bg-green-600 text-white border-green-600" : "bg-white text-muted-foreground border-border"}`}>
             Camera
           </button>
           <button
             onClick={() => setCameraMode("upload")}
-            className={`py-2 rounded-xl text-xs font-bold border transition-all ${cameraMode === "upload" ? "bg-green-600 text-white border-green-600" : "bg-white text-slate-600 border-slate-200"}`}>
+            className={`py-2 rounded-xl text-xs font-bold border transition-all ${cameraMode === "upload" ? "bg-green-600 text-white border-green-600" : "bg-white text-muted-foreground border-border"}`}>
             Depuis galerie
           </button>
         </div>
@@ -395,7 +395,7 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
             </div>
           ) : (
             <button onClick={startCamera}
-              className="w-full py-12 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center gap-3 text-slate-600 hover:border-green-400 hover:bg-green-50 transition-colors">
+              className="w-full py-12 rounded-2xl border-2 border-dashed border-border bg-muted flex flex-col items-center gap-3 text-muted-foreground hover:border-green-400 hover:bg-green-50 transition-colors">
               <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
                 <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -403,8 +403,8 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
                 </svg>
               </div>
               <div className="text-center">
-                <p className="text-sm font-bold text-slate-700">Activer la camera</p>
-                <p className="text-xs text-slate-500">Pointez vers le produit a analyser</p>
+                <p className="text-sm font-bold text-foreground">Activer la camera</p>
+                <p className="text-xs text-muted-foreground">Pointez vers le produit a analyser</p>
               </div>
             </button>
           )}
@@ -417,15 +417,15 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="w-full py-12 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 flex flex-col items-center gap-3 text-slate-600 hover:border-green-400 hover:bg-green-50 transition-colors">
+            className="w-full py-12 rounded-2xl border-2 border-dashed border-border bg-muted flex flex-col items-center gap-3 text-muted-foreground hover:border-green-400 hover:bg-green-50 transition-colors">
             <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center">
               <svg className="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
             <div className="text-center">
-              <p className="text-sm font-bold text-slate-700">Choisir une photo</p>
-              <p className="text-xs text-slate-500">Depuis la galerie de votre telephone</p>
+              <p className="text-sm font-bold text-foreground">Choisir une photo</p>
+              <p className="text-xs text-muted-foreground">Depuis la galerie de votre telephone</p>
             </div>
           </button>
         </div>
@@ -488,7 +488,7 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
           )}
           {!capturedImage && (
             <button onClick={() => setError("")}
-              className="self-start px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold">
+              className="self-start px-3 py-1.5 rounded-lg bg-muted text-foreground text-xs font-bold">
               Fermer
             </button>
           )}
@@ -497,7 +497,7 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
 
       {/* Analysis Result */}
       {result && (
-        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+        <div className="bg-white border border-border rounded-2xl overflow-hidden">
           {/* Score header */}
           <div className={`px-5 py-4 flex items-center justify-between ${
             result.grade === "A" ? "bg-green-50 border-b border-green-200"
@@ -506,14 +506,14 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
             : "bg-red-50 border-b border-red-200"
           }`}>
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Resultat analyse</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Resultat analyse</p>
               <div className="flex items-center gap-3 mt-1">
                 <span className={`text-3xl font-black border-2 px-3 py-1 rounded-xl ${gradeColor(result.grade)}`}>
                   {result.grade}
                 </span>
                 <div>
-                  <p className="text-lg font-black text-slate-800">{result.score}/100</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-lg font-black text-foreground">{result.score}/100</p>
+                  <p className="text-xs text-muted-foreground">
                     {articles.find(a => a.id === selectedArticleId)?.nom}
                     {articles.find(a => a.id === selectedArticleId)?.nomAr && (
                       <span className="ml-1 font-arabic" dir="rtl" lang="ar">({articles.find(a => a.id === selectedArticleId)?.nomAr})</span>
@@ -530,11 +530,11 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
           <div className="px-5 py-4 flex flex-col gap-4">
             {/* Score bar */}
             <div>
-              <div className="flex justify-between text-xs font-semibold text-slate-600 mb-1">
+              <div className="flex justify-between text-xs font-semibold text-muted-foreground mb-1">
                 <span>Score qualite</span>
                 <span>{result.score}%</span>
               </div>
-              <div className="h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-2.5 bg-muted rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-700 ${
                     result.score >= 80 ? "bg-green-500" : result.score >= 60 ? "bg-blue-500" : result.score >= 40 ? "bg-amber-500" : "bg-red-500"
@@ -546,13 +546,13 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
 
             {/* Details grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fraicheur</p>
-                <p className="text-sm font-semibold text-slate-800">{result.fraicheur}</p>
+              <div className="bg-muted rounded-xl p-3">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Fraicheur</p>
+                <p className="text-sm font-semibold text-foreground">{result.fraicheur}</p>
               </div>
-              <div className="bg-slate-50 rounded-xl p-3">
-                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Calibre</p>
-                <p className="text-sm font-semibold text-slate-800">{result.calibre}</p>
+              <div className="bg-muted rounded-xl p-3">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Calibre</p>
+                <p className="text-sm font-semibold text-foreground">{result.calibre}</p>
               </div>
             </div>
 
@@ -583,18 +583,18 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
             )}
 
             {/* Justification */}
-            <div className="bg-slate-50 rounded-xl px-4 py-3">
-              <p className="text-xs font-bold text-slate-700 mb-1">Justification</p>
-              <p className="text-sm text-slate-700 leading-relaxed">{result.justification}</p>
+            <div className="bg-muted rounded-xl px-4 py-3">
+              <p className="text-xs font-bold text-foreground mb-1">Justification</p>
+              <p className="text-sm text-foreground leading-relaxed">{result.justification}</p>
             </div>
 
             {/* Conseils */}
             {result.conseils.length > 0 && (
               <div>
-                <p className="text-xs font-bold text-slate-700 mb-2">Conseils Si-Mohammed</p>
+                <p className="text-xs font-bold text-foreground mb-2">Conseils Si-Mohammed</p>
                 <div className="flex flex-col gap-2">
                   {result.conseils.map((c, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm text-slate-700 bg-blue-50 rounded-xl px-3 py-2">
+                    <div key={i} className="flex items-start gap-2 text-sm text-foreground bg-blue-50 rounded-xl px-3 py-2">
                       <span className="w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0 mt-0.5">{i + 1}</span>
                       {c}
                     </div>
@@ -606,7 +606,7 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
             {/* Retry button */}
             <button
               onClick={resetCapture}
-              className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+              className="w-full py-2.5 rounded-xl border border-border text-sm font-bold text-muted-foreground hover:bg-muted transition-colors">
               Analyser un autre produit
             </button>
           </div>
@@ -830,8 +830,8 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h2 className="text-base font-bold text-slate-800">Comparatif Fournisseurs</h2>
-        <p className="text-xs text-slate-500">Comparez les offres avec historique prix et photos IA</p>
+        <h2 className="text-base font-bold text-foreground">Comparatif Fournisseurs</h2>
+        <p className="text-xs text-muted-foreground">Comparez les offres avec historique prix et photos IA</p>
       </div>
 
       {/* Article selector */}
@@ -856,27 +856,27 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
           {priceHistoryView && (
             <div className="mt-2 flex flex-col gap-2">
               {histByFournisseur.map((h) => h && (
-                <div key={h.fournisseurNom} className="bg-white border border-slate-200 rounded-xl px-4 py-3">
+                <div key={h.fournisseurNom} className="bg-white border border-border rounded-xl px-4 py-3">
                   <div className="flex items-center justify-between mb-1.5">
-                    <p className="text-sm font-bold text-slate-800">{h.fournisseurNom}</p>
-                    <span className="text-xs text-slate-500">{h.nbAchats} achat(s)</span>
+                    <p className="text-sm font-bold text-foreground">{h.fournisseurNom}</p>
+                    <span className="text-xs text-muted-foreground">{h.nbAchats} achat(s)</span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center">
                     <div>
                       <p className="text-sm font-black text-green-700">{h.minPrix.toFixed(2)} DH</p>
-                      <p className="text-[10px] text-slate-500">Min</p>
+                      <p className="text-[10px] text-muted-foreground">Min</p>
                     </div>
                     <div>
                       <p className="text-sm font-black text-blue-700">{h.moyennePrix.toFixed(2)} DH</p>
-                      <p className="text-[10px] text-slate-500">Moy</p>
+                      <p className="text-[10px] text-muted-foreground">Moy</p>
                     </div>
                     <div>
-                      <p className="text-sm font-black text-slate-700">{h.dernierPrix.toFixed(2)} DH</p>
-                      <p className="text-[10px] text-slate-500">Dernier</p>
+                      <p className="text-sm font-black text-foreground">{h.dernierPrix.toFixed(2)} DH</p>
+                      <p className="text-[10px] text-muted-foreground">Dernier</p>
                     </div>
                   </div>
                   {/* Mini bar */}
-                  <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                     <div className="h-full bg-green-500 rounded-full" style={{ width: `${Math.min(100, (h.minPrix / (h.moyennePrix * 1.2)) * 100)}%` }} />
                   </div>
                 </div>
@@ -889,7 +889,7 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
       {/* Fournisseur entries */}
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-bold text-slate-700">Fournisseurs a comparer ({entries.length}/5)</p>
+          <p className="text-xs font-bold text-foreground">Fournisseurs a comparer ({entries.length}/5)</p>
           {entries.length < 5 && (
             <button onClick={addEntry} className="text-xs text-green-600 font-bold flex items-center gap-1">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -901,9 +901,9 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
         </div>
 
         {entries.map((entry, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-              <p className="text-xs font-black text-slate-600">Fournisseur {i + 1}</p>
+          <div key={i} className="bg-white border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 bg-muted border-b border-border flex items-center justify-between">
+              <p className="text-xs font-black text-muted-foreground">Fournisseur {i + 1}</p>
               {entries.length > 2 && (
                 <button onClick={() => setEntries(prev => prev.filter((_, j) => j !== i))}
                   className="text-xs text-red-500 font-semibold">Supprimer</button>
@@ -913,34 +913,34 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
               <select
                 value={entry.fournisseurId}
                 onChange={e => updateEntry(i, { fournisseurId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
+                className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
                 <option value="">-- Fournisseur *</option>
                 {fournisseurs.map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
               </select>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
                     Prix propose (DH/{article?.unite ?? "unite"}) *
                   </label>
                   <input type="number" min="0" step="0.01" value={entry.prixPropose}
                     onChange={e => updateEntry(i, { prixPropose: e.target.value })}
                     placeholder="0.00"
-                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+                    className="w-full px-2.5 py-2 rounded-xl border border-border bg-muted text-sm font-bold text-foreground focus:outline-none focus:ring-2 focus:ring-green-400" />
                 </div>
                 <div>
-                  <label className="text-[10px] font-semibold text-slate-500 block mb-0.5">Qte disponible</label>
+                  <label className="text-[10px] font-semibold text-muted-foreground block mb-0.5">Qte disponible</label>
                   <input type="number" min="0" value={entry.quantiteDisponible}
                     onChange={e => updateEntry(i, { quantiteDisponible: e.target.value })}
                     placeholder="Qte"
-                    className="w-full px-2.5 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+                    className="w-full px-2.5 py-2 rounded-xl border border-border bg-muted text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-green-400" />
                 </div>
               </div>
 
               <input type="text" value={entry.qualiteNotes}
                 onChange={e => updateEntry(i, { qualiteNotes: e.target.value })}
                 placeholder="Notes qualite observee (couleur, fraicheur, calibre...)"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-green-400" />
+                className="w-full px-3 py-2 rounded-xl border border-border bg-muted text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-green-400" />
 
               {/* Photo section */}
               <div>
@@ -976,7 +976,7 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
                     <input ref={el => { fileInputRefs.current[i] = el }} type="file" accept="image/*"
                       onChange={e => handleFileForEntry(i, e)} className="hidden" />
                     <button onClick={() => startCameraForEntry(i)}
-                      className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors">
+                      className="flex-1 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground flex items-center justify-center gap-1.5 hover:bg-muted transition-colors">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -984,7 +984,7 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
                       Camera
                     </button>
                     <button onClick={() => fileInputRefs.current[i]?.click()}
-                      className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 flex items-center justify-center gap-1.5 hover:bg-slate-50 transition-colors">
+                      className="flex-1 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground flex items-center justify-center gap-1.5 hover:bg-muted transition-colors">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
@@ -1037,23 +1037,23 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
           </div>
 
           {/* Classement */}
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-              <p className="text-xs font-bold text-slate-700">Classement</p>
+          <div className="bg-white border border-border rounded-2xl overflow-hidden">
+            <div className="px-4 py-3 bg-muted border-b border-border">
+              <p className="text-xs font-bold text-foreground">Classement</p>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-border">
               {result.classement.sort((a, b) => a.rang - b.rang).map(c => (
                 <div key={c.nom} className="flex items-center gap-3 px-4 py-3">
                   <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
                     c.rang === 1 ? "bg-amber-400 text-white" : c.rang === 2 ? "bg-slate-300 text-slate-700" : "bg-slate-200 text-slate-500"
                   }`}>{c.rang}</span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold text-slate-800 truncate">{c.nom}</p>
-                    <p className="text-xs text-slate-500 truncate">{c.raison}</p>
+                    <p className="text-sm font-bold text-foreground truncate">{c.nom}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.raison}</p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <p className="text-sm font-black text-slate-700">{c.score}/100</p>
-                    <div className="w-16 h-1.5 bg-slate-100 rounded-full mt-1">
+                    <p className="text-sm font-black text-foreground">{c.score}/100</p>
+                    <div className="w-16 h-1.5 bg-muted rounded-full mt-1">
                       <div className="h-full bg-green-500 rounded-full" style={{ width: `${c.score}%` }} />
                     </div>
                   </div>
@@ -1063,24 +1063,24 @@ Fais une analyse comparative experte et reponds UNIQUEMENT en JSON valide:
           </div>
 
           {/* Analyse */}
-          <div className="bg-slate-50 rounded-2xl px-4 py-4">
-            <p className="text-xs font-bold text-slate-700 mb-2">Analyse ASHEL</p>
-            <p className="text-sm text-slate-700 leading-relaxed">{result.analyse}</p>
+          <div className="bg-muted rounded-2xl px-4 py-4">
+            <p className="text-xs font-bold text-foreground mb-2">Analyse ASHEL</p>
+            <p className="text-sm text-foreground leading-relaxed">{result.analyse}</p>
           </div>
 
           {/* Prix cibles pour negociation */}
-          <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+          <div className="bg-white border border-border rounded-2xl overflow-hidden">
             <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
               <p className="text-xs font-bold text-amber-800">Prix cibles pour negociation</p>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-border">
               {result.prixNegociation.map(p => (
                 <div key={p.fournisseurNom} className="px-4 py-3 flex flex-col gap-1">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-slate-800">{p.fournisseurNom}</p>
+                    <p className="text-sm font-bold text-foreground">{p.fournisseurNom}</p>
                     <span className="text-sm font-black text-green-700">{p.prixCible} DH</span>
                   </div>
-                  <p className="text-xs text-slate-500 italic">{p.argument}</p>
+                  <p className="text-xs text-muted-foreground italic">{p.argument}</p>
                 </div>
               ))}
             </div>
@@ -1217,20 +1217,20 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <div className="w-full max-w-lg bg-white rounded-t-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 bg-green-50 shrink-0">
-          <p className="text-sm font-bold text-slate-800">{isEdit ? "Modifier fournisseur" : "Nouveau fournisseur"}</p>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none">✕</button>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-green-50 shrink-0">
+          <p className="text-sm font-bold text-foreground">{isEdit ? "Modifier fournisseur" : "Nouveau fournisseur"}</p>
+          <button onClick={onClose} className="text-muted-foreground hover:text-muted-foreground text-lg leading-none">✕</button>
         </div>
 
         <div className="p-5 flex flex-col gap-4 overflow-y-auto">
           {step === "type" && (
             <>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Type de fournisseur</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Type de fournisseur</p>
               <div className="grid grid-cols-2 gap-2">
                 {FOURNISSEUR_TYPES.map(([val, label]) => (
                   <button key={val} type="button" onClick={() => { setType(val); setStep("form") }}
                     className={`px-3 py-4 rounded-xl text-sm font-semibold border-2 transition-colors ${
-                      type === val ? "border-green-600 bg-green-50 text-green-700" : "border-slate-200 text-slate-600 hover:border-green-300"
+                      type === val ? "border-green-600 bg-green-50 text-green-700" : "border-border text-muted-foreground hover:border-green-300"
                     }`}>
                     {label}
                   </button>
@@ -1241,41 +1241,41 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
 
           {step === "form" && (
             <>
-              <button onClick={() => setStep("type")} className="text-xs font-semibold text-slate-400 hover:text-slate-600 self-start">← Type : {type ? FOURNISSEUR_TYPE_LABELS[type] : ""}</button>
+              <button onClick={() => setStep("type")} className="text-xs font-semibold text-muted-foreground hover:text-muted-foreground self-start">← Type : {type ? FOURNISSEUR_TYPE_LABELS[type] : ""}</button>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-slate-700">Raison sociale / Nom *</label>
+                <label className="text-xs font-semibold text-foreground">Raison sociale / Nom *</label>
                 <input type="text" value={nom} onChange={e => setNom(e.target.value)}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="ex: Souk Had Soualem — Stand 12" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-slate-700">Nom du contact</label>
+                <label className="text-xs font-semibold text-foreground">Nom du contact</label>
                 <input type="text" value={contact} onChange={e => setContact(e.target.value)}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="ex: Ahmed" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-slate-700">Téléphone</label>
+                <label className="text-xs font-semibold text-foreground">Téléphone</label>
                 <input type="tel" value={telephone} onChange={e => setTelephone(e.target.value)}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="06 00 00 00 00" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-slate-700">Ville</label>
+                <label className="text-xs font-semibold text-foreground">Ville</label>
                 <input type="text" value={ville} onChange={e => setVille(e.target.value)}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   placeholder="Casablanca" />
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-slate-700">Spécialités {specialites.length > 0 && <span className="text-green-600">({specialites.length})</span>}</label>
-                  <div className="flex rounded-lg border border-slate-200 overflow-hidden text-[11px] font-semibold">
+                  <label className="text-xs font-semibold text-foreground">Spécialités {specialites.length > 0 && <span className="text-green-600">({specialites.length})</span>}</label>
+                  <div className="flex rounded-lg border border-border overflow-hidden text-[11px] font-semibold">
                     <button type="button" onClick={() => setSpecialiteMode("famille")}
-                      className={`px-2.5 py-1 ${specialiteMode === "famille" ? "bg-green-600 text-white" : "text-slate-500"}`}>
+                      className={`px-2.5 py-1 ${specialiteMode === "famille" ? "bg-green-600 text-white" : "text-muted-foreground"}`}>
                       Par famille
                     </button>
                     <button type="button" onClick={() => setSpecialiteMode("article")}
-                      className={`px-2.5 py-1 ${specialiteMode === "article" ? "bg-green-600 text-white" : "text-slate-500"}`}>
+                      className={`px-2.5 py-1 ${specialiteMode === "article" ? "bg-green-600 text-white" : "text-muted-foreground"}`}>
                       Par article
                     </button>
                   </div>
@@ -1286,7 +1286,7 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
                     {SPECIALITES_FRUITS_LEGUMES.map(s => (
                       <button key={s} type="button" onClick={() => toggleSpecialite(s)}
                         className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-colors ${
-                          specialites.includes(s) ? "bg-green-600 text-white border-green-600" : "border-slate-200 text-slate-600"
+                          specialites.includes(s) ? "bg-green-600 text-white border-green-600" : "border-border text-muted-foreground"
                         }`}>
                         {s}
                       </button>
@@ -1297,18 +1297,18 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
                 {specialiteMode === "article" && (
                   <div className="flex flex-col gap-2">
                     <input type="text" value={articleSearch} onChange={e => setArticleSearch(e.target.value)}
-                      className="px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                      className="px-3 py-2 rounded-lg border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                       placeholder="Rechercher un article..." />
-                    <div className="flex flex-col gap-1 max-h-48 overflow-y-auto border border-slate-100 rounded-lg p-1.5">
+                    <div className="flex flex-col gap-1 max-h-48 overflow-y-auto border border-border rounded-lg p-1.5">
                       {filteredArticlesForSpec.length === 0 && (
-                        <p className="text-xs text-slate-400 text-center py-2">Aucun article trouvé.</p>
+                        <p className="text-xs text-muted-foreground text-center py-2">Aucun article trouvé.</p>
                       )}
                       {filteredArticlesForSpec.map(a => (
-                        <label key={a.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">
+                        <label key={a.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted cursor-pointer">
                           <input type="checkbox" checked={specialites.includes(a.nom)} onChange={() => toggleSpecialite(a.nom)}
                             className="w-4 h-4 accent-green-600 shrink-0" />
-                          <span className="text-sm text-slate-700">{a.nom}</span>
-                          <span className="ml-auto text-[10px] text-slate-400">{a.famille}</span>
+                          <span className="text-sm text-foreground">{a.nom}</span>
+                          <span className="ml-auto text-[10px] text-muted-foreground">{a.famille}</span>
                         </label>
                       ))}
                     </div>
@@ -1317,19 +1317,19 @@ export function NouveauFournisseurModal({ articles, onClose, onCreated, fourniss
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-slate-700">Remarques (optionnel)</label>
+                <label className="text-xs font-semibold text-foreground">Remarques (optionnel)</label>
                 <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)}
-                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                  className="px-3 py-2.5 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
                   placeholder="Produits disponibles, horaires, conditions..." />
               </div>
 
               {/* Position GPS — capturée automatiquement en tâche de fond dès
                   l'ouverture du formulaire, aucune confirmation manuelle requise. */}
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-muted border border-border">
                 {gpsStatus === "loading" && (
                   <>
                     <span className="w-4 h-4 border-2 border-green-500/40 border-t-green-600 rounded-full animate-spin shrink-0" />
-                    <p className="text-xs text-slate-500">Localisation automatique en cours...</p>
+                    <p className="text-xs text-muted-foreground">Localisation automatique en cours...</p>
                   </>
                 )}
                 {gpsStatus === "granted" && gps && (

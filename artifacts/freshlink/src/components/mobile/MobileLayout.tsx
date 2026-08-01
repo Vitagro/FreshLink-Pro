@@ -29,8 +29,6 @@ const MobilePricing          = lazy(() => import("./MobilePricing"))
 const MobileBLValidation     = lazy(() => import("./MobileBLValidation"))
 const MobileAlertes          = lazy(() => import("./MobileAlertes"))
 const MobileChargesAcheteur  = lazy(() => import("./MobileChargesAcheteur"))
-const MobileClientPortail    = lazy(() => import("./MobileClientPortail"))
-const MobileFournisseurPortail = lazy(() => import("./MobileFournisseurPortail"))
 import RoleSwitcher from "@/components/ui/RoleSwitcher"
 import MobileAutoTranslate from "./MobileAutoTranslate"
 import DismissibleBanner from "@/components/ui/DismissibleBanner"
@@ -44,7 +42,7 @@ type MobileTab =
   | "achat" | "charges" | "commercial" | "logistique" | "bilan"
   | "preparation" | "ctrl_achat" | "ctrl_prep" | "ctrl_retour"
   | "agent_ia" | "avis" | "magasinier" | "pricing" | "bl_validation" | "alertes"
-  | "client_portail" | "fournisseur_portail" | "messages"
+  | "messages"
 
 export default function MobileLayout({ user: initialUser, onLogout }: Props) {
   const lang = useLang()
@@ -90,8 +88,6 @@ export default function MobileLayout({ user: initialUser, onLogout }: Props) {
     livreur:          ["bl_validation", "logistique", "ctrl_retour", "agent_ia", "avis"],
     conducteur:       ["bl_validation", "logistique", "ctrl_retour", "agent_ia", "avis"],
     preparateur:      ["preparation", "ctrl_prep", "agent_ia", "avis"],
-    client:           ["client_portail",      "avis"],
-    fournisseur:      ["fournisseur_portail", "avis"],
   }
 
   // Tab icon helper
@@ -119,8 +115,6 @@ export default function MobileLayout({ user: initialUser, onLogout }: Props) {
     { id: "pricing",      label: "Prix",       labelAr: "الأسعار",          labelEn: "Prices",     icon: T("M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z") },
     { id: "bl_validation",label: "Mes BL",     labelAr: "وصولاتي",         labelEn: "My DL",      icon: T("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4") },
     { id: "alertes",           label: "Alertes",    labelAr: "التنبيهات",        labelEn: "Alerts",     icon: T("M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9") },
-    { id: "client_portail",    label: "Mon espace", labelAr: "فضائي",           labelEn: "My Space",   icon: T("M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z") },
-    { id: "fournisseur_portail", label: "Portail",  labelAr: "البوابة",         labelEn: "Portal",     icon: T("M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4") },
     { id: "messages",     label: "Messages",   labelAr: "الرسائل",          labelEn: "Messages",   icon: T("M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A8.96 8.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z") },
   ]
 
@@ -245,8 +239,6 @@ export default function MobileLayout({ user: initialUser, onLogout }: Props) {
           {resolvedTab === "pricing"       && <MobilePricing user={user} />}
           {resolvedTab === "bl_validation" && <MobileBLValidation user={user} />}
           {resolvedTab === "alertes"             && <MobileAlertes user={user} />}
-          {resolvedTab === "client_portail"      && <MobileClientPortail user={user} />}
-          {resolvedTab === "fournisseur_portail" && <MobileFournisseurPortail user={user} />}
           {resolvedTab === "messages"            && <div className="p-3"><MessagerieChannel user={user} compact /></div>}
         </Suspense>
       </main>

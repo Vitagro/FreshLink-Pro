@@ -76,6 +76,13 @@ export default function BODashboard({ user }: Props) {
   const [bls, setBls] = useState(store.getVisibleBonsLivraison())
   const [visites, setVisites] = useState(store.getVisites ? store.getVisites() : [])
   const [dashTab, setDashTab] = useState<DashTab>("global")
+  // Intervalle de dates du "Tableau de bord" — par defaut aujourd'hui seul
+  // (comportement historique inchange). Le KPI "CA aujourd'hui" et les
+  // listes associees (commandes/visites/retours) agregent sur cet
+  // intervalle ; les comparaisons (vs J-1, vs semaine passee) restent
+  // ancrees sur dateFin pour rester lisibles meme en mode periode.
+  const [dateDebut, setDateDebut] = useState(store.today())
+  const [dateFin, setDateFin] = useState(store.today())
   // Factures impayées (fl_invoices) → intégrées au crédit (sinon crédit=0 alors
   // qu'une facture est « Impayée » côté Finance).
   const [unpaidByClient, setUnpaidByClient] = useState<Record<string, number>>({})
@@ -138,11 +145,14 @@ export default function BODashboard({ user }: Props) {
   }, [])
 
   const today = store.today()
-  const yesterday = dateOffset(today, -1)
-  const lastWeekSameDay = dateOffset(today, -7)
-  const weekRange = getWeekRange(today)
+  // Ancrage des comparaisons (J-1, semaine passee) sur la FIN de l'intervalle
+  // choisi — en mode "aujourd'hui seul" (par defaut), dateFin === today et
+  // rien ne change vs avant.
+  const yesterday = dateOffset(dateFin, -1)
+  const lastWeekSameDay = dateOffset(dateFin, -7)
+  const weekRange = getWeekRange(dateFin)
   const lastWeekRange = getWeekRange(yesterday)
-  const monthRange = getMonthRange(today)
+  const monthRange = getMonthRange(dateFin)
 
   // Une commande annulée/refusée (statut "refuse", y compris une suppression
   // par le commercial — MobileCommercial route désormais sa "Supprimer" vers
@@ -152,7 +162,9 @@ export default function BODashboard({ user }: Props) {
   const commandesActives = useMemo(() => commandes.filter(c => c.statut !== "refuse"), [commandes])
 
   // --- Commandes helpers ---
-  const cmdsToday    = useMemo(() => commandesActives.filter(c => c.date === today), [commandesActives, today])
+  // "Today" = tout l'intervalle choisi (dateDebut..dateFin) — un seul jour
+  // par defaut, comportement identique a avant.
+  const cmdsToday    = useMemo(() => commandesActives.filter(c => c.date >= dateDebut && c.date <= dateFin), [commandesActives, dateDebut, dateFin])
   const cmdsYday     = useMemo(() => commandesActives.filter(c => c.date === yesterday), [commandesActives, yesterday])
   const cmdsLastWkDay= useMemo(() => commandesActives.filter(c => c.date === lastWeekSameDay), [commandesActives, lastWeekSameDay])
   const cmdsWeek     = useMemo(() => commandesActives.filter(c => c.date >= weekRange.start && c.date <= weekRange.end), [commandesActives, weekRange])
@@ -174,12 +186,12 @@ export default function BODashboard({ user }: Props) {
   const tonnageLastWkDay= tonnOf(cmdsLastWkDay)
 
   // --- Visites ---
-  const visitesToday  = visites.filter((v: { date: string }) => v.date === today).length
+  const visitesToday  = visites.filter((v: { date: string }) => v.date >= dateDebut && v.date <= dateFin).length
   const visitesYday   = visites.filter((v: { date: string }) => v.date === yesterday).length
   const visitesLastWk = visites.filter((v: { date: string }) => v.date === lastWeekSameDay).length
 
   // ── Tournees du Jour ──────────────────────────────────────────────────────
-  const visitesTodayList = visites.filter((v: { date: string }) => v.date === today) as Visite[]
+  const visitesTodayList = visites.filter((v: { date: string }) => v.date >= dateDebut && v.date <= dateFin) as Visite[]
   const visitesTodayCommandes = visitesTodayList.filter(v => v.resultat === "commande").length
   const tauxConversionJ = visitesTodayList.length > 0
     ? Math.round((visitesTodayCommandes / visitesTodayList.length) * 100)
@@ -193,7 +205,7 @@ export default function BODashboard({ user }: Props) {
   const pvTourneesArr = Object.values(pvTourneesMap).sort((a, b) => b.visites - a.visites)
 
   // --- Retours ---
-  const retoursToday  = retours.filter(r => r.date === today)
+  const retoursToday  = retours.filter(r => r.date >= dateDebut && r.date <= dateFin)
   const retoursAll    = retours
 
   const totalRetourKg = retoursAll.reduce((s, r) => s + r.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
@@ -277,7 +289,7 @@ export default function BODashboard({ user }: Props) {
   // --- Prevendeurs stats ---
   const prevendeurs = users.filter(u => u.role === "prevendeur" && u.actif)
   const getPrevendeurStats = (pv: User) => {
-    const cdJ = commandesActives.filter(c => c.commercialId === pv.id && c.date === today)
+    const cdJ = commandesActives.filter(c => c.commercialId === pv.id && c.date >= dateDebut && c.date <= dateFin)
     const cdW = commandesActives.filter(c => c.commercialId === pv.id && c.date >= weekRange.start && c.date <= weekRange.end)
     const cdM = commandesActives.filter(c => c.commercialId === pv.id && c.date >= monthRange.start && c.date <= monthRange.end)
     return {
@@ -426,6 +438,31 @@ export default function BODashboard({ user }: Props) {
             </div>
           </div>
         </div>
+
+        {/* Intervalle de dates — par defaut aujourd'hui seul (comportement
+            historique) ; les KPI "du jour" et listes associees agregent sur
+            cet intervalle une fois elargi. */}
+        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl" style={{ background: "oklch(0.12 0.018 255)", border: "1px solid oklch(0.20 0.016 255)" }}>
+          <span className="text-[10px] font-semibold text-muted-foreground pl-1">Du</span>
+          <input type="date" value={dateDebut} max={dateFin}
+            onChange={e => setDateDebut(e.target.value)}
+            className="px-2 py-1 rounded-lg text-xs font-semibold"
+            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+          <span className="text-[10px] font-semibold text-muted-foreground">Au</span>
+          <input type="date" value={dateFin} min={dateDebut}
+            onChange={e => setDateFin(e.target.value)}
+            className="px-2 py-1 rounded-lg text-xs font-semibold"
+            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+          {(dateDebut !== today || dateFin !== today) && (
+            <button onClick={() => { setDateDebut(today); setDateFin(today) }}
+              title="Revenir a aujourd'hui"
+              className="px-2 py-1 rounded-lg text-[10px] font-bold transition-colors hover:opacity-80"
+              style={{ background: "oklch(0.18 0.06 148)", color: "oklch(0.72 0.18 148)", border: "1px solid oklch(0.28 0.10 148)" }}>
+              ↺ Aujourd&apos;hui
+            </button>
+          )}
+        </div>
+
         {isAdmin && (
           <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{ background: "oklch(0.12 0.018 255)", border: "1px solid oklch(0.20 0.016 255)" }}>
             {TABS.map(t => (
@@ -499,7 +536,8 @@ export default function BODashboard({ user }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               {
-                label: "CA aujourd'hui", labelAr: "رقم الأعمال اليوم",
+                label: dateDebut === dateFin ? (dateFin === today ? "CA aujourd'hui" : `CA du ${dateFin}`) : `CA du ${dateDebut} au ${dateFin}`,
+                labelAr: "رقم الأعمال اليوم",
                 value: DH(caToday), sub: `${cmdsToday.length} commande(s)`,
                 delta1: <Delta current={caToday} previous={caYday} label="vs J-1" />,
                 delta2: <Delta current={caToday} previous={caLastWkDay} label="vs sem. passee" />,

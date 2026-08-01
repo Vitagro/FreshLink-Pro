@@ -447,7 +447,11 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   // bien moins souvent. Le reste garde son ordre (pipeline achat -> po ->
   // reception, puis reference/prix, puis analytics retrospectifs).
   { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["rapport_marche", "achat", "po", "reception", "sourcing", "fournisseurs", "credit_fournisseur", "pa_historique", "gestion_pa", "analyse_achat", "analyse_reception", "temps_achat"] },
-  { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["articles", "familles", "stock", "shelf_life", "forecast", "caisses_vides"] },
+  // Ordre par frequence reelle : Stock (niveau verifie plusieurs fois/jour) et
+  // Shelf Life/DLC (denrees perissables — controle quotidien de fraicheur)
+  // remontes devant le Catalogue/Caisses vides (reference, plus ponctuels) et
+  // Forecast/Familles (planification, edition rare).
+  { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["stock", "shelf_life", "articles", "caisses_vides", "forecast", "familles"] },
   // Ordre par frequence d'usage reelle : Commandes (quotidien, volume le
   // plus eleve) → Alertes (suivi quotidien des clients/articles) → gestion
   // d'equipe/zones (ponctuel) → devis/prospection (strategique/occasionnel).
@@ -455,13 +459,29 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   // moteur de regles de remises/bonus (pricing), pas un outil de gestion de
   // commandes/zones/equipe — mal classe ici avant ce reajustement.
   { label: "Commercial & Ventes",         labelAr: "التجاري والمبيعات",    ids: ["commandes_unifiees", "alertes_clients", "affectation", "zones_secteurs", "documents", "prospection"] },
-  { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "category_pricing", "moteur_commercial", "echelons_client", "pricing_concurrent", "intelligence_prix", "concurrence"] },
+  // "Pricing" (pricing_concurrent, cf. BOPricingConcurrence) remonte juste
+  // apres "Releve de Prix" : les deux forment le cycle quotidien de l'acheteur
+  // (collecter les prix marche -> en deduire le PV imbattable / alerte achat).
+  // Le reste (tarifs/echelons/moteur de remises) est de la configuration
+  // ponctuelle, et les tableaux de bord d'intelligence/concurrence sont des
+  // analyses retrospectives consultees moins souvent.
+  { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "pricing_concurrent", "category_pricing", "echelons_client", "moteur_commercial", "intelligence_prix", "concurrence"] },
   { label: "Marketing & E-commerce",      labelAr: "التسويق والمتجر الإلكتروني", ids: ["marketplace", "promo_codes", "loyalty", "gifts_v3", "loterie", "shop_analytics"] },
   { label: "Clients & Comptes Web",       labelAr: "الزبائن والحسابات",    ids: ["comptes_externes", "demandes_comptes"] },
   { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
-  { label: "Finance & Contrôle de Gestion", labelAr: "المالية ومراقبة التسيير", ids: ["finance", "fiscalite", "cash", "caisse_acheteur", "analyse_credit", "finance_cdg", "performance_incentives", "investissement"] },
+  // Cash & BL et Caisse Acheteur remontent devant Fiscalite : ce sont des
+  // encaissements/decaissements quotidiens (vente au comptant + achats
+  // payes cash), contrairement a la fiscalite/controle de gestion qui sont
+  // des cloture mensuelles. Analyse Credit remonte aussi : c'est un rapport
+  // quotidien de suivi credit fournisseurs/clients (cf. BOAnalyseCredit).
+  { label: "Finance & Contrôle de Gestion", labelAr: "المالية ومراقبة التسيير", ids: ["finance", "cash", "caisse_acheteur", "analyse_credit", "fiscalite", "finance_cdg", "performance_incentives", "investissement"] },
   { label: "Ressources Humaines",         labelAr: "الموارد البشرية",      ids: ["rh_productivite", "rh_comptabilite", "hr_documents", "template_editor", "agents_ia"] },
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "equipes", "roles_permissions", "journal_activite", "device_access", "mobile_gestion", "depots", "web_integration", "camera_perms", "cutoffs", "database", "liens_externes", "settings", "gsheets", "import_externe"] },
+  // Utilisateurs/Parametres devant : ce sont les ecrans admin les plus
+  // consultes (onboarding, reglages courants). Puis droits d'acces/equipes,
+  // puis config operationnelle (cutoffs, mobile, depots, integrations), puis
+  // outils techniques rarement ouverts (BDD, imports, liens) et enfin les
+  // ecrans reserves super-admin (camera) en dernier.
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -701,19 +721,6 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
     )
   })).filter(g => g.items.length > 0)
 
-  // ── Group icon colors by group label (light-theme friendly) ──
-  const GROUP_ICON_COLOR: Record<string, string> = {
-    "Vue d'ensemble":        "text-emerald-600",
-    "Achats":                "text-amber-600",
-    "Commercial":            "text-lime-600",
-    "Clients & Fournisseurs": "text-rose-600",
-    "Stock & Catalogue":     "text-orange-600",
-    "Logistique":            "text-sky-600",
-    "Finance & Contrôle":    "text-violet-600",
-    "RH & Equipe":           "text-indigo-600",
-    "Administration":        "text-slate-600",
-  }
-
   // ── Render ─────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden font-sans bg-slate-50 text-slate-800">
@@ -732,7 +739,6 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
           setNavSearch={setNavSearch}
           filteredGroups={filteredGroups}
           searchQ={searchQ}
-          GROUP_ICON_COLOR={GROUP_ICON_COLOR}
           navigate={navigate}
           onLogout={onLogout}
           onOpenProfil={() => setShowProfil(true)}
@@ -758,8 +764,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
               setNavSearch={setNavSearch}
               filteredGroups={filteredGroups}
               searchQ={searchQ}
-              GROUP_ICON_COLOR={GROUP_ICON_COLOR}
-              navigate={navigate}
+                  navigate={navigate}
               onLogout={onLogout}
               onOpenProfil={() => setShowProfil(true)}
               appName={companyBrand.appName || "FreshLink Pro"}
@@ -1017,7 +1022,6 @@ interface SidebarContentProps {
   setNavSearch: (v: string) => void
   filteredGroups: Array<{ label: string; labelAr: string; items: NavItem[] }>
   searchQ: string
-  GROUP_ICON_COLOR: Record<string, string>
   navigate: (t: Tab) => void
   onLogout: () => void
   onOpenProfil: () => void
@@ -1030,7 +1034,7 @@ interface SidebarContentProps {
 function SidebarContent({
   user, activeTab, sidebarCollapsed, setSidebarCollapsed,
   profilPhoto, navSearch, setNavSearch, filteredGroups, searchQ,
-  GROUP_ICON_COLOR, navigate, onLogout, onOpenProfil,
+  navigate, onLogout, onOpenProfil,
   appName, appSlogan, appLogo, lang,
 }: SidebarContentProps) {
   const BG = "#0d2218"
