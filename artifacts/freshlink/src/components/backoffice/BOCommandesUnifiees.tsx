@@ -332,7 +332,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const [savingOrder, setSavingOrder]     = useState(false)
   const [noClientId, setNoClientId]       = useState("")
   const [noHeure, setNoHeure]             = useState("08:00")
-  const [noLignes, setNoLignes]           = useState<{ articleId: string; quantite: string; prixVente: string }[]>([{ articleId: "", quantite: "", prixVente: "" }])
+  const [noLignes, setNoLignes]           = useState<{ articleId: string; quantite: string; prixVente: string; uniteMode: string }[]>([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
 
   // ── Import commandes (Excel) ────────────────────────────────────────────────
   const [showImport, setShowImport]       = useState(false)
@@ -457,8 +457,17 @@ export default function BOCommandesUnifiees({ user }: Props) {
       .map(l => {
         const art = articles.find(a => a.id === l.articleId)!
         const pv = toNum(l.prixVente) || store.computePrixEffectif(art, client)
-        const q = toNum(l.quantite) || 0
-        return { articleId: art.id, articleNom: art.nom, unite: art.unite, quantite: q, prixUnitaire: pv, prixVente: pv, total: q * pv }
+        const saisie = toNum(l.quantite) || 0
+        // Saisie en UM (ex: Caisse) → conversion en unite de base (kg) pour le
+        // stockage, comme sur mobile Commercial. quantiteUM garde la saisie
+        // d'origine pour l'affichage.
+        const inUMMode = !!(art.um && art.colisageParUM && l.uniteMode === art.um)
+        const q = inUMMode ? saisie * (art.colisageParUM ?? 1) : saisie
+        return {
+          articleId: art.id, articleNom: art.nom, articleNomAr: art.nomAr, unite: art.unite,
+          quantite: q, prixUnitaire: pv, prixVente: pv, total: q * pv,
+          ...(inUMMode ? { um: art.um, colisageParUM: art.colisageParUM, quantiteUM: saisie, prixUM: art.colisageParUM ? pv * art.colisageParUM : undefined } : {}),
+        }
       })
     if (lignes.length === 0) { setMsg({ ok: false, text: "Ajoutez au moins une ligne valide." }); return }
     const cmd: Commande = {
@@ -473,7 +482,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
     setSavingOrder(true)
     store.addCommande(cmd)
     try { const db = await import("@/lib/supabase/db"); await db.upsertCommande(cmd) } catch { /* offline */ }
-    setShowNew(false); setNoClientId(""); setNoLignes([{ articleId: "", quantite: "", prixVente: "" }])
+    setShowNew(false); setNoClientId(""); setNoLignes([{ articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])
     setMsg({ ok: true, text: `✅ Commande ${cmd.id} créée (${client.nom}).` })
     setSavingOrder(false)
     load()
@@ -1086,26 +1095,49 @@ export default function BOCommandesUnifiees({ user }: Props) {
                 <label className="text-xs font-semibold text-slate-600">Articles</label>
                 {noLignes.map((l, i) => {
                   const art = store.getArticles().find(a => a.id === l.articleId)
+                  const hasUM = !!(art?.um && art?.colisageParUM)
+                  const inUMMode = hasUM && l.uniteMode === art!.um
                   return (
-                    <div key={i} className="flex items-center gap-2">
-                      <select value={l.articleId}
-                        onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, articleId: e.target.value, prixVente: e.target.value ? String(store.computePrixEffectif(store.getArticles().find(a => a.id === e.target.value)!, store.getClients().find(c => c.id === noClientId))) : "" } : x))}
-                        className="flex-1 px-2 py-2 rounded-lg border border-slate-200 text-sm">
-                        <option value="">— Article —</option>
-                        {store.getArticles().slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(a => <option key={a.id} value={a.id}>{a.nom}{a.nomAr ? ` / ${a.nomAr}` : ""}</option>)}
-                      </select>
-                      <input type="text" inputMode="decimal" placeholder="Qté" value={l.quantite}
-                        onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, quantite: e.target.value.replace(",", ".") } : x))}
-                        className="w-20 px-2 py-2 rounded-lg border border-slate-200 text-sm text-center" />
-                      <input type="text" inputMode="decimal" placeholder="PV" value={l.prixVente}
-                        onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, prixVente: e.target.value.replace(",", ".") } : x))}
-                        className="w-20 px-2 py-2 rounded-lg border border-slate-200 text-sm text-center" />
-                      <span className="w-8 text-[10px] text-slate-400">{art?.unite}</span>
-                      {noLignes.length > 1 && <button onClick={() => setNoLignes(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>}
+                    <div key={i} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-100 bg-slate-50">
+                      <div className="flex items-center gap-2">
+                        <select value={l.articleId}
+                          onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, articleId: e.target.value, uniteMode: "base", quantite: "", prixVente: e.target.value ? String(store.computePrixEffectif(store.getArticles().find(a => a.id === e.target.value)!, store.getClients().find(c => c.id === noClientId))) : "" } : x))}
+                          className="flex-1 px-2 py-2 rounded-lg border border-slate-200 text-sm">
+                          <option value="">— Article —</option>
+                          {store.getArticles().slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(a => <option key={a.id} value={a.id}>{a.nom}{a.nomAr ? ` / ${a.nomAr}` : ""}</option>)}
+                        </select>
+                        <input type="text" inputMode="decimal" placeholder="Qté" value={l.quantite}
+                          onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, quantite: e.target.value.replace(",", ".") } : x))}
+                          className="w-20 px-2 py-2 rounded-lg border border-slate-200 text-sm text-center" />
+                        <input type="text" inputMode="decimal" placeholder="PV" value={l.prixVente}
+                          onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, prixVente: e.target.value.replace(",", ".") } : x))}
+                          className="w-20 px-2 py-2 rounded-lg border border-slate-200 text-sm text-center" />
+                        <span className="w-8 text-[10px] text-slate-400">{inUMMode ? art!.um : art?.unite}</span>
+                        {noLignes.length > 1 && <button onClick={() => setNoLignes(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>}
+                      </div>
+                      {hasUM && (
+                        <div className="flex items-center gap-2 pl-1">
+                          <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-white">
+                            <button type="button"
+                              onClick={() => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, uniteMode: "base", quantite: "" } : x))}
+                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${!inUMMode ? "bg-slate-800 text-white" : "text-slate-500"}`}>
+                              {art!.unite}
+                            </button>
+                            <button type="button"
+                              onClick={() => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, uniteMode: art!.um!, quantite: "" } : x))}
+                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${inUMMode ? "bg-slate-800 text-white" : "text-slate-500"}`}>
+                              {art!.um} ({art!.colisageParUM} {art!.unite})
+                            </button>
+                          </div>
+                          {inUMMode && l.quantite && (
+                            <span className="text-[11px] text-slate-400">= {((Number(l.quantite.replace(",", ".")) || 0) * (art!.colisageParUM ?? 1)).toFixed(1)} {art!.unite}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )
                 })}
-                <button onClick={() => setNoLignes(prev => [...prev, { articleId: "", quantite: "", prixVente: "" }])}
+                <button onClick={() => setNoLignes(prev => [...prev, { articleId: "", quantite: "", prixVente: "", uniteMode: "base" }])}
                   className="self-start text-sm font-semibold text-emerald-600">+ Ajouter un article</button>
               </div>
               <div className="flex gap-2 pt-2">
