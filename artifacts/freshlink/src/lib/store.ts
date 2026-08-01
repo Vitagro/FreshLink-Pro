@@ -3669,11 +3669,17 @@ export const store = {
   //   > 0  → LANCER DA (deficit: must purchase)
   //   <= 0 → RAS (stock sufficient)
   // Note: besoinNet is NOT clamped to 0 — negative means surplus
-  computeBesoinNet: (): { articleId: string; articleNom: string; unite: string; commandeQty: number; stockQty: number; retourQty: number; besoinNet: number }[] => {
+  // Plage optionnelle (dateDebut/dateFin, incluses, format YYYY-MM-DD) —
+  // par defaut le jour meme, comme avant. Permet a l'acheteur de voir le
+  // besoin cumule sur plusieurs jours (ex: apres un jour ferie) plutot que
+  // seulement aujourd'hui.
+  computeBesoinNet: (range?: { dateDebut?: string; dateFin?: string }): { articleId: string; articleNom: string; unite: string; commandeQty: number; stockQty: number; retourQty: number; besoinNet: number }[] => {
     const today = store.today()
+    const dateDebut = range?.dateDebut ?? today
+    const dateFin = range?.dateFin ?? today
     const articles = store.getArticles()
-    const commandes = store.getCommandes().filter(c => c.date === today && (c.statut === "en_attente" || c.statut === "valide"))
-    const retours = store.getRetours().filter(r => r.date === today && r.statut === "validé")
+    const commandes = store.getCommandes().filter(c => c.date >= dateDebut && c.date <= dateFin && (c.statut === "en_attente" || c.statut === "valide"))
+    const retours = store.getRetours().filter(r => r.date >= dateDebut && r.date <= dateFin && r.statut === "validé")
     return articles.map(art => {
       const commandeQty = commandes.reduce((s, c) => s + (c.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)
       const retourQty = retours.reduce((s, r) => s + (r.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)
@@ -3752,6 +3758,22 @@ export const store = {
   },
   saveAlertConfig: (c: { inactivityDays: number; articleAbsenceJours?: number; articleAbsenceMedium?: number; articleAbsenceUrgent?: number }) => {
     setLS("fl_alert_config", { ...store.getAlertConfig(), ...c })
+  },
+
+  // --- Fenetre de prise de commande (heureDebut = veille J-1, heureFin = jour J) ---
+  // Informative pour l'acheteur sur l'ecran "Besoin d'achat net" — explique
+  // que le besoin du jour J agrege les commandes prises depuis la veille
+  // 14h jusqu'a 4h le jour meme. Modifiable (BO ou directement depuis
+  // l'ecran mobile Achat) sans redeploiement.
+  getCommandeCutoffConfig: (): { heureDebut: string; heureFin: string } => {
+    const c = getLS<Partial<{ heureDebut: string; heureFin: string }>>("fl_commande_cutoff_config", {})
+    return {
+      heureDebut: c.heureDebut || "14:00",
+      heureFin: c.heureFin || "04:00",
+    }
+  },
+  saveCommandeCutoffConfig: (c: { heureDebut: string; heureFin: string }) => {
+    setLS("fl_commande_cutoff_config", c)
   },
 
   // --- Config Marché (planification achat / besoin / camions / heure arrivée) ---
