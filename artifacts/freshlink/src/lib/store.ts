@@ -3776,6 +3776,35 @@ export const store = {
     setLS("fl_commande_cutoff_config", c)
   },
 
+  // Cycle operationnel "commande", partage par BOCommandesUnifiees et
+  // BOGestionPA (auparavant chacun avait sa propre copie codee en dur a 14h,
+  // deconnectee de getCommandeCutoffConfig ci-dessus — un changement de
+  // cutoff cote mobile n'avait donc aucun effet sur ces deux ecrans BO).
+  // La collecte pour un jour J court de [J-1 heureDebut] a [J heureFin] ;
+  // avant heureDebut, "aujourd'hui" designe J, a partir de heureDebut la
+  // collecte de J+1 a deja commence donc "aujourd'hui" bascule sur J+1.
+  commandeOperationalDate: (): string => {
+    const { heureDebut } = store.getCommandeCutoffConfig()
+    const [hh, mm] = heureDebut.split(":").map(Number)
+    const d = new Date()
+    const afterCutoff = d.getHours() > hh || (d.getHours() === hh && d.getMinutes() >= mm)
+    if (afterCutoff) d.setDate(d.getDate() + 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  },
+  // Bornes precises [debut, fin) pour une date operationnelle "commande" donnee.
+  commandeCycleBounds: (dateStr: string): { start: Date; end: Date } | null => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
+    if (!m) return null
+    const { heureDebut, heureFin } = store.getCommandeCutoffConfig()
+    const [hD, mD] = heureDebut.split(":").map(Number)
+    const [hF, mF] = heureFin.split(":").map(Number)
+    const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3])
+    return {
+      start: new Date(y, mo - 1, da - 1, hD, mD, 0, 0),
+      end:   new Date(y, mo - 1, da, hF, mF, 0, 0),
+    }
+  },
+
   // --- Config Marché (planification achat / besoin / camions / heure arrivée) ---
   // capaciteHondaKg     : capacité d'un camion "Honda" en kg
   // heureOuvertureMarche: heure d'ouverture du marché "HH:MM"

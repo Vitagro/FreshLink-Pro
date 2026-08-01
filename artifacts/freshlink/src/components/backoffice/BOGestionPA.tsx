@@ -3,27 +3,16 @@
 import { useState, useEffect, useMemo, useRef } from "react"
 import { store, type User, type Article, paDeviationConfirmMessage } from "@/lib/store"
 
-// ── Cycle "commande" (confirmé par le client) ────────────────────────────────
-// La collecte des commandes pour un jour J court de J-1 14h00 à J 04h00 (prépa
-// nocturne du marché de gros). Avant 14h, "aujourd'hui" désigne J ; à partir
-// de 14h, la collecte de J+1 a déjà commencé, donc "aujourd'hui" bascule sur
-// J+1. (Le cycle "achat" lui-même reste un jour calendaire classique 00:00-23:59
-// — non modifié ici.)
-function commandeOperationalDate(): string {
-  const d = new Date()
-  if (d.getHours() >= 14) d.setDate(d.getDate() + 1)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
-}
-// Bornes precises [debut, fin) pour une date operationnelle "commande" donnee.
-function commandeDayBounds(dateStr: string): { start: Date; end: Date } | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
-  if (!m) return null
-  const y = Number(m[1]), mo = Number(m[2]), da = Number(m[3])
-  return {
-    start: new Date(y, mo - 1, da - 1, 14, 0, 0, 0),
-    end:   new Date(y, mo - 1, da, 4, 0, 0, 0),
-  }
-}
+// ── Cycle "commande" (confirmé par le client, même règle que BOCommandesUnifiees) ──
+// La collecte des commandes pour un jour J court de [J-1 heureDebut] à [J
+// heureFin] — cf. store.getCommandeCutoffConfig (par défaut 14h00 → 04h00,
+// modifiable sans redéploiement depuis le BO ou l'écran mobile Achat). Avant
+// heureDebut, "aujourd'hui" désigne J ; à partir de heureDebut, la collecte
+// de J+1 a déjà commencé, donc "aujourd'hui" bascule sur J+1. (Le cycle
+// "achat" lui-même reste un jour calendaire classique 00:00-23:59 — non
+// modifié ici.)
+const commandeOperationalDate = store.commandeOperationalDate
+const commandeDayBounds = store.commandeCycleBounds
 
 export default function BOGestionPA({ user }: { user: User }) {
   const [articles, setArticles] = useState<Article[]>([])
@@ -37,6 +26,7 @@ export default function BOGestionPA({ user }: { user: User }) {
   const fileRef = useRef<HTMLInputElement>(null)
 
   const canEdit = ["super_super_admin", "super_admin", "admin", "resp_achat", "ctrl_achat"].includes(user.role)
+  const cutoffCfg = store.getCommandeCutoffConfig()
 
   useEffect(() => {
     setArticles(store.getArticles())
@@ -164,7 +154,7 @@ export default function BOGestionPA({ user }: { user: User }) {
             <div className="flex items-end gap-2">
               <label className="flex flex-col gap-1"><span className="text-[10px] text-muted-foreground">Du</span><input type="date" value={from} onChange={e => setFrom(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm" /></label>
               <label className="flex flex-col gap-1"><span className="text-[10px] text-muted-foreground">Au</span><input type="date" value={to} onChange={e => setTo(e.target.value)} className="px-2 py-1.5 rounded-lg border border-border bg-background text-foreground text-sm" /></label>
-              <span className="text-xs text-muted-foreground pb-2" title="Fenetre commande : veille 14h00 -> jour J 04h00">{orderedIds.size} commandé(s) · cycle J-1 14h→J 4h</span>
+              <span className="text-xs text-muted-foreground pb-2" title={`Fenetre commande : veille ${cutoffCfg.heureDebut} -> jour J ${cutoffCfg.heureFin}`}>{orderedIds.size} commandé(s) · cycle J-1 {cutoffCfg.heureDebut}→J {cutoffCfg.heureFin}</span>
             </div>
           )}
           <button onClick={doExport} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold">📤 Exporter Excel</button>
