@@ -70,6 +70,14 @@ export default function MobileControlRetour({ user }: Props) {
     return out
   })[0]
   const allArticles = useState(() => store.getArticles().map(a => a.nom).filter(Boolean).sort((a, b) => a.localeCompare(b, "fr")))[0]
+  // Nom arabe — RetourItem ne stocke qu'un nom libre (pas d'articleId), on
+  // retrouve le nomAr par correspondance de nom dans le catalogue.
+  const nomArByNom = useState(() => {
+    const m: Record<string, string> = {}
+    store.getArticles().forEach(a => { if (a.nomAr) m[a.nom.toLowerCase().trim()] = a.nomAr })
+    return m
+  })[0]
+  const nomArOfName = (nom: string) => nomArByNom[String(nom ?? "").toLowerCase().trim()] ?? ""
   const articleOptions = (() => {
     const k = (form.clientNom ?? "").toLowerCase().trim()
     const forClient = k ? articlesParClient[k] : undefined
@@ -177,7 +185,10 @@ export default function MobileControlRetour({ user }: Props) {
               </svg>
               Retour
             </button>
-            <p className="font-bold text-sm text-foreground">Analyse IA — {selected.articleNom}</p>
+            <p className="font-bold text-sm text-foreground">
+              Analyse IA — {selected.articleNom}
+              {nomArOfName(selected.articleNom) && <span className="ml-1 font-arabic" dir="rtl" lang="ar">({nomArOfName(selected.articleNom)})</span>}
+            </p>
           </div>
           <CameraIARetour
             articleNom={selected.articleNom}
@@ -326,7 +337,10 @@ export default function MobileControlRetour({ user }: Props) {
       {showValidate && selected && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm bg-card rounded-2xl border border-border p-5 flex flex-col gap-4">
-            <p className="font-bold text-foreground">Validation — {selected.articleNom}</p>
+            <p className="font-bold text-foreground">
+              Validation — {selected.articleNom}
+              {nomArOfName(selected.articleNom) && <span className="ml-1 font-arabic" dir="rtl" lang="ar">({nomArOfName(selected.articleNom)})</span>}
+            </p>
             <div className="text-xs text-muted-foreground space-y-1">
               <p>Client : <strong>{selected.clientNom}</strong></p>
               <p>Quantite : <strong>{selected.qteRetour} {selected.unite}</strong></p>
@@ -365,11 +379,13 @@ function RetourCard({ r, onAnalyseIA, onValidate, statusBadge, statusLabel, canV
     canValidate: boolean
     validLabel: string
   }) {
+  const nomAr = store.getArticles().find(a => a.nom.toLowerCase().trim() === String(r.articleNom ?? "").toLowerCase().trim())?.nomAr
   return (
     <div className="bg-card border border-border rounded-2xl p-4 flex flex-col gap-3 mb-2">
       <div className="flex items-start justify-between gap-2">
         <div>
           <p className="font-bold text-sm text-foreground">{r.articleNom}</p>
+          {nomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomAr}</p>}
           <p className="text-xs text-muted-foreground">{r.clientNom} — {r.qteRetour} {r.unite}</p>
           <p className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleDateString("fr-FR")} · {r.createdBy}</p>
         </div>
