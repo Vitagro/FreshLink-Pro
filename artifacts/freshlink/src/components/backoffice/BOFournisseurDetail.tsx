@@ -92,6 +92,8 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
   const [data, setData] = useState<SupplierData | null>(null)
   const [paHisto, setPaHisto] = useState<PaHistoRow[]>([])
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  // Nom arabe — PO/reception/historique PA ne le stockent pas, on le retrouve via l'id.
+  const nomArOf = (articleId: string) => store.getArticles().find(a => a.id === articleId)?.nomAr ?? ""
 
   // Payment modal
   const [payOpen, setPayOpen] = useState(false)
@@ -417,7 +419,10 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
                         return (
                           <tr key={po.id} className="border-b border-border/60">
                             <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">{po.date}</td>
-                            <td className="py-2 pr-3 font-medium text-foreground">{po.articleNom}</td>
+                            <td className="py-2 pr-3 font-medium text-foreground">
+                              {po.articleNom}
+                              {nomArOf(po.articleId) && <span className="block text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
+                            </td>
                             <td className="py-2 pr-3 text-right">{po.quantite} {po.articleUnite}</td>
                             <td className="py-2 pr-3 text-right">{dh(po.prixUnitaire)}</td>
                             <td className="py-2 pr-3 text-right font-semibold">{dh(po.total)}</td>
@@ -460,7 +465,10 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
                         const ecart = (Number(l.quantiteRecue) || 0) - (Number(l.quantiteFacturee ?? l.quantiteCommandee) || 0)
                         return (
                           <div key={i} className="flex items-center justify-between gap-3 text-xs py-1 border-b border-border/40 last:border-0">
-                            <span className="font-medium text-foreground truncate">{l.articleNom}</span>
+                            <span className="font-medium text-foreground truncate">
+                              {l.articleNom}
+                              {nomArOf(l.articleId) && <span className="ml-1 text-muted-foreground font-arabic" dir="rtl" lang="ar">({nomArOf(l.articleId)})</span>}
+                            </span>
                             <div className="flex items-center gap-3 shrink-0 text-muted-foreground">
                               <span>Cmd: <strong className="text-foreground">{l.quantiteCommandee}</strong></span>
                               <span>Reçu: <strong className="text-foreground">{l.quantiteRecue}</strong></span>
@@ -545,7 +553,10 @@ export default function BOFournisseurDetail({ fournisseur, user, canEdit, onClos
                       {paHisto.map((h, i) => (
                         <tr key={`${h.articleId}-${i}`} className="border-b border-border/60">
                           <td className="py-2 pr-3 text-muted-foreground whitespace-nowrap">{h.date || "—"}</td>
-                          <td className="py-2 pr-3 font-medium text-foreground">{h.articleNom}</td>
+                          <td className="py-2 pr-3 font-medium text-foreground">
+                            {h.articleNom}
+                            {nomArOf(h.articleId) && <span className="block text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(h.articleId)}</span>}
+                          </td>
                           <td className="py-2 pr-3 text-right font-semibold">{dh(h.prixAchat)}{h.unite ? `/${h.unite}` : ""}</td>
                           <td className="py-2 text-right text-muted-foreground">{h.quantite != null ? `${h.quantite}${h.unite ? ` ${h.unite}` : ""}` : "—"}</td>
                         </tr>

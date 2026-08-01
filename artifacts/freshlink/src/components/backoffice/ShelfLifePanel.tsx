@@ -205,7 +205,12 @@ export default function ShelfLifePanel() {
               {/* Info */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <p className="font-bold text-sm text-foreground">{lot.articleNom}</p>
+                  <p className="font-bold text-sm text-foreground">
+                    {lot.articleNom}
+                    {articles.find(a => a.id === lot.articleId)?.nomAr && (
+                      <span className="ml-1.5 text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">({articles.find(a => a.id === lot.articleId)?.nomAr})</span>
+                    )}
+                  </p>
                   <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${lot.status.color}`}>
                     {lot.status.label}
                   </span>

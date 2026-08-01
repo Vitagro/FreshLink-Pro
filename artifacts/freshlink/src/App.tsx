@@ -95,8 +95,12 @@ function MainApp() {
       // effet chez un acheteur déjà connecté tant qu'il ne se reconnecte pas.
       hydrateConfigs().catch(() => {})
     }).catch(() => {})
-    // Enregistrement push natif (no-op hors app mobile Capacitor, cf. notify.ts).
-    import("@/lib/notify").then(({ registerPush }) => { void registerPush(user.id) }).catch(() => {})
+    // Enregistrement push natif (no-op hors app mobile Capacitor, cf. notify.ts)
+    // + Web Push (PWA installée — le canal réellement utilisé aujourd'hui).
+    import("@/lib/notify").then(({ registerPush, registerWebPush }) => {
+      void registerPush(user.id)
+      void registerWebPush(user.id)
+    }).catch(() => {})
   }, [user])
 
   const handleLogin = (loggedUser: User, forceView?: "mobile" | "backoffice") => {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { store, type Article, type Fournisseur } from "@/lib/store"
+import { store, type Article, type Fournisseur, computeCaissesAuto } from "@/lib/store"
 import {
   sendEmail,
   sendEmailMulti,
@@ -37,6 +37,9 @@ interface BesoinRow extends BesoinLigneEmail {
   articleId: string
   fournisseurId: string
   selected: boolean
+  um?: string             // libelle UM (ex: "Caisse") si l'article en a une
+  colisageParUM?: number  // kg par UM — sert au calcul du nombre de caisses
+  articleNomAr?: string
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -141,6 +144,9 @@ function computeBesoinRows(): BesoinRow[] {
         besoinNet,
         unite:          art.unite,
         selected:       besoinNet > 0,
+        um:             art.um,
+        colisageParUM:  art.colisageParUM,
+        articleNomAr:   art.nomAr,
       }
     })
     .filter(r => r.commandeTotal > 0)
@@ -574,7 +580,7 @@ export default function BORecap() {
                         onChange={e => setRows(prev => prev.map(r => ({ ...r, selected: e.target.checked })))}
                         className="w-4 h-4 rounded" />
                     </th>
-                    {["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net"].map(h => (
+                    {["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net", "Caisses"].map(h => (
                       <th key={h} className="text-left px-3 py-3 text-muted-foreground font-medium text-xs uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
@@ -588,7 +594,10 @@ export default function BORecap() {
                           onChange={() => setRows(prev => prev.map(x => x.articleId === r.articleId ? { ...x, selected: !x.selected } : x))}
                           className="w-4 h-4 rounded" />
                       </td>
-                      <td className="px-3 py-3 font-semibold text-foreground">{r.articleNom}</td>
+                      <td className="px-3 py-3 font-semibold text-foreground">
+                        {r.articleNom}
+                        {r.articleNomAr && <span className="block text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">{r.articleNomAr}</span>}
+                      </td>
                       <td className="px-3 py-3 text-muted-foreground text-xs">{r.fournisseurNom}</td>
                       <td className="px-3 py-3 text-center font-medium">{r.commandeTotal} {r.unite}</td>
                       <td className={`px-3 py-3 text-center font-semibold ${r.stockActuel === 0 ? "text-red-600" : r.stockActuel < r.commandeTotal ? "text-amber-600" : "text-green-600"}`}>
@@ -603,6 +612,17 @@ export default function BORecap() {
                             </span>
                           : <span className="text-green-600 text-xs font-semibold">Stock OK</span>
                         }
+                      </td>
+                      <td className="px-3 py-3 text-center text-xs">
+                        {r.besoinNet > 0 ? (() => {
+                          const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM)
+                          if (c.gros === 0 && c.demi === 0) return <span className="text-muted-foreground">—</span>
+                          return (
+                            <span className="font-semibold text-blue-700">
+                              {c.gros > 0 ? `${c.gros} gros` : ""}{c.gros > 0 && c.demi > 0 ? " + " : ""}{c.demi > 0 ? `${c.demi} demi` : ""}
+                            </span>
+                          )
+                        })() : <span className="text-muted-foreground">—</span>}
                       </td>
                     </tr>
                   ))}

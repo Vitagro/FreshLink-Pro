@@ -20,6 +20,8 @@ export default function BOReception({ user }: { user: { id: string; name: string
   const [receptions, setReceptions] = useState<Reception[]>([])
   const [articles, setArticles] = useState<Article[]>([])
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
+  // Nom arabe — les lignes reception/PO ne le stockent pas, on le retrouve via l'id.
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
 
   // Motif options for reliquat / ecart
   const MOTIFS_RELIQUAT = [
@@ -423,7 +425,10 @@ export default function BOReception({ user }: { user: { id: string; name: string
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${po.statut === "envoyé" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>{po.statut}</span>
-                  <p className="font-bold text-foreground">{po.articleNom}</p>
+                  <p className="font-bold text-foreground">
+                    {po.articleNom}
+                    {nomArOf(po.articleId) && <span className="ml-1.5 font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">({nomArOf(po.articleId)})</span>}
+                  </p>
                   <span className="text-xs text-muted-foreground">•</span>
                   <p className="text-sm text-muted-foreground">{po.fournisseurNom}</p>
                 </div>
@@ -660,7 +665,10 @@ export default function BOReception({ user }: { user: { id: string; name: string
                 return (
                   <div key={l.articleId} className="p-3 rounded-xl border border-border bg-muted/20">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="font-semibold text-foreground text-sm">{l.articleNom}</p>
+                      <div>
+                        <p className="font-semibold text-foreground text-sm">{l.articleNom}</p>
+                        {nomArOf(l.articleId) && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(l.articleId)}</p>}
+                      </div>
                       <span className={`w-2 h-2 rounded-full ${conforme ? "bg-green-500" : "bg-yellow-500"}`} />
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground mb-2">
@@ -776,7 +784,10 @@ export default function BOReception({ user }: { user: { id: string; name: string
           <div className="bg-card rounded-2xl p-6 w-full max-w-md flex flex-col gap-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-foreground">Reception PO — {selectedPO.articleNom}</h3>
+                <h3 className="font-bold text-foreground">
+                  Reception PO — {selectedPO.articleNom}
+                  {nomArOf(selectedPO.articleId) && <span className="ml-1.5 font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">({nomArOf(selectedPO.articleId)})</span>}
+                </h3>
                 <p className="text-xs text-muted-foreground">{selectedPO.fournisseurNom} • {selectedPO.date}</p>
               </div>
               <button onClick={() => setSelectedPO(null)} className="p-2 hover:bg-muted rounded-lg">

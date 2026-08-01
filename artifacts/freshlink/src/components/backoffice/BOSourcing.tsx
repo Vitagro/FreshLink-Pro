@@ -62,6 +62,9 @@ const EMPTY_FORM = (): Omit<SourcingEntry, "id" | "createdAt" | "updatedAt" | "u
 export default function BOSourcing({ user }: { user?: { id: string; name: string } }) {
   const [entries, setEntries]     = useState<SourcingEntry[]>([])
   const [articles, setArticles]   = useState<Article[]>([])
+  // Nom arabe — uniquement pour les entrees liees a un article du catalogue
+  // (produits hors catalogue, en attente de validation, n'en ont pas).
+  const nomArOf = (articleId?: string) => (articleId ? articles.find(a => a.id === articleId)?.nomAr ?? "" : "")
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [view, setView]           = useState<"list" | "form" | "detail">("list")
   const [editId, setEditId]       = useState<string | null>(null)
@@ -232,6 +235,7 @@ export default function BOSourcing({ user }: { user?: { id: string; name: string
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h2 className="text-xl font-black text-foreground">{selected.articleNom}</h2>
+              {nomArOf(selected.articleId) && <p className="text-sm text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(selected.articleId)}</p>}
               <p className="text-sm text-muted-foreground">{selected.categorie}</p>
             </div>
             <div className="flex gap-2 flex-wrap">
@@ -734,6 +738,7 @@ export default function BOSourcing({ user }: { user?: { id: string; name: string
               <div className="p-4 flex flex-col gap-2">
                 <div>
                   <h3 className="font-bold text-foreground text-sm leading-tight">{entry.articleNom}</h3>
+                  {nomArOf(entry.articleId) && <p className="text-[11px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(entry.articleId)}</p>}
                   <p className="text-[11px] text-muted-foreground">{entry.categorie}</p>
                 </div>
                 <div className="flex items-center justify-between">

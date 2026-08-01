@@ -262,6 +262,7 @@ export default function BOFamilles({ user: _user }: Props) {
                       <input type="checkbox" checked={toAdd.has(a.id)} onChange={() => toggleAdd(a.id)} className="w-4 h-4 accent-primary shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">{a.nom}</p>
+                        {a.nomAr && <p className="text-[10px] text-muted-foreground" dir="rtl" lang="ar">{a.nomAr}</p>}
                         <p className="text-[10px] text-muted-foreground truncate">{a.famille || "— sans famille —"}</p>
                       </div>
                     </label>

@@ -51,6 +51,9 @@ interface ArticleSummary {
 export default function BOPricing({ user }: { user?: { id: string; name: string } }) {
   const [entries, setEntries]       = useState<PriceEntry[]>([])
   const [articles, setArticles]     = useState<Article[]>([])
+  // Nom arabe — les relevés stockent un nom libre (pas toujours lié à un
+  // articleId du catalogue), on tente un match par nom.
+  const nomArOfName = (nom: string) => articles.find(a => a.nom.toLowerCase() === nom.trim().toLowerCase())?.nomAr ?? ""
   const [view, setView]             = useState<"list" | "by_article" | "form">("by_article")
   const [editId, setEditId]         = useState<string | null>(null)
   const [filterType, setFilterType] = useState<"all" | PriceEntryType>("all")
@@ -434,6 +437,7 @@ export default function BOPricing({ user }: { user?: { id: string; name: string 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-foreground">{s.articleNom}</span>
+                      {nomArOfName(s.articleNom) && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOfName(s.articleNom)}</span>}
                       <span className="text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full">{s.categorie}</span>
                     </div>
                     <div className="flex items-center gap-4 mt-1 flex-wrap">
@@ -611,6 +615,7 @@ export default function BOPricing({ user }: { user?: { id: string; name: string 
                   <td className="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{new Date(e.date).toLocaleDateString("fr-MA")}</td>
                   <td className="px-4 py-2.5">
                     <p className="font-semibold text-foreground whitespace-nowrap">{e.articleNom}</p>
+                    {nomArOfName(e.articleNom) && <p className="text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</p>}
                     <p className="text-[10px] text-muted-foreground">{e.categorie}</p>
                   </td>
                   <td className="px-4 py-2.5">

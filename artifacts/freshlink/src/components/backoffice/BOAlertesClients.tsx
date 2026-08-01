@@ -26,6 +26,7 @@ interface ClientArticleAlert {
   prevendeurNom: string
   articleId: string
   articleNom: string
+  articleNomAr?: string
   famille: string
   joursAbsence: number
   nbCommandes: number
@@ -127,6 +128,7 @@ export default function BOAlertesClients({ user }: Props) {
         prevendeurNom: prevendeur?.name ?? info.commercialNom ?? "—",
         articleId: info.articleId,
         articleNom: art.nom,
+        articleNomAr: art.nomAr,
         famille: art.famille ?? "",
         joursAbsence,
         nbCommandes: info.count,
@@ -283,6 +285,7 @@ export default function BOAlertesClients({ user }: Props) {
                       <td className="px-3 py-2.5 text-slate-500">{a.prevendeurNom}</td>
                       <td className="px-3 py-2.5">
                         <div className="font-medium text-slate-800">{a.articleNom}</div>
+                        {a.articleNomAr && <div className="text-xs text-slate-400 font-arabic" dir="rtl" lang="ar">{a.articleNomAr}</div>}
                         {a.famille && <div className="text-[11px] text-slate-400">{a.famille}</div>}
                       </td>
                       <td className="px-3 py-2.5 text-center">

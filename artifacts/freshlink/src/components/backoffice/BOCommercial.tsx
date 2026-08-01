@@ -510,7 +510,14 @@ export default function BOCommercial({ user }: Props) {
               {selected.lignes.map((l, idx) => (
                 <div key={idx} className="py-2 border-b border-border/50 last:border-0">
                   <div className="flex items-center justify-between text-sm font-sans">
-                    <span className="font-medium text-foreground">{l.articleNom}</span>
+                    <span className="font-medium text-foreground">
+                      {l.articleNom}
+                      {(l.articleNomAr || store.getArticles().find(a => a.id === l.articleId)?.nomAr) && (
+                        <span className="block text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">
+                          {l.articleNomAr || store.getArticles().find(a => a.id === l.articleId)?.nomAr}
+                        </span>
+                      )}
+                    </span>
                     <span className="font-bold text-primary">{(l.quantite * l.prixVente).toLocaleString("fr-MA")} DH</span>
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground font-sans flex-wrap">
