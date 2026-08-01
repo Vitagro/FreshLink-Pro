@@ -1,4 +1,4 @@
-const CACHE_NAME = 'freshlink-v4'
+const CACHE_NAME = 'freshlink-v5'
 const OFFLINE_URL = '/'
 
 // Assets to precache on install
@@ -92,6 +92,26 @@ self.addEventListener('message', event => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting()
   }
+})
+
+// ── Web Push (VAPID) → notification système même app fermée/réduite ───────────
+// Réceptionne le push envoyé par l'api-server (lib/webPush.ts) et l'affiche via
+// registration.showNotification — seul chemin qui fonctionne app fermée (une
+// notification créée depuis une page ouverte, comme notify.ts, ne peut pas
+// s'afficher si aucune page n'est chargée pour l'exécuter).
+self.addEventListener('push', event => {
+  let data = {}
+  try { data = event.data ? event.data.json() : {} } catch { data = {} }
+  const title = data.title || 'FreshLink Pro'
+  const options = {
+    body: data.body,
+    tag: data.tag,
+    renotify: !!data.tag,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: { url: data.url || '/' },
+  }
+  event.waitUntil(self.registration.showNotification(title, options))
 })
 
 // ── Notification click → ouvre / focus l'app (cut-offs Vita Fresh) ─────────────

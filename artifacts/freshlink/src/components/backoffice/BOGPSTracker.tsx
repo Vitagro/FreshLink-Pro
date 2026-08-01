@@ -145,6 +145,13 @@ export default function BOGPSTracker({ user }: Props) {
   })
   const videoRef = useRef<HTMLVideoElement>(null)
   const watchIdRef = useRef<number | null>(null)
+  // Verrou d'écran (Wake Lock) — empêche le téléphone de s'éteindre pendant le
+  // suivi, seul moyen web de garder le GPS actif de façon fiable quand l'app
+  // reste ouverte mais que l'utilisateur n'y touche pas. Ne garantit RIEN une
+  // fois l'app réellement réduite/l'écran éteint — limitation navigateur, pas
+  // corrigible côté app (surtout marquée sur iOS Safari).
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null)
+  const wantTrackingRef = useRef(false)
   const isSuperAdmin = user.role === "super_admin" || user.role === "admin" || user.role === "super_super_admin"
   const canUseCamera = user.role === "super_admin" || user.role === "super_super_admin"
 
@@ -188,17 +195,38 @@ export default function BOGPSTracker({ user }: Props) {
     return () => clearInterval(interval)
   }, [refreshTracked])
 
+  // Wake Lock — maintient l'écran allumé pendant le suivi (Chrome/Edge Android
+  // + Safari iOS 16.4+). Best-effort : ignore silencieusement si l'API est
+  // absente ou si le navigateur refuse (onglet pas visible, batterie faible…).
+  const acquireWakeLock = useCallback(async () => {
+    try {
+      const nav = navigator as Navigator & { wakeLock?: { request: (type: "screen") => Promise<WakeLockSentinel> } }
+      if (!nav.wakeLock) return
+      wakeLockRef.current = await nav.wakeLock.request("screen")
+      wakeLockRef.current.addEventListener("release", () => { wakeLockRef.current = null })
+    } catch { /* refusé (onglet caché, économie d'énergie…) — pas bloquant */ }
+  }, [])
+
+  const releaseWakeLock = useCallback(() => {
+    try { void wakeLockRef.current?.release() } catch { /* noop */ }
+    wakeLockRef.current = null
+  }, [])
+
   // ── Track current user's position ──
   const startTracking = useCallback(() => {
     if (!navigator.geolocation) {
       setGpsError("GPS non disponible sur cet appareil")
       return
     }
+    wantTrackingRef.current = true
     setGpsLoading(true)
     setGpsError(null)
+    void acquireWakeLock()
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsLoading(false)
+        setGpsError(null)
         setMyPosition(pos)
         // Save this user's position
         savePosition(user.id, {
@@ -214,21 +242,46 @@ export default function BOGPSTracker({ user }: Props) {
       },
       (err) => {
         setGpsLoading(false)
-        setGpsError(err.message || "Erreur GPS")
+        // Erreur transitoire (timeout, position indisponible un instant) : le
+        // suivi reste "actif" côté utilisateur et on retente au lieu de tout
+        // arrêter silencieusement — un simple timeout GPS ne doit pas couper
+        // le tracking en pleine tournée. Seul un refus explicite de permission
+        // (code 1) arrête vraiment le suivi, car retenter ne sert à rien.
+        setGpsError(err.message || "Erreur GPS — nouvelle tentative…")
+        if (err.code === err.PERMISSION_DENIED) { wantTrackingRef.current = false; releaseWakeLock(); return }
+        if (wantTrackingRef.current) setTimeout(() => { if (wantTrackingRef.current) startTracking() }, 5000)
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
     )
-  }, [user.id, myStatus, refreshTracked])
+  }, [user.id, myStatus, refreshTracked, acquireWakeLock, releaseWakeLock])
 
   const stopTracking = useCallback(() => {
+    wantTrackingRef.current = false
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current)
       watchIdRef.current = null
     }
+    releaseWakeLock()
     setMyPosition(null)
-  }, [])
+  }, [releaseWakeLock])
 
-  useEffect(() => { return () => { if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current) } }, [])
+  // Reprise : le Wake Lock est automatiquement relâché par le navigateur quand
+  // l'onglet passe en arrière-plan (spec) — on le ré-acquiert dès que l'app
+  // redevient visible si le suivi est toujours voulu, pour limiter au maximum
+  // la fenêtre où l'écran peut s'éteindre pendant une tournée.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && wantTrackingRef.current) void acquireWakeLock()
+    }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+  }, [acquireWakeLock])
+
+  useEffect(() => { return () => {
+    wantTrackingRef.current = false
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
+    try { void wakeLockRef.current?.release() } catch { /* noop */ }
+  } }, [])
 
   // ── Camera ──────────────────────────────────────────────────
   const openCamera = async () => {
@@ -647,6 +700,11 @@ export default function BOGPSTracker({ user }: Props) {
             </svg>
             Arreter GPS
           </button>
+        )}
+        {myPosition && (
+          <span className="text-[10px] text-gray-500 max-w-xs">
+            Reste actif tant que l&apos;app est ouverte (écran verrouillé/appli fermée = coupé par le téléphone, limitation système — surtout iPhone).
+          </span>
         )}
 
         {/* Camera button — super_admin only */}

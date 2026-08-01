@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { sendPushToUser } from "../../lib/push.js";
+import { sendWebPushToUser } from "../../lib/webPush.js";
 
 const router = Router();
 
@@ -76,13 +77,16 @@ router.post("/", async (req: Request, res: Response) => {
     if (!r.ok) throw new Error(await r.text());
     res.json({ ok: true, id });
 
-    // Best-effort push — never blocks or fails the response above.
+    // Best-effort push — never blocks or fails the response above. Envoie sur
+    // les deux canaux : FCM natif (Capacitor, si l'app tourne en app compilée)
+    // et Web Push (PWA installée, le cas réel de la majorité des utilisateurs
+    // aujourd'hui) — chacun no-op silencieusement si l'utilisateur n'a pas
+    // d'abonnement sur ce canal.
     if (row.destinataire_id) {
-      void sendPushToUser(String(row.destinataire_id), {
-        title: row.titre,
-        body: row.corps ? String(row.corps) : undefined,
-        tag: id,
-      });
+      const dest = String(row.destinataire_id);
+      const corps = row.corps ? String(row.corps) : undefined;
+      void sendPushToUser(dest, { title: row.titre, body: corps, tag: id });
+      void sendWebPushToUser(dest, { title: row.titre, body: corps, tag: id });
     }
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });

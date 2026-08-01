@@ -81,6 +81,61 @@ export function isHidden(): boolean {
   return typeof document !== "undefined" && document.hidden
 }
 
+// ── Web Push (VAPID) — PWA installée, Android Chrome et iOS 16.4+ Safari ──────
+// Contrairement à registerPush() (FCM, app native Capacitor compilée — cas non
+// utilisé aujourd'hui, cette app est distribuée comme PWA), c'est CE chemin
+// qui permet de recevoir une notification app fermée/réduite pour la quasi
+// totalité des utilisateurs réels. Sans effet si le navigateur ne supporte pas
+// Service Worker + Push (repli silencieux sur les notifications foreground de
+// notify()/CutoffNotifier existantes).
+function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4)
+  const base64Safe = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/")
+  const raw = atob(base64Safe)
+  const out = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i)
+  return out
+}
+
+let webPushAttempted = false
+
+export async function registerWebPush(userId: string): Promise<void> {
+  if (typeof window === "undefined" || webPushAttempted || !userId) return
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return
+  webPushAttempted = true
+
+  try {
+    if (Notification.permission === "default") {
+      const perm = await Notification.requestPermission()
+      if (perm !== "granted") { webPushAttempted = false; return }
+    }
+    if (Notification.permission !== "granted") return
+
+    const reg = await navigator.serviceWorker.ready
+    let sub = await reg.pushManager.getSubscription()
+    if (!sub) {
+      const keyRes = await fetch("/api/ext/push/vapid-public-key")
+      if (!keyRes.ok) return // Web Push pas configuré côté serveur (VAPID absent) — no-op
+      const { publicKey } = await keyRes.json() as { publicKey: string }
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey),
+      })
+    }
+
+    const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } }
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) return
+
+    await fetch("/api/ext/push/web-subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, subscription: json }),
+    }).catch(() => { /* best-effort — retry next login */ })
+  } catch {
+    webPushAttempted = false
+  }
+}
+
 // ── Push natif (app mobile Capacitor uniquement) ──────────────────────────────
 // Enregistre l'appareil pour les notifications push FCM et envoie le token au
 // serveur pour cet utilisateur. Sans effet dans un navigateur classique (web).
