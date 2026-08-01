@@ -34,7 +34,7 @@ const SOURCES: SourceDef[] = [
   },
   {
     table: "fl_commandes_web",
-    tab: "commandes_web",
+    tab: "commandes_unifiees",
     isPending: p => p.statut === "nouveau" || !p.statut,
     label: p => `Nouvelle commande web${p.nom_client ? " — " + String(p.nom_client) : ""}`,
     icon: "🛒",

@@ -74,7 +74,6 @@ const L = (label: string) => () => <div className="p-8 text-center text-muted-fo
 const BODashboard            = React.lazy(() => import("./BODashboard"))
 const BOAchat                = React.lazy(() => import("./BOAchat"))
 const BOReception            = React.lazy(() => import("./BOReception"))
-const BOCommercial           = React.lazy(() => import("./BOCommercial"))
 const BOStock                = React.lazy(() => import("./BOStock"))
 const BODispatch             = React.lazy(() => import("./BODispatch"))
 const BOFournisseurs         = React.lazy(() => import("./BOFournisseurs"))
@@ -115,7 +114,6 @@ const BORapportMarche        = React.lazy(() => import("./BORapportMarche"))
 const AnalyseReceptionPanel  = React.lazy(() => import("./AnalyseReceptionPanel"))
 const ShelfLifePanel         = React.lazy(() => import("./ShelfLifePanel"))
 const ForecastPanel          = React.lazy(() => import("./ForecastPanel"))
-const ASHELMarketPanel       = React.lazy(() => import("./ASHELMarketPanel"))
 const CameraPermissionsPanel = React.lazy(() => import("./CameraPermissionsPanel"))
 const CaissesVidesPanel      = React.lazy(() => import("./CaissesVidesPanel"))
 const DeployGuidePanel       = React.lazy(() => import("./DeployGuidePanel"))
@@ -164,7 +162,7 @@ const BOPaHistoriqueV3       = React.lazy(() => import("./BOPaHistorique"))
 
 export type Tab =
   | "dashboard" | "achat" | "reception" | "po"
-  | "commercial" | "affectation" | "zones_secteurs" | "dispatch"
+  | "affectation" | "zones_secteurs" | "dispatch"
   | "stock" | "retour" | "cash"
   | "recap" | "rapport_livraison" | "preparation"
   | "fournisseurs" | "articles" | "familles"
@@ -174,9 +172,8 @@ export type Tab =
   | "prospection" | "credit_fournisseur" | "agents_ia"
   | "gps_tracker"
   | "feedback" | "trip_charges" | "analyse_achat" | "temps_achat" | "analyse_reception" | "caisse_acheteur" | "analyse_credit" | "roles_permissions" | "rapport_marche" | "shop_analytics" | "promo_codes"
-  | "caisses_vides" | "shelf_life" | "forecast" | "ashel_market"
+  | "caisses_vides" | "shelf_life" | "forecast"
   | "camera_perms" | "cutoffs" | "deploy_guide"
-  | "azmi_agent" | "hicham_agent" | "ourai_agent"
   | "depots"
   | "rh_productivite" | "rh_comptabilite"
   | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
@@ -187,11 +184,9 @@ export type Tab =
   | "documents"
   | "category_pricing"
   | "echelons_client"
-  | "firebase_archive"
   | "liens_externes"
   | "device_access"
   | "mobile_gestion"
-  | "commandes_web"
   | "commandes_unifiees"
   | "alertes_clients"
   | "moteur_commercial" | "gifts_v3" | "loterie" | "pa_historique" | "gestion_pa" | "cutoffs_v3" | "feedbacks_v3"
@@ -222,7 +217,7 @@ interface NavGroup {
 const NAV_I18N_KEYS: Partial<Record<string, keyof typeof T>> = {
   recap: "nav.recap", finance: "nav.finance", rapport_livraison: "nav.rapport_livr",
   achat: "nav.achat", po: "nav.po", fournisseurs: "nav.fournisseurs",
-  reception: "nav.reception", commercial: "nav.commandes", affectation: "nav.affectation",
+  reception: "nav.reception", affectation: "nav.affectation",
   cash: "nav.cash", stock: "nav.stock", dispatch: "nav.dispatch",
   preparation: "nav.preparation", retour: "nav.retours", bon_livraison: "nav.bon_livr",
   articles: "nav.articles", comptes_externes: "nav.clients", whatsapp: "nav.whatsapp",
@@ -495,7 +490,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   achat:             (_u) => <BOAchat />,
   reception:         (u) => <BOReception user={u} />,
   po:                (_u) => <BOPurchaseOrders />,
-  commercial:        (u) => <BOCommercial user={u} />,
   affectation:       (u) => <BOAffectationCommerciale user={u} />,
   zones_secteurs:    (u) => <BOZonesSecteurs user={u} />,
   dispatch:          (u) => <BODispatch user={u} />,
@@ -523,13 +517,11 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   loterie:           (u)  => <BOLoterie user={u} />,
   cutoffs_v3:        (u)  => <BOCutoffsV3 currentUserId={u.id} />,
   feedbacks_v3:      (u) => <FeedbackPanel user={u} />,
-  commandes_web:       (u) => <BOCommandesUnifiees user={u} />,
   commandes_unifiees:  (u) => <BOCommandesUnifiees user={u} />,
   alertes_clients:     (u) => <BOAlertesClients user={u} />,
   category_pricing:  (u) => <BOCategoryPricing user={u} />,
   echelons_client:   (u) => <BOEchelonsClient user={u} />,
   documents:         (u) => <BODocuments user={u} />,
-  firebase_archive:  (_u) => <div className="p-8 text-center text-slate-400">Module retiré</div>,
   liens_externes:    (u)  => <BOExternalLinks user={u} />,
   demandes_comptes:  (u) => <BODemandesComptes user={u} />,
   web_integration:   (u) => <BOWebIntegration user={u} />,
@@ -540,9 +532,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   prospection:       (u) => <BOProspection user={u} />,
   credit_fournisseur:(u) => <BOCreditFournisseur user={u} />,
   agents_ia:         (u) => <AgentsIAPanel user={u} initialAgent="ashel" />,
-  azmi_agent:        (u) => <AgentsIAPanel user={u} initialAgent="azmi" />,
-  hicham_agent:      (u) => <AgentsIAPanel user={u} initialAgent="hicham" />,
-  ourai_agent:       (u) => <AgentsIAPanel user={u} initialAgent="ourai" />,
   gps_tracker:       (u) => <BOGPSTracker user={u} />,
   feedback:          (u) => <FeedbackPanel user={u} />,
   trip_charges:      (_u) => <TripChargesPanel />,
@@ -558,7 +547,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   analyse_reception:   (_u) => <AnalyseReceptionPanel />,
   shelf_life:          (_u) => <ShelfLifePanel />,
   forecast:            (_u) => <ForecastPanel />,
-  ashel_market:        (_u) => <ASHELMarketPanel />,
   camera_perms:      (u) => <CameraPermissionsPanel currentUser={u} />,
   cutoffs:           (u)  => <BOCutoffsV3 currentUserId={u.id} />,
   deploy_guide:      (_u) => <DeployGuidePanel />,
