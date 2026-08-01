@@ -264,7 +264,7 @@ export default function MobileMagasinier({ user }: Props) {
         )}
 
         {tab === "po_achat" && (
-          <POAchatTab pos={allPos} onRefresh={refresh} />
+          <POAchatTab pos={allPos} articles={articles} onRefresh={refresh} />
         )}
 
         {tab === "besoin_sku" && (
@@ -272,7 +272,7 @@ export default function MobileMagasinier({ user }: Props) {
         )}
 
         {tab === "besoin_achat" && (
-          <BesoinAchatTab bons={bonsAchat} />
+          <BesoinAchatTab bons={bonsAchat} articles={articles} />
         )}
 
         {tab === "validation_bl" && (
@@ -292,8 +292,9 @@ export default function MobileMagasinier({ user }: Props) {
 // ─────────────────────────────────────────────────────────────
 // PO Achat Tab — commandes fournisseurs passees par acheteur
 // ─────────────────────────────────────────────────────────────
-function POAchatTab({ pos, onRefresh }: { pos: PurchaseOrder[]; onRefresh: () => void }) {
+function POAchatTab({ pos, articles, onRefresh }: { pos: PurchaseOrder[]; articles: Article[]; onRefresh: () => void }) {
   const DH = (n: number) => n.toLocaleString("fr-MA", { minimumFractionDigits: 2 }) + " DH"
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
   const STATUT_COLOR: Record<string, string> = {
     ouvert:      "bg-blue-100 text-blue-700",
     "envoyé":    "bg-amber-100 text-amber-700",
@@ -324,6 +325,7 @@ function POAchatTab({ pos, onRefresh }: { pos: PurchaseOrder[]; onRefresh: () =>
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="font-bold text-sm text-foreground">{po.articleNom}</p>
+              {nomArOf(po.articleId) && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</p>}
               <p className="text-xs text-muted-foreground">{po.fournisseurNom}</p>
             </div>
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUT_COLOR[po.statut] ?? "bg-muted text-muted-foreground"}`}>
@@ -429,8 +431,9 @@ function BesoinSKUTab({ besoin }: { besoin: ReturnType<typeof store.computeBesoi
 // ─────────────────────────────────────────────────────────────
 // Besoin Achat Tab — bons d'achat transmis par acheteur
 // ─────────────────────────────────────────────────────────────
-function BesoinAchatTab({ bons }: { bons: BonAchat[] }) {
+function BesoinAchatTab({ bons, articles }: { bons: BonAchat[]; articles: Article[] }) {
   const DH = (n: number) => n.toLocaleString("fr-MA", { minimumFractionDigits: 2 }) + " DH"
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
   const STATUT_COLOR: Record<string, string> = {
     brouillon:    "bg-slate-100 text-slate-600",
     "validé":     "bg-amber-100 text-amber-700",
@@ -473,7 +476,10 @@ function BesoinAchatTab({ bons }: { bons: BonAchat[] }) {
             <div className="space-y-1">
               {bon.lignes.slice(0, 3).map((l, i) => (
                 <div key={i} className="flex items-center justify-between text-xs bg-muted rounded-lg px-2 py-1">
-                  <span className="font-medium text-foreground">{l.articleNom}</span>
+                  <span className="font-medium text-foreground">
+                    {l.articleNom}
+                    {nomArOf(l.articleId) && <span className="block text-[10px] font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(l.articleId)}</span>}
+                  </span>
                   <span className="text-muted-foreground">{l.quantite} kg @ {DH(l.prixAchat)}</span>
                 </div>
               ))}
@@ -724,6 +730,7 @@ function ReceptionTab({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-foreground truncate">{l.articleNom}</p>
+                  {art?.nomAr && <p className="text-xs text-muted-foreground font-arabic truncate" dir="rtl" lang="ar">{art.nomAr}</p>}
                   <p className="text-xs text-muted-foreground">
                     Commande: <span className="font-semibold">{QTE(l.quantite)} {unite}</span>
                   </p>
@@ -1142,6 +1149,7 @@ function ValidationBLTab({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-foreground truncate">{l.articleNom ?? art?.nom}</p>
+                {art?.nomAr && <p className="text-xs text-muted-foreground font-arabic truncate" dir="rtl" lang="ar">{art.nomAr}</p>}
                 <p className="text-xs text-muted-foreground">{QTE(l.quantite ?? 0)} {art?.unite ?? "kg"}</p>
               </div>
               <span className="text-sm font-bold text-primary shrink-0">{DH(l.total ?? 0)}</span>

@@ -8,6 +8,7 @@ interface Props { user: User }
 interface ScanEntry {
   articleId: string
   articleNom: string
+  articleNomAr?: string
   unite: string
   um?: string
   colisageParUM?: number
@@ -103,7 +104,7 @@ export default function MobileControlAchat({ user }: Props) {
         if (!map[l.articleId]) {
           const art = allArts.find(a => a.id === l.articleId)
           map[l.articleId] = {
-            articleId: l.articleId, articleNom: l.articleNom,
+            articleId: l.articleId, articleNom: l.articleNom, articleNomAr: art?.nomAr,
             unite: art?.unite ?? "kg", um: art?.um, colisageParUM: art?.colisageParUM,
             qteAttendue: 0, qteBesoin: besoinMap[l.articleId] ?? 0,
             qteScannee: "", conforme: null,
@@ -365,6 +366,7 @@ export default function MobileControlAchat({ user }: Props) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <p className="font-bold text-sm text-foreground">{e.articleNom}</p>
+                      {e.articleNomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{e.articleNomAr}</p>}
                       <p className="text-xs text-muted-foreground">
                         Achete : <strong>{e.qteAttendue} {e.unite}</strong>
                         {qteUM && <span className="ml-2 text-blue-600">= {qteUM} {e.um}</span>}

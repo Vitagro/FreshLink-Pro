@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type User, type BonPreparation, type BonLivraison, type ContenantTare } from "@/lib/store"
+import { store, type User, type BonPreparation, type BonLivraison, type ContenantTare, type Article } from "@/lib/store"
 
 interface Props { user: User }
 
@@ -139,6 +139,10 @@ export default function MobilePreparation({ user }: Props) {
   const [caisseGros, setCaisseGros] = useState<Record<string, string>>({})
   const [caisseDemi, setCaisseDemi] = useState<Record<string, string>>({})
   const [brutPoids, setBrutPoids] = useState<Record<string, string>>({})
+  const [articles, setArticles] = useState<Article[]>([])
+  // Nom arabe de l'article — LignePreparation ne le stocke pas, on le
+  // retrouve via l'id dans le catalogue.
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
 
   const contenantGros = contenants.find(c => c.nom.toLowerCase().includes("gros") || c.nom.toLowerCase().includes("plastique"))
   const contenantDemi = contenants.find(c => c.nom.toLowerCase().includes("demi") || c.nom.toLowerCase().includes("petit"))
@@ -162,6 +166,7 @@ export default function MobilePreparation({ user }: Props) {
     const relevant = all.filter(b => (b.statut !== "valide" || b.format === "numerique") && forMe(b))
     setBons(relevant)
     setContenants(store.getContenantsConfig().filter(c => c.actif))
+    setArticles(store.getArticles())
   }, [])
 
   const refresh = () => {
@@ -289,7 +294,10 @@ export default function MobilePreparation({ user }: Props) {
                   }
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-foreground">{ligne.articleNom}</p>
+                  <p className="font-bold text-foreground">
+                    {ligne.articleNom}
+                    {nomArOf(ligne.articleId) && <span className="block text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(ligne.articleId)}</span>}
+                  </p>
                   <p className="text-xs text-muted-foreground mb-3">
                     A préparer : <strong>{ligne.qteCommandee.toFixed(1)} {ligne.unite}</strong>
                   </p>

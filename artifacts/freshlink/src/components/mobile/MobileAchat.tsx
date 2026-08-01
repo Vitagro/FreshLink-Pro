@@ -50,6 +50,7 @@ function resolveQty(l: LigneForm, art?: Article): number {
 interface BesoinSKU {
   articleId: string
   articleNom: string
+  articleNomAr: string
   unite: string
   stockDispo: number
   qteCommandee: number    // sum of validated orders for today
@@ -57,6 +58,15 @@ interface BesoinSKU {
   dernierPrixAchat: number
   totalEstime: number     // besoinNet * dernierPrixAchat (0 when covered)
   lancerDA: boolean       // true when besoinNet > 0 → must create Purchase Order
+  um?: string             // libelle UM (ex: "Caisse") si l'article en a une
+  colisageParUM?: number  // quantite en unite de base par UM (ex: 15 kg/caisse)
+}
+
+// Nombre d'UM (caisses...) arrondi au superieur pour couvrir le besoin — on ne
+// peut pas commander une demi-caisse en moins que necessaire.
+function nbUM(qteBase: number, colisageParUM?: number): number | null {
+  if (!colisageParUM || colisageParUM <= 0) return null
+  return Math.ceil(Math.abs(qteBase) / colisageParUM)
 }
 
 // Exclut les articles désactivés globalement (BOArticles → actif=false) —
@@ -73,8 +83,8 @@ function onlyActiveArticles(list: Article[]): Article[] {
 //   besoinNet > 0  → LANCER DA (red, purchase required)
 //   besoinNet <= 0 → RAS (green, stock sufficient)
 // Shows ALL articles that have active orders today for complete visibility
-function calcBesoinSKU(articles: Article[]): BesoinSKU[] {
-  const besoinRaw = store.computeBesoinNet()
+function calcBesoinSKU(articles: Article[], range?: { dateDebut?: string; dateFin?: string }): BesoinSKU[] {
+  const besoinRaw = store.computeBesoinNet(range)
   return besoinRaw
     .map(b => {
       const art = articles.find(a => a.id === b.articleId)
@@ -83,7 +93,11 @@ function calcBesoinSKU(articles: Article[]): BesoinSKU[] {
       const lancerDA = besoinNet > 0
       return {
         articleId: b.articleId,
-        articleNom: b.articleNom,
+        // b.articleNom (computeBesoinNet) est deja "Nom / NomAr" concatene —
+        // on repart du nom francais seul pour afficher les 2 langues sur des
+        // lignes separees (FR en gras, AR en RTL juste en-dessous).
+        articleNom: art?.nom ?? b.articleNom,
+        articleNomAr: art?.nomAr ?? "",
         unite: b.unite,
         stockDispo: b.stockQty,
         qteCommandee: b.commandeQty,
@@ -91,6 +105,8 @@ function calcBesoinSKU(articles: Article[]): BesoinSKU[] {
         lancerDA,
         dernierPrixAchat: art?.prixAchat ?? 0,
         totalEstime: lancerDA ? besoinNet * (art?.prixAchat ?? 0) : 0,
+        um: art?.um,
+        colisageParUM: art?.colisageParUM,
       }
     })
     .sort((a, b) => b.besoinNet - a.besoinNet) // most urgent first (highest deficit)
@@ -201,6 +217,11 @@ export default function MobileAchat({ user }: Props) {
   // PA history modal
   const [historyArtId, setHistoryArtId] = useState<string | null>(null)
   const [besoinSKU, setBesoinSKU] = useState<BesoinSKU[]>([])
+  // Intervalle de dates du besoin net — par defaut aujourd'hui seul (comportement historique).
+  const [besoinDateDebut, setBesoinDateDebut] = useState(store.today())
+  const [besoinDateFin, setBesoinDateFin] = useState(store.today())
+  const [cutoffConfig, setCutoffConfig] = useState(store.getCommandeCutoffConfig())
+  const [editingCutoff, setEditingCutoff] = useState(false)
   // PO push mode: "auto" = redirect to po_push tab automatically, "click" = badge only
   const [poPushMode, setPoPushMode] = useState<"auto" | "click">("auto")
   const [pendingPOs, setPendingPOs] = useState(store.getPendingPOsForAcheteur())
@@ -1072,15 +1093,94 @@ export default function MobileAchat({ user }: Props) {
           {/* Section title */}
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-foreground">Demande d&apos;Achat du Jour</h3>
+              <h3 className="text-sm font-bold text-foreground">Demande d&apos;Achat — Besoin net</h3>
               <p className="text-xs text-muted-foreground">Commandes vs stock — articles a acheter en priorite</p>
             </div>
-            <button onClick={() => setBesoinSKU(calcBesoinSKU(articles))}
+            <button onClick={() => setBesoinSKU(calcBesoinSKU(articles, { dateDebut: besoinDateDebut, dateFin: besoinDateFin }))}
               className="p-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors">
               <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
             </button>
+          </div>
+
+          {/* Intervalle de dates — par defaut aujourd'hui seul, extensible pour
+              revoir le besoin cumule sur plusieurs jours. */}
+          <div className="bg-card rounded-xl border border-border p-3 flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Du</label>
+                <input type="date" value={besoinDateDebut}
+                  onChange={e => setBesoinDateDebut(e.target.value)}
+                  className="px-2.5 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Au</label>
+                <input type="date" value={besoinDateFin} min={besoinDateDebut}
+                  onChange={e => setBesoinDateFin(e.target.value)}
+                  className="px-2.5 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+              <button
+                onClick={() => setBesoinSKU(calcBesoinSKU(articles, { dateDebut: besoinDateDebut, dateFin: besoinDateFin }))}
+                className="self-end px-3 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:opacity-90 transition-opacity">
+                Calculer
+              </button>
+            </div>
+            {(besoinDateDebut !== store.today() || besoinDateFin !== store.today()) && (
+              <button onClick={() => {
+                setBesoinDateDebut(store.today()); setBesoinDateFin(store.today())
+                setBesoinSKU(calcBesoinSKU(articles, { dateDebut: store.today(), dateFin: store.today() }))
+              }} className="text-[11px] font-semibold text-primary self-start hover:underline">
+                ↺ Revenir a aujourd&apos;hui seul
+              </button>
+            )}
+          </div>
+
+          {/* Info fenetre de prise de commande — J-1 (heureDebut) → J (heureFin).
+              Modifiable directement ici (pas besoin de passer par le BO). */}
+          <div className="bg-sky-50 border border-sky-200 rounded-xl px-3 py-2.5 flex items-start gap-2">
+            <svg className="w-4 h-4 text-sky-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {editingCutoff ? (
+              <div className="flex-1 flex flex-col gap-2">
+                <p className="text-xs font-semibold text-sky-800">Fenetre de prise de commande (J-1 → J)</p>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] text-sky-700">Depart (veille J-1)</label>
+                    <input type="time" value={cutoffConfig.heureDebut}
+                      onChange={e => setCutoffConfig(c => ({ ...c, heureDebut: e.target.value }))}
+                      className="px-2 py-1.5 rounded-lg border border-sky-300 bg-white text-sm" />
+                  </div>
+                  <span className="text-sky-400 mt-3">→</span>
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[10px] text-sky-700">Fin (jour J)</label>
+                    <input type="time" value={cutoffConfig.heureFin}
+                      onChange={e => setCutoffConfig(c => ({ ...c, heureFin: e.target.value }))}
+                      className="px-2 py-1.5 rounded-lg border border-sky-300 bg-white text-sm" />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => { store.saveCommandeCutoffConfig(cutoffConfig); setEditingCutoff(false) }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-sky-600 hover:bg-sky-700">
+                    Enregistrer
+                  </button>
+                  <button onClick={() => { setCutoffConfig(store.getCommandeCutoffConfig()); setEditingCutoff(false) }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-bold text-sky-700 border border-sky-300">
+                    Annuler
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-between gap-2">
+                <p className="text-xs text-sky-800">
+                  La prise de commande court de <strong>J-1 {cutoffConfig.heureDebut}</strong> jusqu&apos;a <strong>J {cutoffConfig.heureFin}</strong> — le besoin du jour agrege donc les commandes prises depuis la veille.
+                </p>
+                <button onClick={() => setEditingCutoff(true)} className="text-xs font-bold text-sky-700 hover:underline shrink-0">
+                  ✏️ Modifier
+                </button>
+              </div>
+            )}
           </div>
 
           {/* KPI bar — DA = besoinNet>0, RAS = besoinNet<=0 */}
@@ -1117,6 +1217,9 @@ export default function MobileAchat({ user }: Props) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <p className="font-bold text-sm text-foreground">{b.articleNom}</p>
+                      {b.articleNomAr && (
+                        <p className="text-xs text-muted-foreground" dir="rtl" lang="ar">{b.articleNomAr}</p>
+                      )}
                     </div>
                     {b.lancerDA ? (
                       <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-black bg-red-500 text-white animate-pulse">
@@ -1155,6 +1258,18 @@ export default function MobileAchat({ user }: Props) {
                       <span className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-200 text-slate-600 text-xs font-black flex items-center justify-center z-10">=</span>
                     </div>
                   </div>
+
+                  {/* Calcul par UM (ex: Caisse) — conversion de la base (kg...) */}
+                  {b.um && b.colisageParUM && (
+                    <div className="flex items-center justify-between text-xs bg-sky-50 border border-sky-200 rounded-xl px-3 py-2">
+                      <span className="text-sky-700 font-medium">
+                        Par {b.um} ({b.colisageParUM} {b.unite}/{b.um})
+                      </span>
+                      <span className="font-black text-sky-800">
+                        {nbUM(b.besoinNet, b.colisageParUM)} {b.um}{Math.abs(nbUM(b.besoinNet, b.colisageParUM) ?? 0) > 1 ? "s" : ""} {b.lancerDA ? "a commander" : "en surplus"}
+                      </span>
+                    </div>
+                  )}
 
                   {/* Cout estime si DA */}
                   {b.lancerDA && b.dernierPrixAchat > 0 && (
@@ -1196,6 +1311,7 @@ export default function MobileAchat({ user }: Props) {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
                       Lancer DA — Commander {b.besoinNet} {b.unite}
+                      {b.um && b.colisageParUM ? ` (≈ ${nbUM(b.besoinNet, b.colisageParUM)} ${b.um}${(nbUM(b.besoinNet, b.colisageParUM) ?? 0) > 1 ? "s" : ""})` : ""}
                     </button>
                   )}
                 </div>

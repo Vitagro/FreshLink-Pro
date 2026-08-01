@@ -8,6 +8,7 @@ interface Props { user: User }
 interface TripArticleLine {
   articleId: string
   articleNom: string
+  articleNomAr?: string
   unite: string
   um?: string
   colisageParUM?: number
@@ -195,7 +196,7 @@ export default function MobileControlPrep({ user }: Props) {
           const colGros = (art as unknown as { colisageCaisses?: number })?.colisageCaisses ?? (art?.colisageParUM ?? 30)
           const colDemi = (art as unknown as { colisageDemiCaisses?: number })?.colisageDemiCaisses ?? Math.round(colGros / 2)
           artMap[l.articleId] = {
-            articleId: l.articleId, articleNom: l.articleNom, unite: art?.unite ?? "kg",
+            articleId: l.articleId, articleNom: l.articleNom, articleNomAr: art?.nomAr, unite: art?.unite ?? "kg",
             um: art?.um, colisageParUM: art?.colisageParUM, colisageCaisses: colGros, colisageDemiCaisses: colDemi,
             qteAttendue: l.qtePrepared > 0 ? l.qtePrepared : l.qteCommandee,
             qtePrepared: "", conforme: null, nbCaisseGros: "", nbCaisseDemi: "", typePoids: "brut", photos: [],
@@ -212,7 +213,7 @@ export default function MobileControlPrep({ user }: Props) {
               const colGros = (art as unknown as { colisageCaisses?: number })?.colisageCaisses ?? (art?.colisageParUM ?? 30)
               const colDemi = (art as unknown as { colisageDemiCaisses?: number })?.colisageDemiCaisses ?? Math.round(colGros / 2)
               artMap[l.articleId] = {
-                articleId: l.articleId, articleNom: l.articleNom, unite: l.unite ?? art?.unite ?? "kg",
+                articleId: l.articleId, articleNom: l.articleNom, articleNomAr: art?.nomAr, unite: l.unite ?? art?.unite ?? "kg",
                 um: art?.um, colisageParUM: art?.colisageParUM, colisageCaisses: colGros, colisageDemiCaisses: colDemi,
                 qteAttendue: 0, qtePrepared: "", conforme: null, nbCaisseGros: "", nbCaisseDemi: "", typePoids: "brut", photos: [],
               }
@@ -611,6 +612,7 @@ export default function MobileControlPrep({ user }: Props) {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <p className="font-bold text-sm text-foreground">{line.articleNom}</p>
+                      {line.articleNomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{line.articleNomAr}</p>}
                       <p className="text-xs text-muted-foreground">
                         Attendu: <strong>{line.qteAttendue} {line.unite}</strong>
                         {qteUM && <span className="ml-2 text-blue-600">= {qteUM} {line.um}</span>}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { store, type User, type PurchaseOrder } from "@/lib/store"
+import { store, type User, type PurchaseOrder, type Article } from "@/lib/store"
 
 interface Props { user: User }
 
@@ -67,6 +67,9 @@ function saveFourPays(p: FourPayConfirm[]) {
 export default function MobileFournisseurPortail({ user }: Props) {
   const [subTab, setSubTab]   = useState<SubTab>("paiements")
   const [orders, setOrders]   = useState<PurchaseOrder[]>([])
+  const [articles, setArticles] = useState<Article[]>([])
+  // Nom arabe de l'article — PurchaseOrder ne le stocke pas, on le retrouve via l'id.
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
   const [dispos, setDispos]   = useState<DispoConfirm[]>([])
   const [pays, setPays]       = useState<FourPayConfirm[]>([])
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -102,6 +105,7 @@ export default function MobileFournisseurPortail({ user }: Props) {
     setOrders(myOrders)
     setDispos(getDispos())
     setPays(getFourPays())
+    setArticles(store.getArticles())
   }, [user.fournisseurId, user.name])
 
   useEffect(() => { load() }, [load])
@@ -270,6 +274,7 @@ export default function MobileFournisseurPortail({ user }: Props) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black text-slate-700">{po.articleNom}</span>
+                        {nomArOf(po.articleId) && <span className="text-[10px] text-slate-400 font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${PAIEMENT_COLORS[statPay]}`}>
                           {PAIEMENT_LABELS[statPay]}
                         </span>
@@ -364,6 +369,7 @@ export default function MobileFournisseurPortail({ user }: Props) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-black text-slate-700">{po.articleNom}</span>
+                        {nomArOf(po.articleId) && <span className="text-[10px] text-slate-400 font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${STATUT_PO_COLORS[po.statut] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
                           {STATUT_PO_LABELS[po.statut] ?? po.statut}
                         </span>
@@ -452,7 +458,10 @@ export default function MobileFournisseurPortail({ user }: Props) {
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-xl">📦</div>
               <div>
                 <div className="font-black text-slate-800">Valider la disponibilité</div>
-                <div className="text-xs text-slate-500">{dispoModal.articleNom}</div>
+                <div className="text-xs text-slate-500">
+                  {dispoModal.articleNom}
+                  {nomArOf(dispoModal.articleId) && <span className="ml-1 font-arabic" dir="rtl" lang="ar">({nomArOf(dispoModal.articleId)})</span>}
+                </div>
               </div>
             </div>
             <p className="text-sm text-slate-600 mb-4">
@@ -508,7 +517,11 @@ export default function MobileFournisseurPortail({ user }: Props) {
               <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-xl">✅</div>
               <div>
                 <div className="font-black text-slate-800">Confirmer paiement reçu</div>
-                <div className="text-xs text-slate-500">{payModal.articleNom} — {payModal.date}</div>
+                <div className="text-xs text-slate-500">
+                  {payModal.articleNom}
+                  {nomArOf(payModal.articleId) && <span className="ml-1 font-arabic" dir="rtl" lang="ar">({nomArOf(payModal.articleId)})</span>}
+                  {" "}— {payModal.date}
+                </div>
               </div>
             </div>
 

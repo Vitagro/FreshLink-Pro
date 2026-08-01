@@ -291,7 +291,10 @@ export default function MobileClientPortail({ user }: Props) {
                     <div className="space-y-1.5 mb-3">
                       {cmd.lignes.map((l, i) => (
                         <div key={i} className="flex items-center justify-between text-xs">
-                          <span className="text-slate-700 font-medium">{l.articleNom}</span>
+                          <span className="text-slate-700 font-medium">
+                            {l.articleNom}
+                            {l.articleNomAr && <span className="block text-[10px] text-slate-400 font-arabic" dir="rtl" lang="ar">{l.articleNomAr}</span>}
+                          </span>
                           <span className="text-slate-500">{l.quantite} × {fmt(l.prixVente)} DH</span>
                           <span className="font-bold text-slate-700">{fmt(l.quantite * l.prixVente)} DH</span>
                         </div>
