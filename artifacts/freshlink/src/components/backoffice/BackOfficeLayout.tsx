@@ -442,8 +442,14 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Communication",               labelAr: "التواصل",              ids: ["messagerie", "whatsapp", "feedback"] },
   { label: "Achats & Approvisionnement",  labelAr: "المشتريات والتموين",   ids: ["achat", "po", "reception", "fournisseurs", "credit_fournisseur", "sourcing", "pa_historique", "gestion_pa", "rapport_marche", "analyse_achat", "analyse_reception", "temps_achat"] },
   { label: "Stock & Catalogue",           labelAr: "المخزون والفهرس",      ids: ["articles", "familles", "stock", "shelf_life", "forecast", "caisses_vides"] },
-  { label: "Commercial & Ventes",         labelAr: "التجاري والمبيعات",    ids: ["commandes_unifiees", "affectation", "zones_secteurs", "alertes_clients", "documents", "prospection", "moteur_commercial"] },
-  { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "category_pricing", "echelons_client", "pricing_concurrent", "intelligence_prix", "concurrence"] },
+  // Ordre par frequence d'usage reelle : Commandes (quotidien, volume le
+  // plus eleve) → Alertes (suivi quotidien des clients/articles) → gestion
+  // d'equipe/zones (ponctuel) → devis/prospection (strategique/occasionnel).
+  // "Moteur commercial" deplace vers "Prix, Marge & Concurrence" : c'est un
+  // moteur de regles de remises/bonus (pricing), pas un outil de gestion de
+  // commandes/zones/equipe — mal classe ici avant ce reajustement.
+  { label: "Commercial & Ventes",         labelAr: "التجاري والمبيعات",    ids: ["commandes_unifiees", "alertes_clients", "affectation", "zones_secteurs", "documents", "prospection"] },
+  { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "category_pricing", "moteur_commercial", "echelons_client", "pricing_concurrent", "intelligence_prix", "concurrence"] },
   { label: "Marketing & E-commerce",      labelAr: "التسويق والمتجر الإلكتروني", ids: ["marketplace", "promo_codes", "loyalty", "gifts_v3", "loterie", "shop_analytics"] },
   { label: "Clients & Comptes Web",       labelAr: "الزبائن والحسابات",    ids: ["comptes_externes", "demandes_comptes"] },
   { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
