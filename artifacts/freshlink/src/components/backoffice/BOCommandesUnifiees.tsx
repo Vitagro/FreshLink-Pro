@@ -52,7 +52,7 @@ const STATUTS_WEB: Record<string, { label: string; color: string; icon: string }
 }
 
 const STATUTS_ERP: Record<string, { label: string; color: string; icon: string }> = {
-  en_attente:             { label: "En attente",     color: "bg-slate-100 text-slate-600 border-slate-200",    icon: "🕐" },
+  en_attente:             { label: "En attente",     color: "bg-muted text-muted-foreground border-border",    icon: "🕐" },
   en_attente_approbation: { label: "En approbation", color: "bg-yellow-100 text-yellow-700 border-yellow-200", icon: "👁️" },
   valide:                 { label: "Validé",         color: "bg-green-100 text-green-700 border-green-200",    icon: "✅" },
   en_preparation:         { label: "En préparation", color: "bg-violet-100 text-violet-700 border-violet-200", icon: "📦" },
@@ -68,7 +68,7 @@ const NEXT_ERP = ["en_attente", "en_attente_approbation", "valide", "en_preparat
 
 function getStatutCfg(statut: string, source: "web" | "erp") {
   const dict = source === "web" ? STATUTS_WEB : STATUTS_ERP
-  return dict[statut] ?? { label: statut, color: "bg-slate-100 text-slate-600 border-slate-200", icon: "•" }
+  return dict[statut] ?? { label: statut, color: "bg-muted text-muted-foreground border-border", icon: "•" }
 }
 
 // ── Normalisation des données ─────────────────────────────────────────────────
@@ -768,7 +768,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
         <div className="w-14 h-14 rounded-2xl bg-red-50 flex items-center justify-center text-2xl">🔒</div>
-        <p className="text-base font-semibold text-slate-700">Accès restreint</p>
+        <p className="text-base font-semibold text-foreground">Accès restreint</p>
       </div>
     )
   }
@@ -907,8 +907,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
       {/* ── En-tête ── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">📦 Toutes les Commandes</h2>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <h2 className="text-xl font-bold text-foreground">📦 Toutes les Commandes</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">
             Vue unifiée — Prévendeurs terrain <span className="text-amber-600 font-semibold">({erpCount} ERP)</span> +
             Site web <span className="text-blue-600 font-semibold">({webCount} Web)</span>
           </p>
@@ -923,7 +923,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
           {hasPermission(user.role, "creer_commande") && <button
             onClick={() => { setShowImport(true); setImportPreview(null); setImportError("") }}
             title="Importer un fichier Excel de commandes (Date, Client, Article, Quantite, PrixVente) — crée automatiquement les clients/articles manquants"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
@@ -934,7 +934,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
             onClick={exportDetaille}
             disabled={filtered.length === 0}
             title="Exporte le détail complet des commandes filtrées : une ligne par commande × article, tous les champs (date, client, secteur, statut, prévendeur, prix...)"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v11a2 2 0 01-2 2z" />
@@ -945,7 +945,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
             onClick={exportParClientArticle}
             disabled={filtered.length === 0}
             title="Exporte les commandes filtrées, une ligne par client × article, avec quantité et montant cumulés"
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-40"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H8a2 2 0 01-2-2V5a2 2 0 012-2h6l6 6v11a2 2 0 01-2 2z" />
@@ -954,7 +954,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
           </button>}
           <button
             onClick={load}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -984,9 +984,9 @@ export default function BOCommandesUnifiees({ user }: Props) {
           return (
             <button key={stage} onClick={() => setFlowStage(active ? "tous" : stage)}
               className={`flex flex-col items-start gap-0.5 px-4 py-3 rounded-2xl border transition-colors text-left ${
-                active ? `${activeClass} text-white` : "bg-white border-slate-200 hover:bg-slate-50"}`}>
-              <span className={`text-xs font-semibold ${active ? "text-white/90" : "text-slate-500"}`}>{label}</span>
-              <span className={`text-2xl font-black ${active ? "text-white" : "text-slate-800"}`}>{count}</span>
+                active ? `${activeClass} text-white` : "bg-white border-border hover:bg-muted"}`}>
+              <span className={`text-xs font-semibold ${active ? "text-white/90" : "text-muted-foreground"}`}>{label}</span>
+              <span className={`text-2xl font-black ${active ? "text-white" : "text-foreground"}`}>{count}</span>
             </button>
           )
         })}
@@ -996,14 +996,14 @@ export default function BOCommandesUnifiees({ user }: Props) {
       {showImport && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={e => e.target === e.currentTarget && setShowImport(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h3 className="font-bold text-slate-800">Importer des commandes</h3>
-              <button onClick={() => setShowImport(false)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="font-bold text-foreground">Importer des commandes</h3>
+              <button onClick={() => setShowImport(false)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">✕</button>
             </div>
             <div className="p-5 flex flex-col gap-4">
-              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-600 leading-relaxed">
+              <div className="rounded-xl bg-muted border border-border p-3 text-xs text-muted-foreground leading-relaxed">
                 Fichier Excel avec une ligne par <strong>Client × Article</strong>. Colonnes attendues :
-                <code className="block mt-1 px-2 py-1 rounded bg-white border border-slate-200 font-mono text-[11px]">
+                <code className="block mt-1 px-2 py-1 rounded bg-white border border-border font-mono text-[11px]">
                   Date | Client | Telephone | Secteur | Article | Unite | Quantite | PrixVente
                 </code>
                 Les clients/articles introuvables dans l&apos;ERP sont créés automatiquement.
@@ -1016,7 +1016,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                   onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f) }}
                   className="text-sm flex-1"
                 />
-                {importParsing && <span className="text-xs text-slate-500">Lecture...</span>}
+                {importParsing && <span className="text-xs text-muted-foreground">Lecture...</span>}
               </div>
 
               {importError && (
@@ -1026,28 +1026,28 @@ export default function BOCommandesUnifiees({ user }: Props) {
               {importPreview && (
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-                      <p className="text-[11px] text-slate-500">Commandes détectées</p>
-                      <p className="text-lg font-bold text-slate-800">{importPreview.nbCommandes}</p>
+                    <div className="rounded-xl bg-muted border border-border px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground">Commandes détectées</p>
+                      <p className="text-lg font-bold text-foreground">{importPreview.nbCommandes}</p>
                     </div>
-                    <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
-                      <p className="text-[11px] text-slate-500">Lignes article</p>
-                      <p className="text-lg font-bold text-slate-800">{importPreview.nbLignes}</p>
+                    <div className="rounded-xl bg-muted border border-border px-3 py-2">
+                      <p className="text-[11px] text-muted-foreground">Lignes article</p>
+                      <p className="text-lg font-bold text-foreground">{importPreview.nbLignes}</p>
                     </div>
                     <div className={`rounded-xl border px-3 py-2 ${importPreview.clientsACreer.size > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
-                      <p className="text-[11px] text-slate-500">Nouveaux clients à créer</p>
-                      <p className="text-lg font-bold text-slate-800">{importPreview.clientsACreer.size}</p>
+                      <p className="text-[11px] text-muted-foreground">Nouveaux clients à créer</p>
+                      <p className="text-lg font-bold text-foreground">{importPreview.clientsACreer.size}</p>
                     </div>
                     <div className={`rounded-xl border px-3 py-2 ${importPreview.articlesACreer.size > 0 ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200"}`}>
-                      <p className="text-[11px] text-slate-500">Nouveaux articles à créer</p>
-                      <p className="text-lg font-bold text-slate-800">{importPreview.articlesACreer.size}</p>
+                      <p className="text-[11px] text-muted-foreground">Nouveaux articles à créer</p>
+                      <p className="text-lg font-bold text-foreground">{importPreview.articlesACreer.size}</p>
                     </div>
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-600">Statut de ces commandes</label>
+                    <label className="text-xs font-semibold text-muted-foreground">Statut de ces commandes</label>
                     <select value={importStatut} onChange={e => setImportStatut(e.target.value as typeof importStatut)}
-                      className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                      className="px-3 py-2 rounded-xl border border-border text-sm">
                       <option value="en_attente">En attente (nouvelles commandes à traiter normalement)</option>
                       <option value="valide">Validée</option>
                       <option value="livre">Déjà livrée (historique — génère aussi Préparation + BL, livraison = date commande + 1)</option>
@@ -1072,30 +1072,30 @@ export default function BOCommandesUnifiees({ user }: Props) {
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={e => e.target === e.currentTarget && setShowNew(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h3 className="font-bold text-slate-800">Nouvelle commande</h3>
-              <button onClick={() => setShowNew(false)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="font-bold text-foreground">Nouvelle commande</h3>
+              <button onClick={() => setShowNew(false)} className="p-2 rounded-lg hover:bg-muted text-muted-foreground">✕</button>
             </div>
             <div className="p-5 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-600">Client *</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Client *</label>
                   <select value={noClientId} onChange={e => setNoClientId(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm">
+                    className="px-3 py-2 rounded-xl border border-border text-sm">
                     <option value="">— Choisir —</option>
                     {store.getClients().slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(c => <option key={c.id} value={c.id}>{c.nom}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-slate-600">Heure de livraison</label>
+                  <label className="text-xs font-semibold text-muted-foreground">Heure de livraison</label>
                   <input type="time" value={noHeure} onChange={e => setNoHeure(e.target.value)}
-                    className="px-3 py-2 rounded-xl border border-slate-200 text-sm" />
+                    className="px-3 py-2 rounded-xl border border-border text-sm" />
                 </div>
               </div>
               <div className="flex flex-col gap-2">
-                <label className="text-xs font-semibold text-slate-600">Articles</label>
+                <label className="text-xs font-semibold text-muted-foreground">Articles</label>
                 {/* En-têtes de colonnes — une ligne par article ci-dessous */}
-                <div className="hidden sm:flex items-center gap-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                <div className="hidden sm:flex items-center gap-2 px-3 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
                   <span className="w-6">#</span>
                   <span className="flex-[2]">Article</span>
                   <span className="w-24 text-center">Quantité</span>
@@ -1108,42 +1108,42 @@ export default function BOCommandesUnifiees({ user }: Props) {
                   const hasUM = !!(art?.um && art?.colisageParUM)
                   const inUMMode = hasUM && l.uniteMode === art!.um
                   return (
-                    <div key={i} className="flex flex-col gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                    <div key={i} className="flex flex-col gap-2 p-3 rounded-xl border border-border bg-muted">
                       <div className="flex items-center gap-2">
-                        <span className="w-6 shrink-0 text-xs font-bold text-slate-400 text-center">{i + 1}</span>
+                        <span className="w-6 shrink-0 text-xs font-bold text-muted-foreground text-center">{i + 1}</span>
                         <select value={l.articleId}
                           onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, articleId: e.target.value, uniteMode: "base", quantite: "", prixVente: e.target.value ? String(store.computePrixEffectif(store.getArticles().find(a => a.id === e.target.value)!, store.getClients().find(c => c.id === noClientId))) : "" } : x))}
-                          className="flex-[2] min-w-0 px-2 py-2.5 rounded-lg border border-slate-200 text-sm">
+                          className="flex-[2] min-w-0 px-2 py-2.5 rounded-lg border border-border text-sm">
                           <option value="">— Article —</option>
                           {store.getArticles().slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(a => <option key={a.id} value={a.id}>{a.nom}{a.nomAr ? ` / ${a.nomAr}` : ""}</option>)}
                         </select>
                         <input type="text" inputMode="decimal" placeholder="Qté" value={l.quantite}
                           onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, quantite: e.target.value.replace(",", ".") } : x))}
-                          className="w-24 shrink-0 px-2 py-2.5 rounded-lg border border-slate-200 text-sm text-center" />
+                          className="w-24 shrink-0 px-2 py-2.5 rounded-lg border border-border text-sm text-center" />
                         <input type="text" inputMode="decimal" placeholder="PV" value={l.prixVente}
                           onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, prixVente: e.target.value.replace(",", ".") } : x))}
-                          className="w-24 shrink-0 px-2 py-2.5 rounded-lg border border-slate-200 text-sm text-center" />
-                        <span className="w-16 shrink-0 text-xs text-slate-400 text-center">{inUMMode ? art!.um : art?.unite}</span>
+                          className="w-24 shrink-0 px-2 py-2.5 rounded-lg border border-border text-sm text-center" />
+                        <span className="w-16 shrink-0 text-xs text-muted-foreground text-center">{inUMMode ? art!.um : art?.unite}</span>
                         <span className="w-6 shrink-0 flex justify-center">
-                          {noLignes.length > 1 && <button onClick={() => setNoLignes(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>}
+                          {noLignes.length > 1 && <button onClick={() => setNoLignes(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-red-600">✕</button>}
                         </span>
                       </div>
                       {hasUM && (
                         <div className="flex items-center gap-2 pl-8">
-                          <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-white">
+                          <div className="flex rounded-lg overflow-hidden border border-border bg-white">
                             <button type="button"
                               onClick={() => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, uniteMode: "base", quantite: "" } : x))}
-                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${!inUMMode ? "bg-slate-800 text-white" : "text-slate-500"}`}>
+                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${!inUMMode ? "bg-slate-800 text-white" : "text-muted-foreground"}`}>
                               {art!.unite}
                             </button>
                             <button type="button"
                               onClick={() => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, uniteMode: art!.um!, quantite: "" } : x))}
-                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${inUMMode ? "bg-slate-800 text-white" : "text-slate-500"}`}>
+                              className={`px-2.5 py-1 text-[11px] font-semibold transition-colors ${inUMMode ? "bg-slate-800 text-white" : "text-muted-foreground"}`}>
                               {art!.um} ({art!.colisageParUM} {art!.unite})
                             </button>
                           </div>
                           {inUMMode && l.quantite && (
-                            <span className="text-[11px] text-slate-400">= {((Number(l.quantite.replace(",", ".")) || 0) * (art!.colisageParUM ?? 1)).toFixed(1)} {art!.unite}</span>
+                            <span className="text-[11px] text-muted-foreground">= {((Number(l.quantite.replace(",", ".")) || 0) * (art!.colisageParUM ?? 1)).toFixed(1)} {art!.unite}</span>
                           )}
                         </div>
                       )}
@@ -1154,7 +1154,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                   className="self-start text-sm font-semibold text-emerald-600">+ Ajouter un article</button>
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={() => setShowNew(false)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-600">Annuler</button>
+                <button onClick={() => setShowNew(false)} className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground">Annuler</button>
                 <button onClick={saveNewOrder} disabled={savingOrder}
                   className="flex-1 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold disabled:opacity-50">
                   {savingOrder ? "Création..." : "Créer la commande"}
@@ -1189,8 +1189,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
       {/* ── Stats ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-border p-4 text-center">
-          <div className="text-2xl font-black text-slate-800">{cmds.length}</div>
-          <div className="text-xs font-semibold text-slate-400 mt-1 uppercase">Total</div>
+          <div className="text-2xl font-black text-foreground">{cmds.length}</div>
+          <div className="text-xs font-semibold text-muted-foreground mt-1 uppercase">Total</div>
         </div>
         <div className="bg-blue-50 rounded-xl border border-blue-100 p-4 text-center">
           <div className="text-2xl font-black text-blue-700">{webCount}</div>
@@ -1214,7 +1214,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
         <select
           value={filterSource}
           onChange={e => setFilterSource(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-slate-700 cursor-pointer"
+          className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-foreground cursor-pointer"
         >
           <option value="tous">📋 Toutes sources</option>
           <option value="web">🌐 Web</option>
@@ -1225,7 +1225,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
         <select
           value={filterStatut}
           onChange={e => setFilterStatut(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-slate-700 cursor-pointer"
+          className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-foreground cursor-pointer"
         >
           <option value="tous">Tous statuts</option>
           <optgroup label="— Web">
@@ -1245,7 +1245,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
           <select
             value={filterZone}
             onChange={e => setFilterZone(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-slate-700 cursor-pointer"
+            className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-foreground cursor-pointer"
           >
             <option value="tous">🗺️ Toutes zones</option>
             {zones.map(z => <option key={z} value={z}>{z}</option>)}
@@ -1256,7 +1256,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
         <select
           value={filterCategorie}
           onChange={e => setFilterCategorie(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-slate-700 cursor-pointer"
+          className="px-3 py-2 rounded-xl border border-border text-sm font-medium bg-white text-foreground cursor-pointer"
         >
           <option value="tous">🏷️ Toutes catégories</option>
           <option value="CHR">🍽️ CHR</option>
@@ -1273,18 +1273,18 @@ export default function BOCommandesUnifiees({ user }: Props) {
           value={filterDateDebut}
           onChange={e => setFilterDateDebut(e.target.value)}
           title="Du"
-          className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-slate-700"
+          className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-foreground"
         />
         <input
           type="date"
           value={filterDateFin}
           onChange={e => setFilterDateFin(e.target.value)}
           title="Au"
-          className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-slate-700"
+          className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-foreground"
         />
         <button type="button" onClick={() => { const { debut, fin } = commandeCycleRange(commandeOperationalDate()); setFilterDateDebut(debut); setFilterDateFin(fin) }}
           title={`Commandes du cycle J-1 ${cutoffCfg.heureDebut} → J ${cutoffCfg.heureFin}`}
-          className="px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 whitespace-nowrap">
+          className="px-3 py-2 rounded-xl text-xs font-bold bg-muted text-muted-foreground hover:bg-muted whitespace-nowrap">
           🌙 Cycle commande
         </button>
 
@@ -1294,17 +1294,17 @@ export default function BOCommandesUnifiees({ user }: Props) {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Client, tél, réf, zone..."
-          className="flex-1 min-w-44 px-3 py-2 rounded-xl border border-border text-sm bg-white text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-green-500"
+          className="flex-1 min-w-44 px-3 py-2 rounded-xl border border-border text-sm bg-white text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-green-500"
         />
 
         {/* Tri */}
-        <div className="flex gap-1 p-1 rounded-xl bg-slate-100">
+        <div className="flex gap-1 p-1 rounded-xl bg-muted">
           <button type="button" onClick={() => setSortMode("date")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${sortMode === "date" ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${sortMode === "date" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>
             Plus récent
           </button>
           <button type="button" onClick={() => setSortMode("alpha")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${sortMode === "alpha" ? "bg-white shadow-sm text-slate-800" : "text-slate-500"}`}>
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold ${sortMode === "alpha" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground"}`}>
             A → Z
           </button>
         </div>
@@ -1312,25 +1312,25 @@ export default function BOCommandesUnifiees({ user }: Props) {
         {(search || filterStatut !== "tous" || filterSource !== "tous" || filterZone !== "tous" || filterCategorie !== "tous" || !isDefaultDateRange) && (
           <button
             onClick={() => { setSearch(""); setFilterStatut("tous"); setFilterSource("tous"); setFilterZone("tous"); setFilterCategorie("tous"); setFilterDateDebut(cycleDefault.debut); setFilterDateFin(cycleDefault.fin) }}
-            className="px-3 py-2 rounded-xl border border-border text-sm text-slate-500 hover:bg-slate-50"
+            className="px-3 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted"
           >
             ✕ Reset
           </button>
         )}
 
-        <span className="text-xs text-slate-400 ml-auto">{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
+        <span className="text-xs text-muted-foreground ml-auto">{filtered.length} résultat{filtered.length > 1 ? "s" : ""}</span>
       </div>
 
       {/* ── Barre d'actions groupées ── */}
       {filtered.length > 0 && (
-        <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 rounded-xl border border-border bg-slate-50">
+        <div className="flex items-center gap-2 flex-wrap px-4 py-2.5 rounded-xl border border-border bg-muted">
           <button onClick={toggleSelectAll}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-white hover:bg-slate-100">
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-white hover:bg-muted">
             {allFilteredSelected ? "☑ Tout désélectionner" : "☐ Tout sélectionner"}
           </button>
           {selectedIds.size > 0 && (
             <>
-              <span className="text-xs font-bold text-slate-600">{selectedIds.size} sélectionnée(s)</span>
+              <span className="text-xs font-bold text-muted-foreground">{selectedIds.size} sélectionnée(s)</span>
               <div className="flex items-center gap-1.5 ml-2">
                 <select value={bulkNewStatut} onChange={e => setBulkNewStatut(e.target.value)}
                   className="px-2.5 py-1.5 rounded-lg border border-border text-xs bg-white">
@@ -1353,14 +1353,14 @@ export default function BOCommandesUnifiees({ user }: Props) {
 
       {/* ── Table ── */}
       {loading ? (
-        <div className="py-16 text-center text-slate-400 text-sm">⏳ Chargement des commandes...</div>
+        <div className="py-16 text-center text-muted-foreground text-sm">⏳ Chargement des commandes...</div>
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-slate-400 text-sm">Aucune commande trouvée.</div>
+        <div className="py-16 text-center text-muted-foreground text-sm">Aucune commande trouvée.</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-border bg-white">
           <table className="w-full text-sm border-collapse">
             <thead>
-              <tr className="border-b border-border bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
+              <tr className="border-b border-border bg-muted text-muted-foreground text-xs uppercase tracking-wide">
                 <th className="px-4 py-3 w-8">
                   <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll}
                     className="w-4 h-4 rounded accent-primary cursor-pointer" />
@@ -1388,7 +1388,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                 return (
                   <tr
                     key={`${cmd.table}-${cmd.id}`}
-                    className={`border-b border-border hover:bg-slate-50 cursor-pointer transition-colors ${i % 2 === 0 ? "" : "bg-slate-50/40"}`}
+                    className={`border-b border-border hover:bg-muted cursor-pointer transition-colors ${i % 2 === 0 ? "" : "bg-muted/40"}`}
                     onClick={() => setSelected(cmd)}
                   >
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
@@ -1401,13 +1401,13 @@ export default function BOCommandesUnifiees({ user }: Props) {
                     </td>
                     {/* Date + heure de prise de commande (📝, vrai timestamp createdAt) +
                         heure de livraison souhaitée (🕐, préférence client — pas la même chose) */}
-                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                    <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">
                       <div>{fmt(cmd.date)}{cmd.heureCommande ? ` · 📝 ${cmd.heureCommande}` : ""}</div>
-                      {cmd.heurelivraison && <div className="text-[11px] text-slate-400">🕐 {cmd.heurelivraison}</div>}
+                      {cmd.heurelivraison && <div className="text-[11px] text-muted-foreground">🕐 {cmd.heurelivraison}</div>}
                     </td>
                     {/* Client */}
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-800 text-sm">{cmd.nom_client}</div>
+                      <div className="font-semibold text-foreground text-sm">{cmd.nom_client}</div>
                       {tel && (
                         <a
                           href={`https://wa.me/${tel}`} target="_blank"
@@ -1419,7 +1419,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                       )}
                       <div className="flex gap-1 mt-0.5 flex-wrap">
                         {cmd.zone && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
                             🗺️ {cmd.zone}
                           </span>
                         )}
@@ -1428,7 +1428,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                             cmd.categorie === "CHR" ? "bg-purple-100 text-purple-700"
                             : cmd.categorie === "Marchand" ? "bg-amber-100 text-amber-700"
                             : cmd.categorie === "Particulier" ? "bg-blue-100 text-blue-700"
-                            : "bg-slate-100 text-slate-600"
+                            : "bg-muted text-muted-foreground"
                           }`}>
                             {cmd.categorie}
                           </span>
@@ -1436,7 +1436,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                       </div>
                     </td>
                     {/* Articles */}
-                    <td className="px-4 py-3 text-slate-600 text-xs max-w-44 truncate" title={articlesLabel}>
+                    <td className="px-4 py-3 text-muted-foreground text-xs max-w-44 truncate" title={articlesLabel}>
                       {articlesLabel}
                     </td>
                     {/* Total */}
@@ -1493,7 +1493,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                         {/* Ouvrir le détail */}
                         <button
                           onClick={() => setSelected(cmd)}
-                          className="px-2 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 text-xs border border-slate-200 transition-colors"
+                          className="px-2 py-1.5 rounded-lg bg-muted hover:bg-muted text-muted-foreground text-xs border border-border transition-colors"
                           title="Voir détail / changer statut"
                         >
                           ✏️
@@ -1519,8 +1519,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
             {/* Header drawer */}
             <div className="sticky top-0 bg-white border-b border-border px-5 py-4 flex items-start justify-between">
               <div>
-                <h3 className="font-bold text-slate-800 font-mono">{selected.numero}</h3>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <h3 className="font-bold text-foreground font-mono">{selected.numero}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   {fmt(selected.date)}
                   {selected.heureCommande ? ` · 📝 Prise à ${selected.heureCommande}` : ""}
                   {selected.heurelivraison ? ` · 🕐 Livraison ${selected.heurelivraison}` : ""}
@@ -1528,7 +1528,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
               </div>
               <button
                 onClick={() => setSelected(null)}
-                className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="text-muted-foreground hover:text-muted-foreground p-2 rounded-lg hover:bg-muted transition-colors"
               >
                 ✕
               </button>
@@ -1554,9 +1554,9 @@ export default function BOCommandesUnifiees({ user }: Props) {
               </div>
 
               {/* Infos client */}
-              <div className="bg-slate-50 rounded-xl p-4 space-y-1">
-                <p className="text-xs font-semibold text-slate-500 uppercase mb-2">👤 Client</p>
-                <p className="font-bold text-slate-800 text-base">{selected.nom_client}</p>
+              <div className="bg-muted rounded-xl p-4 space-y-1">
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">👤 Client</p>
+                <p className="font-bold text-foreground text-base">{selected.nom_client}</p>
                 {selected.telephone && (
                   <a
                     href={`https://wa.me/${selected.telephone.replace(/\D/g,"")}`}
@@ -1567,20 +1567,20 @@ export default function BOCommandesUnifiees({ user }: Props) {
                   </a>
                 )}
                 {selected.adresse && (
-                  <p className="text-sm text-slate-500">📍 {selected.adresse}</p>
+                  <p className="text-sm text-muted-foreground">📍 {selected.adresse}</p>
                 )}
                 {selected.zone && (
-                  <p className="text-sm text-slate-500">🗺️ Zone : {selected.zone}</p>
+                  <p className="text-sm text-muted-foreground">🗺️ Zone : {selected.zone}</p>
                 )}
               </div>
 
               {/* Lignes articles */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">
                   🛒 Articles ({selected.lignes.length})
                 </p>
                 {selected.lignes.length === 0 ? (
-                  <p className="text-sm text-slate-400">Aucun article détaillé.</p>
+                  <p className="text-sm text-muted-foreground">Aucun article détaillé.</p>
                 ) : (
                   <div className="border border-border rounded-xl overflow-hidden">
                     {selected.lignes.map((l, i) => (
@@ -1589,20 +1589,20 @@ export default function BOCommandesUnifiees({ user }: Props) {
                         className={`flex items-center justify-between px-4 py-3 ${i < selected.lignes.length - 1 ? "border-b border-border" : ""}`}
                       >
                         <div>
-                          <p className="text-sm font-semibold text-slate-800">{l.nom}</p>
+                          <p className="text-sm font-semibold text-foreground">{l.nom}</p>
                           {(() => {
                             const nomAr = store.getArticles().find(a => a.nom.toLowerCase() === l.nom.toLowerCase().trim())?.nomAr
-                            return nomAr ? <p className="text-xs text-slate-400 font-arabic" dir="rtl" lang="ar">{nomAr}</p> : null
+                            return nomAr ? <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomAr}</p> : null
                           })()}
-                          <p className="text-xs text-slate-400">{l.quantite} {l.unite}</p>
+                          <p className="text-xs text-muted-foreground">{l.quantite} {l.unite}</p>
                         </div>
                         <p className="text-sm font-bold text-green-700">
                           {(l.total > 0 ? l.total : l.prix * l.quantite).toLocaleString("fr-MA", { maximumFractionDigits: 2 })} MAD
                         </p>
                       </div>
                     ))}
-                    <div className="flex items-center justify-between px-4 py-3 bg-slate-50 font-bold">
-                      <span className="text-slate-700">Total</span>
+                    <div className="flex items-center justify-between px-4 py-3 bg-muted font-bold">
+                      <span className="text-foreground">Total</span>
                       <span className="text-green-700 text-base">
                         {selected.montant.toLocaleString("fr-MA", { maximumFractionDigits: 2 })} MAD
                       </span>
@@ -1615,13 +1615,13 @@ export default function BOCommandesUnifiees({ user }: Props) {
               {selected.notes && (
                 <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                   <p className="text-xs font-semibold text-amber-600 uppercase mb-1">📝 Notes / Instructions</p>
-                  <p className="text-sm text-slate-700">{selected.notes}</p>
+                  <p className="text-sm text-foreground">{selected.notes}</p>
                 </div>
               )}
 
               {/* Changer statut */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase mb-3">🔄 Changer le statut</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-3">🔄 Changer le statut</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(selected.source === "web" ? NEXT_WEB : NEXT_ERP).map(s => {
                     const cfg       = getStatutCfg(s, selected.source)
@@ -1634,7 +1634,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                         className={`px-3 py-2.5 rounded-xl text-xs font-semibold border transition-all ${
                           isActive
                             ? cfg.color + " cursor-default"
-                            : "bg-white border-border text-slate-600 hover:border-green-400 hover:bg-green-50 active:scale-95 disabled:opacity-40"
+                            : "bg-white border-border text-muted-foreground hover:border-green-400 hover:bg-green-50 active:scale-95 disabled:opacity-40"
                         }`}
                       >
                         {cfg.icon} {cfg.label}
