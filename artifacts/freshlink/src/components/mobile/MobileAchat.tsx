@@ -223,6 +223,9 @@ export default function MobileAchat({ user }: Props) {
   // Intervalle de dates du besoin net — par defaut aujourd'hui seul (comportement historique).
   const [besoinDateDebut, setBesoinDateDebut] = useState(store.today())
   const [besoinDateFin, setBesoinDateFin] = useState(store.today())
+  // Selection multiple des DA (Demandes d'Achat) a lancer d'un coup — evite de
+  // cliquer "Lancer DA" article par article quand plusieurs sont en deficit.
+  const [selectedDA, setSelectedDA] = useState<Set<string>>(new Set())
   const [cutoffConfig, setCutoffConfig] = useState(store.getCommandeCutoffConfig())
   const [editingCutoff, setEditingCutoff] = useState(false)
   // PO push mode: "auto" = redirect to po_push tab automatically, "click" = badge only
@@ -773,6 +776,45 @@ export default function MobileAchat({ user }: Props) {
   const urgents = besoinSKU.filter(b => b.lancerDA)
   const totalBesoinEstime = urgents.reduce((s, b) => s + b.totalEstime, 0)
 
+  const toggleSelectDA = (articleId: string) => {
+    setSelectedDA(prev => {
+      const next = new Set(prev)
+      if (next.has(articleId)) next.delete(articleId)
+      else next.add(articleId)
+      return next
+    })
+  }
+  const toggleSelectAllDA = () => {
+    setSelectedDA(prev => prev.size === urgents.length ? new Set() : new Set(urgents.map(b => b.articleId)))
+  }
+  // Ajoute une ou plusieurs DA au bon d'achat en cours (reutilise les lignes
+  // vides du panier avant d'en ajouter de nouvelles), puis bascule sur l'onglet
+  // "Bon d'achat" pour finaliser (prix, fournisseur...).
+  const launchDA = (items: BesoinSKU[]) => {
+    if (items.length === 0) return
+    setActiveTab("bon")
+    setLignes(prev => {
+      let next = [...prev]
+      for (const b of items) {
+        if (next.some(l => l.articleId === b.articleId)) continue
+        const art = articles.find(a => a.id === b.articleId)
+        const newLigne: LigneForm = {
+          articleId: b.articleId,
+          uniteMode: "base",
+          quantite: String(b.besoinNet),
+          prixAchat: String(art?.prixAchat ?? ""),
+          totalPaye: "",
+          calcMode: "unit",
+        }
+        const emptyIdx = next.findIndex(l => !l.articleId)
+        if (emptyIdx >= 0) next[emptyIdx] = newLigne
+        else next = [...next, newLigne]
+      }
+      return next
+    })
+    setSelectedDA(new Set())
+  }
+
   // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
   // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible.
   const ACHAT_TAB_IDS = ["besoin", "bon", "po_push", "fournisseurs", "charges", "camera", "comparatif", "avis", "mes_achats"] as const
@@ -1205,6 +1247,28 @@ export default function MobileAchat({ user }: Props) {
             </div>
           </div>
 
+          {/* Selection multiple — cocher plusieurs DA puis les lancer d'un coup */}
+          {urgents.length > 0 && (
+            <div className="flex items-center justify-between gap-2 bg-card rounded-xl border border-border px-3 py-2.5">
+              <button onClick={toggleSelectAllDA} className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <span className={`w-4 h-4 rounded flex items-center justify-center border-2 ${selectedDA.size === urgents.length ? "bg-primary border-primary" : "border-border"}`}>
+                  {selectedDA.size === urgents.length && (
+                    <svg className="w-3 h-3 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                  )}
+                </span>
+                {selectedDA.size === urgents.length ? "Tout deselectionner" : "Tout selectionner"}
+                {selectedDA.size > 0 && <span className="text-muted-foreground font-normal">({selectedDA.size}/{urgents.length})</span>}
+              </button>
+              <button
+                onClick={() => launchDA(urgents.filter(b => selectedDA.has(b.articleId)))}
+                disabled={selectedDA.size === 0}
+                className="px-3 py-2 rounded-lg text-xs font-bold text-white bg-red-600 hover:opacity-90 disabled:opacity-40 disabled:hover:opacity-40 transition-opacity flex items-center gap-1.5 shrink-0">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Lancer {selectedDA.size > 0 ? `(${selectedDA.size})` : "la selection"}
+              </button>
+            </div>
+          )}
+
           {besoinSKU.length === 0 ? (
             <div className="bg-card rounded-2xl border border-border p-10 flex flex-col items-center gap-2 text-center">
               <svg className="w-10 h-10 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1221,11 +1285,21 @@ export default function MobileAchat({ user }: Props) {
 
                   {/* Header */}
                   <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <p className="font-bold text-sm text-foreground">{b.articleNom}</p>
-                      {b.articleNomAr && (
-                        <p className="text-xs text-muted-foreground" dir="rtl" lang="ar">{b.articleNomAr}</p>
+                    <div className="flex-1 flex items-start gap-2">
+                      {b.lancerDA && (
+                        <button onClick={() => toggleSelectDA(b.articleId)}
+                          className={`mt-0.5 w-4 h-4 rounded flex items-center justify-center border-2 shrink-0 ${selectedDA.has(b.articleId) ? "bg-primary border-primary" : "border-border bg-white"}`}>
+                          {selectedDA.has(b.articleId) && (
+                            <svg className="w-3 h-3 text-primary-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          )}
+                        </button>
                       )}
+                      <div>
+                        <p className="font-bold text-sm text-foreground">{b.articleNom}</p>
+                        {b.articleNomAr && (
+                          <p className="text-xs text-muted-foreground" dir="rtl" lang="ar">{b.articleNomAr}</p>
+                        )}
+                      </div>
                     </div>
                     {b.lancerDA ? (
                       <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-black bg-red-500 text-white animate-pulse">
@@ -1288,30 +1362,7 @@ export default function MobileAchat({ user }: Props) {
                   {/* Action: Lancer DA → pre-remplir bon achat */}
                   {b.lancerDA && (
                     <button
-                      onClick={() => {
-                        setActiveTab("bon")
-                        setLignes(prev => {
-                          const exists = prev.some(l => l.articleId === b.articleId)
-                          if (exists) return prev
-                          const emptyIdx = prev.findIndex(l => !l.articleId)
-                          const newLignes = [...prev]
-                          const art = articles.find(a => a.id === b.articleId)
-                          const newLigne: LigneForm = {
-                            articleId: b.articleId,
-                            uniteMode: "base",
-                            quantite: String(b.besoinNet),
-                            prixAchat: String(art?.prixAchat ?? ""),
-                            totalPaye: "",
-                            calcMode: "unit",
-                          }
-                          if (emptyIdx >= 0) {
-                            newLignes[emptyIdx] = newLigne
-                          } else {
-                            newLignes.push(newLigne)
-                          }
-                          return newLignes
-                        })
-                      }}
+                      onClick={() => launchDA([b])}
                       className="w-full py-2.5 rounded-xl text-xs font-bold text-white flex items-center justify-center gap-1.5 transition-opacity hover:opacity-90 bg-red-600">
                       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
