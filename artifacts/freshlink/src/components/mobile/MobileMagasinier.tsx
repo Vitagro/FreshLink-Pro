@@ -517,6 +517,20 @@ function ReceptionTab({
   onRefresh: () => void
 }) {
   const [selected, setSelected]     = useState<ReceptionItem | null>(null)
+  // Recherche & tri locaux — appliques par-dessus le filtre depot/showAll du parent.
+  const [search, setSearch]         = useState("")
+  const [sortMode, setSortMode]     = useState<"recent" | "ancien" | "montant">("recent")
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let list = items.filter(it =>
+      !q || it.fournisseurNom.toLowerCase().includes(q) || it.id.toLowerCase().includes(q)
+    )
+    if (sortMode === "ancien") list = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    else if (sortMode === "montant") list = [...list].sort((a, b) =>
+      b.lignes.reduce((s, l) => s + l.quantite * l.prixAchat, 0) - a.lignes.reduce((s, l) => s + l.quantite * l.prixAchat, 0))
+    // "recent" garde l'ordre deja trie desc par date fourni par le parent (items)
+    return list
+  }, [items, search, sortMode])
   const [qtesRecues, setQtesRecues] = useState<Record<string, string>>({})
   const [uniteMode, setUniteMode]   = useState<Record<string, string>>({})
   const [prixRecus, setPrixRecus]   = useState<Record<string, string>>({})
@@ -948,6 +962,19 @@ function ReceptionTab({
             </select>
           )}
         </div>
+
+        {/* Recherche & tri */}
+        <div className="flex items-center gap-2">
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher fournisseur, ref..."
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary" />
+          <select value={sortMode} onChange={e => setSortMode(e.target.value as typeof sortMode)}
+            className="shrink-0 px-2.5 py-1.5 rounded-xl border border-border bg-background text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="recent">Plus recent</option>
+            <option value="ancien">Plus ancien</option>
+            <option value="montant">Montant le plus eleve</option>
+          </select>
+        </div>
       </div>
 
       {/* Debug hint when empty */}
@@ -977,8 +1004,14 @@ function ReceptionTab({
         </div>
       )}
 
+      {items.length > 0 && visibleItems.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">Aucun resultat pour cette recherche</p>
+        </div>
+      )}
+
       {/* Items list */}
-      {items.map(item => {
+      {visibleItems.map(item => {
         const prevRecs  = receptions.filter(r =>
           item.source === "purchase_order"
             ? r.purchaseOrderId === item.id
@@ -1072,16 +1105,25 @@ function ValidationBLTab({
   const [saving, setSaving]         = useState(false)
   const [success, setSuccess]       = useState("")
   const [searchQ, setSearchQ]       = useState("")
+  const [sortMode, setSortMode]     = useState<"recent" | "ancien" | "montant">("recent")
 
   const filtered = useMemo(() => {
-    if (!searchQ.trim()) return bls
-    const q = searchQ.toLowerCase()
-    return bls.filter(b =>
-      b.id.toLowerCase().includes(q) ||
-      b.clientNom?.toLowerCase().includes(q) ||
-      b.livreurNom?.toLowerCase().includes(q)
-    )
-  }, [bls, searchQ])
+    let list = bls
+    if (searchQ.trim()) {
+      const q = searchQ.toLowerCase()
+      list = list.filter(b =>
+        b.id.toLowerCase().includes(q) ||
+        b.clientNom?.toLowerCase().includes(q) ||
+        b.livreurNom?.toLowerCase().includes(q)
+      )
+    }
+    if (sortMode === "recent") list = [...list].sort((a, b) => b.date.localeCompare(a.date))
+    else if (sortMode === "ancien") list = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    else if (sortMode === "montant") list = [...list].sort((a, b) =>
+      (b.lignes ?? []).reduce((s: number, l: { total?: number }) => s + (l.total ?? 0), 0) -
+      (a.lignes ?? []).reduce((s: number, l: { total?: number }) => s + (l.total ?? 0), 0))
+    return list
+  }, [bls, searchQ, sortMode])
 
   const handleAction = (action: "valider" | "refuser") => {
     if (!selectedBL) return
@@ -1220,6 +1262,14 @@ function ValidationBLTab({
           </button>
         )}
       </div>
+
+      {/* Tri */}
+      <select value={sortMode} onChange={e => setSortMode(e.target.value as typeof sortMode)}
+        className="self-start px-2.5 py-1.5 rounded-xl border border-border bg-background text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="recent">Plus recent</option>
+        <option value="ancien">Plus ancien</option>
+        <option value="montant">Montant le plus eleve</option>
+      </select>
 
       <div className="bg-card rounded-xl border border-border p-4">
         <p className="text-sm font-bold text-foreground">BL en attente de validation</p>
