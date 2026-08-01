@@ -54,12 +54,12 @@ class PanelErrorBoundary extends Component<{ children: React.ReactNode; label: s
             </svg>
           </div>
           <div>
-            <p className="font-bold text-slate-800 text-base">{this.props.label} — Erreur de chargement</p>
-            <p className="text-xs text-slate-500 mt-1 max-w-xs font-mono break-all">{this.state.msg}</p>
+            <p className="font-bold text-foreground text-base">{this.props.label} — Erreur de chargement</p>
+            <p className="text-xs text-muted-foreground mt-1 max-w-xs font-mono break-all">{this.state.msg}</p>
           </div>
           <button
             onClick={() => this.setState({ hasError: false, msg: "" })}
-            className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+            className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
             Reessayer
           </button>
         </div>
@@ -74,7 +74,6 @@ const L = (label: string) => () => <div className="p-8 text-center text-muted-fo
 const BODashboard            = React.lazy(() => import("./BODashboard"))
 const BOAchat                = React.lazy(() => import("./BOAchat"))
 const BOReception            = React.lazy(() => import("./BOReception"))
-const BOCommercial           = React.lazy(() => import("./BOCommercial"))
 const BOStock                = React.lazy(() => import("./BOStock"))
 const BODispatch             = React.lazy(() => import("./BODispatch"))
 const BOFournisseurs         = React.lazy(() => import("./BOFournisseurs"))
@@ -115,7 +114,6 @@ const BORapportMarche        = React.lazy(() => import("./BORapportMarche"))
 const AnalyseReceptionPanel  = React.lazy(() => import("./AnalyseReceptionPanel"))
 const ShelfLifePanel         = React.lazy(() => import("./ShelfLifePanel"))
 const ForecastPanel          = React.lazy(() => import("./ForecastPanel"))
-const ASHELMarketPanel       = React.lazy(() => import("./ASHELMarketPanel"))
 const CameraPermissionsPanel = React.lazy(() => import("./CameraPermissionsPanel"))
 const CaissesVidesPanel      = React.lazy(() => import("./CaissesVidesPanel"))
 const DeployGuidePanel       = React.lazy(() => import("./DeployGuidePanel"))
@@ -164,7 +162,7 @@ const BOPaHistoriqueV3       = React.lazy(() => import("./BOPaHistorique"))
 
 export type Tab =
   | "dashboard" | "achat" | "reception" | "po"
-  | "commercial" | "affectation" | "zones_secteurs" | "dispatch"
+  | "affectation" | "zones_secteurs" | "dispatch"
   | "stock" | "retour" | "cash"
   | "recap" | "rapport_livraison" | "preparation"
   | "fournisseurs" | "articles" | "familles"
@@ -174,9 +172,8 @@ export type Tab =
   | "prospection" | "credit_fournisseur" | "agents_ia"
   | "gps_tracker"
   | "feedback" | "trip_charges" | "analyse_achat" | "temps_achat" | "analyse_reception" | "caisse_acheteur" | "analyse_credit" | "roles_permissions" | "rapport_marche" | "shop_analytics" | "promo_codes"
-  | "caisses_vides" | "shelf_life" | "forecast" | "ashel_market"
+  | "caisses_vides" | "shelf_life" | "forecast"
   | "camera_perms" | "cutoffs" | "deploy_guide"
-  | "azmi_agent" | "hicham_agent" | "ourai_agent"
   | "depots"
   | "rh_productivite" | "rh_comptabilite"
   | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
@@ -187,11 +184,9 @@ export type Tab =
   | "documents"
   | "category_pricing"
   | "echelons_client"
-  | "firebase_archive"
   | "liens_externes"
   | "device_access"
   | "mobile_gestion"
-  | "commandes_web"
   | "commandes_unifiees"
   | "alertes_clients"
   | "moteur_commercial" | "gifts_v3" | "loterie" | "pa_historique" | "gestion_pa" | "cutoffs_v3" | "feedbacks_v3"
@@ -222,7 +217,7 @@ interface NavGroup {
 const NAV_I18N_KEYS: Partial<Record<string, keyof typeof T>> = {
   recap: "nav.recap", finance: "nav.finance", rapport_livraison: "nav.rapport_livr",
   achat: "nav.achat", po: "nav.po", fournisseurs: "nav.fournisseurs",
-  reception: "nav.reception", commercial: "nav.commandes", affectation: "nav.affectation",
+  reception: "nav.reception", affectation: "nav.affectation",
   cash: "nav.cash", stock: "nav.stock", dispatch: "nav.dispatch",
   preparation: "nav.preparation", retour: "nav.retours", bon_livraison: "nav.bon_livr",
   articles: "nav.articles", comptes_externes: "nav.clients", whatsapp: "nav.whatsapp",
@@ -423,6 +418,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
         ),
       },
       { id: "import_externe",    label: "Import Bases Externes", labelAr: "استيراد قواعد البيانات", permKey: "canViewDatabase", icon: <Icon d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4M15 3l2 2-2 2M9 3L7 5l2 2" /> },
+      { id: "deploy_guide",      label: "Guide de deploiement",  labelAr: "دليل النشر",        permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M13 10V3L4 14h7v7l9-11h-7z" /> },
     ],
   },
 ]
@@ -481,7 +477,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   // puis config operationnelle (cutoffs, mobile, depots, integrations), puis
   // outils techniques rarement ouverts (BDD, imports, liens) et enfin les
   // ecrans reserves super-admin (camera) en dernier.
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms", "deploy_guide"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -495,7 +491,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   achat:             (_u) => <BOAchat />,
   reception:         (u) => <BOReception user={u} />,
   po:                (_u) => <BOPurchaseOrders />,
-  commercial:        (u) => <BOCommercial user={u} />,
   affectation:       (u) => <BOAffectationCommerciale user={u} />,
   zones_secteurs:    (u) => <BOZonesSecteurs user={u} />,
   dispatch:          (u) => <BODispatch user={u} />,
@@ -523,13 +518,11 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   loterie:           (u)  => <BOLoterie user={u} />,
   cutoffs_v3:        (u)  => <BOCutoffsV3 currentUserId={u.id} />,
   feedbacks_v3:      (u) => <FeedbackPanel user={u} />,
-  commandes_web:       (u) => <BOCommandesUnifiees user={u} />,
   commandes_unifiees:  (u) => <BOCommandesUnifiees user={u} />,
   alertes_clients:     (u) => <BOAlertesClients user={u} />,
   category_pricing:  (u) => <BOCategoryPricing user={u} />,
   echelons_client:   (u) => <BOEchelonsClient user={u} />,
   documents:         (u) => <BODocuments user={u} />,
-  firebase_archive:  (_u) => <div className="p-8 text-center text-slate-400">Module retiré</div>,
   liens_externes:    (u)  => <BOExternalLinks user={u} />,
   demandes_comptes:  (u) => <BODemandesComptes user={u} />,
   web_integration:   (u) => <BOWebIntegration user={u} />,
@@ -540,9 +533,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   prospection:       (u) => <BOProspection user={u} />,
   credit_fournisseur:(u) => <BOCreditFournisseur user={u} />,
   agents_ia:         (u) => <AgentsIAPanel user={u} initialAgent="ashel" />,
-  azmi_agent:        (u) => <AgentsIAPanel user={u} initialAgent="azmi" />,
-  hicham_agent:      (u) => <AgentsIAPanel user={u} initialAgent="hicham" />,
-  ourai_agent:       (u) => <AgentsIAPanel user={u} initialAgent="ourai" />,
   gps_tracker:       (u) => <BOGPSTracker user={u} />,
   feedback:          (u) => <FeedbackPanel user={u} />,
   trip_charges:      (_u) => <TripChargesPanel />,
@@ -558,7 +548,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   analyse_reception:   (_u) => <AnalyseReceptionPanel />,
   shelf_life:          (_u) => <ShelfLifePanel />,
   forecast:            (_u) => <ForecastPanel />,
-  ashel_market:        (_u) => <ASHELMarketPanel />,
   camera_perms:      (u) => <CameraPermissionsPanel currentUser={u} />,
   cutoffs:           (u)  => <BOCutoffsV3 currentUserId={u.id} />,
   deploy_guide:      (_u) => <DeployGuidePanel />,
@@ -723,7 +712,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
 
   // ── Render ─────────────────────────────────────────────────
   return (
-    <div className="flex h-screen overflow-hidden font-sans bg-slate-50 text-slate-800">
+    <div className="flex h-screen overflow-hidden font-sans bg-muted text-foreground">
 
       {isAdminOrAbove && <BONotifications navigate={navigate} />}
 
@@ -785,13 +774,13 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
         {/* ── Topbar ─────────────────────────────────────── */}
-        <header className="flex items-center justify-between px-4 lg:px-5 py-3 shrink-0 gap-3 bg-white border-b border-slate-200 shadow-sm">
+        <header className="flex items-center justify-between px-4 lg:px-5 py-3 shrink-0 gap-3 bg-white border-b border-border shadow-sm">
 
           {/* Left: hamburger + breadcrumb */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors shrink-0"
+              className="lg:hidden p-2 rounded-xl hover:bg-muted text-muted-foreground transition-colors shrink-0"
               aria-label="Ouvrir le menu">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -800,17 +789,17 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
 
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-[11px] text-slate-400 hidden sm:inline font-medium">
+                <span className="text-[11px] text-muted-foreground hidden sm:inline font-medium">
                   {(() => { const g = NAV_GROUPS.find(g => g.items.some(i => i.id === activeTab)); return g ? getGroupLabel(g.label, lang) : "Dashboard" })()}
                 </span>
-                <svg className="w-3 h-3 text-slate-300 hidden sm:block shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 text-muted-foreground hidden sm:block shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-                <h1 className="text-sm font-bold text-slate-800 truncate">
+                <h1 className="text-sm font-bold text-foreground truncate">
                   {activeItem ? getNavLabel(activeItem.id, activeItem.label, activeItem.labelAr, lang) : "Tableau de bord"}
                 </h1>
               </div>
-              <p className="text-[11px] text-slate-400 hidden sm:block">
+              <p className="text-[11px] text-muted-foreground hidden sm:block">
                 {new Date().toLocaleDateString("fr-MA", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </p>
             </div>
@@ -856,7 +845,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
                 : syncRunning ? "bg-emerald-50 border-emerald-200 text-emerald-600"
                 : sbStatus === "connected" ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
                 : sbStatus === "error"     ? "bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100"
-                                           : "bg-slate-50 border-slate-200 text-slate-500"
+                                           : "bg-muted border-border text-muted-foreground"
               ].join(" ")}>
               {syncRunning ? (
                 <svg className="w-3 h-3 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
@@ -903,7 +892,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
             {/* Avatar + name */}
             <button
               onClick={() => setShowProfil(true)}
-              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors">
+              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl border border-border bg-muted hover:bg-muted transition-colors">
               {profilPhoto ? (
                 <img src={profilPhoto} alt={user.name} className="w-7 h-7 rounded-full object-cover" />
               ) : (
@@ -912,8 +901,8 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
                 </div>
               )}
               <div className="hidden sm:block text-left">
-                <p className="text-xs font-semibold text-slate-700 leading-none">{user.name}</p>
-                <p className="text-[10px] text-slate-400">{ROLE_LABELS[user.role]}</p>
+                <p className="text-xs font-semibold text-foreground leading-none">{user.name}</p>
+                <p className="text-[10px] text-muted-foreground">{ROLE_LABELS[user.role]}</p>
               </div>
             </button>
 
@@ -923,7 +912,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
             {/* Logout */}
             <button
               onClick={onLogout}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-600 hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-colors">
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border text-xs text-muted-foreground hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition-colors">
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
@@ -960,11 +949,11 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
 
 
         {/* ── Content ────────────────────────────────────── */}
-        <main className="flex-1 overflow-auto bg-slate-50">
+        <main className="flex-1 overflow-auto bg-muted">
           <div className="p-4 lg:p-6 min-h-full">
             <PanelErrorBoundary key={activeTab} label={allItems.find(i => i.id === activeTab)?.label ?? activeTab}>
               {PANELS[activeTab]?.(user, setActiveTab) ?? (
-                <div className="flex items-center justify-center h-64 text-slate-400 text-sm">
+                <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
                   Section non disponible
                 </div>
               )}
@@ -976,8 +965,8 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
         <CallCenter user={user} />
 
         {/* ── Footer ─────────────────────────────────────── */}
-        <footer className="shrink-0 border-t border-slate-200 bg-white px-4 py-2 flex items-center justify-between gap-4 flex-wrap">
-          <p className="text-[11px] text-slate-500">
+        <footer className="shrink-0 border-t border-border bg-white px-4 py-2 flex items-center justify-between gap-4 flex-wrap">
+          <p className="text-[11px] text-muted-foreground">
             &copy; 2026{" "}
             <span className="font-black" style={{ color: "#1a4f2a" }}>
               Vita<span style={{ color: "#b8962e" }}>Fresh</span>
@@ -1265,7 +1254,7 @@ function TabPill({ id, activeTab, navigate, label }: {
         "shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap",
         isActive
           ? "bg-blue-600 text-white shadow-sm"
-          : "bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-800 border border-slate-200",
+          : "bg-white text-muted-foreground hover:bg-muted hover:text-foreground border border-border",
       ].join(" ")}
     >
       {label}
@@ -1335,17 +1324,17 @@ function ProfilModal({ user, profilPhoto, setProfilPhoto, onClose, canUseCamera 
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-scale-in">
+      <div className="bg-white rounded-2xl border border-border shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-scale-in">
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 bg-slate-50 border-b border-slate-200">
-          <h2 className="font-bold text-sm text-slate-800">Mon Profil / ملفي الشخصي</h2>
+        <div className="flex items-center justify-between px-5 py-4 bg-muted border-b border-border">
+          <h2 className="font-bold text-sm text-foreground">Mon Profil / ملفي الشخصي</h2>
           <div className="flex items-center gap-2">
             <button onClick={() => { setEditMode(v => !v); setSaveMsg(null) }}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${editMode ? "bg-slate-200 text-slate-700" : "bg-green-100 text-green-700 hover:bg-green-200"}`}>
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${editMode ? "bg-muted text-foreground" : "bg-green-100 text-green-700 hover:bg-green-200"}`}>
               {editMode ? "Annuler" : "✏️ Modifier"}
             </button>
-            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700 transition-colors">
+            <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -1361,7 +1350,7 @@ function ProfilModal({ user, profilPhoto, setProfilPhoto, onClose, canUseCamera 
               {profilPhoto ? (
                 <img src={profilPhoto} alt={user.name} className="w-20 h-20 rounded-full object-cover border-4 border-primary shadow-lg" />
               ) : (
-                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black text-white border-4 border-slate-200 shadow-md ${ROLE_COLORS[user.role]}`}>
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black text-white border-4 border-border shadow-md ${ROLE_COLORS[user.role]}`}>
                   {user.name[0]?.toUpperCase()}
                 </div>
               )}
@@ -1404,32 +1393,32 @@ function ProfilModal({ user, profilPhoto, setProfilPhoto, onClose, canUseCamera 
 
               {/* Email */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-600">Email</label>
+                <label className="text-xs font-bold text-muted-foreground">Email</label>
                 <input type="email" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                  className="px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
               </div>
 
               {/* Password */}
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-600">Nouveau mot de passe <span className="text-slate-400 font-normal">(laisser vide = inchangé)</span></label>
+                <label className="text-xs font-bold text-muted-foreground">Nouveau mot de passe <span className="text-muted-foreground font-normal">(laisser vide = inchangé)</span></label>
                 <input type="password" value={editPwd1} onChange={e => setEditPwd1(e.target.value)}
                   placeholder="Min. 6 caractères"
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                  className="px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs font-bold text-slate-600">Confirmer le mot de passe</label>
+                <label className="text-xs font-bold text-muted-foreground">Confirmer le mot de passe</label>
                 <input type="password" value={editPwd2} onChange={e => setEditPwd2(e.target.value)}
                   placeholder="Répétez le mot de passe"
-                  className="px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
+                  className="px-3 py-2 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
               </div>
 
               {/* ── Super admin can also modify own permissions ── */}
               {isJawad && (
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-600">Mes permissions / صلاحياتي</label>
+                  <label className="text-xs font-bold text-muted-foreground">Mes permissions / صلاحياتي</label>
                   <div className="grid grid-cols-2 gap-1.5">
                     {PERM_KEYS.map(k => (
-                      <label key={k} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer hover:bg-slate-50 text-xs">
+                      <label key={k} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border cursor-pointer hover:bg-muted text-xs">
                         <input type="checkbox" checked={!!editPerms[k]}
                           onChange={e => setEditPerms(prev => ({ ...prev, [k]: e.target.checked }))}
                           className="accent-green-600 w-3.5 h-3.5 shrink-0" />

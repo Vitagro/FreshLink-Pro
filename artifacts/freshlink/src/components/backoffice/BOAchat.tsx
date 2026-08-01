@@ -679,7 +679,7 @@ export default function BOAchat() {
                     <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${statutColor[b.statut]}`}>{b.statut}</span></td>
                     <td className="px-4 py-3">
                       {b.statut === "brouillon" && (
-                        <button onClick={() => handleValidateBon(b)} className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs font-medium hover:opacity-90">Valider</button>
+                        <button onClick={() => handleValidateBon(b)} className="px-3 py-1 bg-primary text-primary-foreground rounded-lg text-xs font-medium hover:opacity-90">Valider</button>
                       )}
                     </td>
                   </tr>
