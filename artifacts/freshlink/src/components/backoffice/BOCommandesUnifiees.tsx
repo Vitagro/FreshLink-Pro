@@ -1070,12 +1070,12 @@ export default function BOCommandesUnifiees({ user }: Props) {
       {/* ── Modal : nouvelle commande (création manuelle) ── */}
       {showNew && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={e => e.target === e.currentTarget && setShowNew(false)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-bold text-slate-800">Nouvelle commande</h3>
               <button onClick={() => setShowNew(false)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500">✕</button>
             </div>
-            <div className="p-5 flex flex-col gap-3">
+            <div className="p-5 flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-slate-600">Client *</label>
@@ -1093,30 +1093,42 @@ export default function BOCommandesUnifiees({ user }: Props) {
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-semibold text-slate-600">Articles</label>
+                {/* En-têtes de colonnes — une ligne par article ci-dessous */}
+                <div className="hidden sm:flex items-center gap-2 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                  <span className="w-6">#</span>
+                  <span className="flex-[2]">Article</span>
+                  <span className="w-24 text-center">Quantité</span>
+                  <span className="w-24 text-center">Prix vente</span>
+                  <span className="w-16 text-center">Unité</span>
+                  <span className="w-6" />
+                </div>
                 {noLignes.map((l, i) => {
                   const art = store.getArticles().find(a => a.id === l.articleId)
                   const hasUM = !!(art?.um && art?.colisageParUM)
                   const inUMMode = hasUM && l.uniteMode === art!.um
                   return (
-                    <div key={i} className="flex flex-col gap-1.5 p-2 rounded-lg border border-slate-100 bg-slate-50">
+                    <div key={i} className="flex flex-col gap-2 p-3 rounded-xl border border-slate-200 bg-slate-50">
                       <div className="flex items-center gap-2">
+                        <span className="w-6 shrink-0 text-xs font-bold text-slate-400 text-center">{i + 1}</span>
                         <select value={l.articleId}
                           onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, articleId: e.target.value, uniteMode: "base", quantite: "", prixVente: e.target.value ? String(store.computePrixEffectif(store.getArticles().find(a => a.id === e.target.value)!, store.getClients().find(c => c.id === noClientId))) : "" } : x))}
-                          className="flex-1 px-2 py-2 rounded-lg border border-slate-200 text-sm">
+                          className="flex-[2] min-w-0 px-2 py-2.5 rounded-lg border border-slate-200 text-sm">
                           <option value="">— Article —</option>
                           {store.getArticles().slice().sort((a, b) => a.nom.localeCompare(b.nom)).map(a => <option key={a.id} value={a.id}>{a.nom}{a.nomAr ? ` / ${a.nomAr}` : ""}</option>)}
                         </select>
                         <input type="text" inputMode="decimal" placeholder="Qté" value={l.quantite}
                           onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, quantite: e.target.value.replace(",", ".") } : x))}
-                          className="w-20 px-2 py-2 rounded-lg border border-slate-200 text-sm text-center" />
+                          className="w-24 shrink-0 px-2 py-2.5 rounded-lg border border-slate-200 text-sm text-center" />
                         <input type="text" inputMode="decimal" placeholder="PV" value={l.prixVente}
                           onChange={e => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, prixVente: e.target.value.replace(",", ".") } : x))}
-                          className="w-20 px-2 py-2 rounded-lg border border-slate-200 text-sm text-center" />
-                        <span className="w-8 text-[10px] text-slate-400">{inUMMode ? art!.um : art?.unite}</span>
-                        {noLignes.length > 1 && <button onClick={() => setNoLignes(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>}
+                          className="w-24 shrink-0 px-2 py-2.5 rounded-lg border border-slate-200 text-sm text-center" />
+                        <span className="w-16 shrink-0 text-xs text-slate-400 text-center">{inUMMode ? art!.um : art?.unite}</span>
+                        <span className="w-6 shrink-0 flex justify-center">
+                          {noLignes.length > 1 && <button onClick={() => setNoLignes(prev => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>}
+                        </span>
                       </div>
                       {hasUM && (
-                        <div className="flex items-center gap-2 pl-1">
+                        <div className="flex items-center gap-2 pl-8">
                           <div className="flex rounded-lg overflow-hidden border border-slate-200 bg-white">
                             <button type="button"
                               onClick={() => setNoLignes(prev => prev.map((x, j) => j === i ? { ...x, uniteMode: "base", quantite: "" } : x))}
