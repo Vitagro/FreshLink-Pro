@@ -21,7 +21,7 @@ interface AlertItem {
 }
 
 interface ArticleAlert {
-  articleId: string; articleNom: string; famille: string
+  articleId: string; articleNom: string; articleNomAr?: string; famille: string
   joursAbsence: number; nbCommandesHistorique: number
   stockDisponible?: number; prixVente?: number
 }
@@ -251,7 +251,7 @@ export default function MobileAlertes({ user }: Props) {
       if (!art) return acc
       const joursAbsence = Math.floor((today.getTime() - new Date(info.lastDate).getTime()) / 86400000)
       if (joursAbsence < store.getAlertConfig().articleAbsenceJours) return acc
-      acc.push({ articleId: artId, articleNom: art.nom, famille: art.famille ?? "", joursAbsence, nbCommandesHistorique: info.count, stockDisponible: art.stockDisponible, prixVente: info.prixVente })
+      acc.push({ articleId: artId, articleNom: art.nom, articleNomAr: art.nomAr, famille: art.famille ?? "", joursAbsence, nbCommandesHistorique: info.count, stockDisponible: art.stockDisponible, prixVente: info.prixVente })
       return acc
     }, []).sort((a, b) => b.joursAbsence - a.joursAbsence)
   }, [selectedClientId])
@@ -457,6 +457,7 @@ export default function MobileAlertes({ user }: Props) {
                       <p className="font-bold text-sm text-foreground leading-tight">{a.articleNom}</p>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${badge}`}>J-{a.joursAbsence}</span>
                     </div>
+                    {a.articleNomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{a.articleNomAr}</p>}
                     <p className="text-xs text-muted-foreground mt-0.5">{a.famille}</p>
                     <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                       <span className="text-[10px] text-slate-500">📊 {a.nbCommandesHistorique}× commandé</span>

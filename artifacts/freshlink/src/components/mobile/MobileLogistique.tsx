@@ -95,7 +95,10 @@ function DeliveryCard({ commande, motifs, onUpdate }: DeliveryCardProps) {
             <div className="flex flex-col gap-1.5">
               {commande.lignes.map((l, i) => (
                 <div key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-foreground font-medium">{l.articleNom}</span>
+                  <span className="text-foreground font-medium">
+                    {l.articleNom}
+                    {l.articleNomAr && <span className="block text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{l.articleNomAr}</span>}
+                  </span>
                   <span className="text-muted-foreground font-sans">{l.quantite} × {(l.prixVente ?? l.prixUnitaire ?? 0)} DH = <strong>{(l.quantite * (l.prixVente ?? l.prixUnitaire ?? 0)).toLocaleString("fr-MA")} DH</strong></span>
                 </div>
               ))}
@@ -702,7 +705,10 @@ export default function MobileLogistique({ user }: Props) {
                       <div className="bg-muted/40 rounded-xl p-3">
                         {c.lignes.map((l, i) => (
                           <div key={i} className="flex justify-between text-xs py-0.5">
-                            <span className="text-foreground">{l.articleNom}</span>
+                            <span className="text-foreground">
+                              {l.articleNom}
+                              {l.articleNomAr && <span className="block text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{l.articleNomAr}</span>}
+                            </span>
                             <span className="text-muted-foreground font-medium">{l.quantite} × {l.prixVente} DH</span>
                           </div>
                         ))}
@@ -1126,6 +1132,10 @@ function MagasinierReceptionTab({ user }: { user: User }) {
     setPendingPOs(store.getPurchaseOrders().filter(po => po.statut === "envoyé"))
   }
 
+  // Nom arabe de l'article — les lignes PO/reception ne le stockent pas,
+  // on le retrouve via l'id dans le catalogue déjà chargé.
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
+
   useEffect(() => { reload() }, [])
 
   // Helper: compute DLC date from article shelfLifeJours
@@ -1313,7 +1323,10 @@ function MagasinierReceptionTab({ user }: { user: User }) {
           <div className="flex flex-col gap-1.5">
             {pendingPOs.slice(0, 3).map(po => (
               <div key={po.id} className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-amber-900">{po.articleNom}</span>
+                <span className="font-semibold text-amber-900">
+                  {po.articleNom}
+                  {nomArOf(po.articleId) && <span className="block text-[10px] font-normal font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
+                </span>
                 <span className="text-amber-700">{po.quantite} {po.articleUnite} — {po.fournisseurNom}</span>
               </div>
             ))}
@@ -1345,7 +1358,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
                 className="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-green-400">
                 <option value="">-- Selectionner un PO --</option>
                 {pendingPOs.map(po => (
-                  <option key={po.id} value={po.id}>{po.articleNom} — {po.quantite} {po.articleUnite} ({po.fournisseurNom})</option>
+                  <option key={po.id} value={po.id}>{po.articleNom}{nomArOf(po.articleId) ? ` / ${nomArOf(po.articleId)}` : ""} — {po.quantite} {po.articleUnite} ({po.fournisseurNom})</option>
                 ))}
               </select>
             </div>
@@ -1389,7 +1402,10 @@ function MagasinierReceptionTab({ user }: { user: User }) {
                   />
                 ) : (
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-bold text-slate-800">{l.articleNom}</p>
+                    <p className="text-sm font-bold text-slate-800">
+                      {l.articleNom}
+                      {nomArOf(l.articleId) && <span className="block text-xs font-normal text-slate-500 font-arabic" dir="rtl" lang="ar">{nomArOf(l.articleId)}</span>}
+                    </p>
                     <span className="text-xs text-slate-500">{l.quantiteCommandee} {l.unite} command.</span>
                   </div>
                 )}
@@ -1537,7 +1553,10 @@ function MagasinierReceptionTab({ user }: { user: User }) {
                   return (
                     <div key={i} className="flex items-start justify-between text-xs">
                       <div>
-                        <p className="font-semibold text-slate-800">{l.articleNom}</p>
+                        <p className="font-semibold text-slate-800">
+                          {l.articleNom}
+                          {nomArOf(l.articleId) && <span className="block text-xs font-normal text-slate-500 font-arabic" dir="rtl" lang="ar">{nomArOf(l.articleId)}</span>}
+                        </p>
                         <p className="text-slate-500">Recu: <span className="font-bold text-green-700">{l.quantiteRecue}</span> / command: {l.quantiteCommandee}</p>
                         {dlcEntry?.dlc && (
                           <p className="text-[10px] text-blue-600 font-semibold">DLC: {dlcEntry.dlc}</p>

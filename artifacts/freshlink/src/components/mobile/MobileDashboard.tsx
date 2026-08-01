@@ -70,9 +70,9 @@ export default function MobileDashboard({ user }: Props) {
   const pctClients = Math.min(100, objClients > 0 ? (uniqueClients / objClients) * 100 : 0)
 
   // SKU breakdown (today)
-  const skuBreakdown: Record<string, { nom: string; quantite: number; ca: number }> = {}
+  const skuBreakdown: Record<string, { nom: string; nomAr?: string; quantite: number; ca: number }> = {}
   forPeriod.forEach(c => c.lignes.forEach(l => {
-    if (!skuBreakdown[l.articleId]) skuBreakdown[l.articleId] = { nom: l.articleNom, quantite: 0, ca: 0 }
+    if (!skuBreakdown[l.articleId]) skuBreakdown[l.articleId] = { nom: l.articleNom, nomAr: l.articleNomAr, quantite: 0, ca: 0 }
     skuBreakdown[l.articleId].quantite += l.quantite
     skuBreakdown[l.articleId].ca += l.quantite * l.prixVente
   }))
@@ -181,6 +181,7 @@ export default function MobileDashboard({ user }: Props) {
                     <div key={id} className="px-4 py-3 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-semibold text-foreground">{sku.nom}</p>
+                        {sku.nomAr && <p className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{sku.nomAr}</p>}
                         <p className="text-xs text-muted-foreground">{sku.quantite.toLocaleString("fr-MA")} kg</p>
                       </div>
                       <span className="font-bold text-primary text-sm">

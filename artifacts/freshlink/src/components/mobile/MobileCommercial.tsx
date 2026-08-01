@@ -1700,6 +1700,7 @@ export default function MobileCommercial({ user }: Props) {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-foreground truncate">{art.nom}</p>
+                        {art.nomAr && <p className="text-xs text-muted-foreground font-arabic truncate" dir="rtl" lang="ar">{art.nomAr}</p>}
                         <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
                           <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-amber-100 text-amber-700">
                             {hab.count}x commande(s)

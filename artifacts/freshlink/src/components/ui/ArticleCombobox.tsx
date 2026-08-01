@@ -28,7 +28,7 @@ export default function ArticleCombobox({ articles, value, onChange, placeholder
   const filtered = articles.filter(a => {
     if (!search) return true
     const q = search.toLowerCase()
-    return a.nom.toLowerCase().includes(q) || ((a as {reference?:string}).reference ?? "").toLowerCase().includes(q)
+    return a.nom.toLowerCase().includes(q) || (a.nomAr ?? "").includes(q) || ((a as {reference?:string}).reference ?? "").toLowerCase().includes(q)
   }).slice(0, 40)
 
   return (
@@ -42,6 +42,9 @@ export default function ArticleCombobox({ articles, value, onChange, placeholder
         {selected ? (
           <span className="flex-1 flex items-center gap-2 truncate">
             <span className="font-semibold text-foreground truncate">{selected.nom}</span>
+            {selected.nomAr && (
+              <span className="text-xs text-muted-foreground truncate shrink-0" dir="rtl" lang="ar">{selected.nomAr}</span>
+            )}
             <span className="text-xs text-muted-foreground shrink-0">{store.computePV(selected)} DH/{selected.unite}</span>
             {selected.stockDisponible <= 0 && (
               <span className="text-[9px] font-bold px-1 rounded bg-orange-100 text-orange-600 shrink-0">Rupture</span>
@@ -90,6 +93,9 @@ export default function ArticleCombobox({ articles, value, onChange, placeholder
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-sm font-semibold text-foreground truncate">{art.nom}</span>
+                      {art.nomAr && (
+                        <span className="text-xs text-muted-foreground truncate" dir="rtl" lang="ar">{art.nomAr}</span>
+                      )}
                       {art.stockDisponible <= 0 && (
                         <span className="text-[9px] font-bold px-1 rounded bg-orange-100 text-orange-600 shrink-0">Rupture</span>
                       )}

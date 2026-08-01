@@ -630,6 +630,7 @@ export interface BonAchat {
 export interface LigneCommande {
   articleId: string
   articleNom: string
+  articleNomAr?: string   // nom arabe de l'article (affichage bilingue mobile)
   unite?: string          // unite de mesure
   // UM (Unite de Mesure)
   um?: string             // libelle UM ex: "Caisse 15kg"
