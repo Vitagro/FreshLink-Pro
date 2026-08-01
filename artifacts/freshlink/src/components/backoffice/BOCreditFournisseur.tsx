@@ -73,6 +73,9 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
   const [fournisseurs, setFournisseurs] = useState<Array<{ id: string; nom: string }>>([])
   const [users, setUsers]           = useState<Array<{ id: string; name: string }>>([])
   const [articleNoms, setArticleNoms] = useState<string[]>([])
+  // Nom arabe — articleNom ici est un texte libre (pas d'articleId), on
+  // tente un match par nom dans le catalogue.
+  const nomArOfName = (nom: string) => store.getArticles().find(a => a.nom.toLowerCase() === nom.trim().toLowerCase())?.nomAr ?? ""
 
   useEffect(() => {
     const frs = store.getFournisseurs()
@@ -271,7 +274,10 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
                     return (
                       <tr key={c.id} className={`border-t border-border hover:bg-muted/20 ${isOverdue ? "bg-red-50/30" : ""}`}>
                         <td className="px-4 py-3 font-semibold">{c.fournisseurNom}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{c.articleNom}</td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {c.articleNom}
+                          {nomArOfName(c.articleNom) && <span className="block text-xs font-arabic" dir="rtl" lang="ar">{nomArOfName(c.articleNom)}</span>}
+                        </td>
                         <td className="px-4 py-3">{c.acheteurNom}</td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{c.dateAchat}</td>
                         <td className="px-4 py-3 whitespace-nowrap">
@@ -336,7 +342,10 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
                     return (
                       <div key={l.id} className="flex items-center gap-4 px-5 py-3 text-sm">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-foreground truncate">{l.articleNom}</p>
+                          <p className="font-semibold text-foreground truncate">
+                            {l.articleNom}
+                            {nomArOfName(l.articleNom) && <span className="ml-1 text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">({nomArOfName(l.articleNom)})</span>}
+                          </p>
                           <p className="text-xs text-muted-foreground">Acheteur: {l.acheteurNom} · {l.dateAchat}</p>
                         </div>
                         <div className="text-right shrink-0">
@@ -386,7 +395,11 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
                     return (
                       <div key={l.id} className="flex items-center gap-4 px-5 py-3 text-sm">
                         <div className="flex-1 min-w-0">
-                          <p className="font-semibold truncate">{l.articleNom} — {l.fournisseurNom}</p>
+                          <p className="font-semibold truncate">
+                            {l.articleNom}
+                            {nomArOfName(l.articleNom) && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar"> ({nomArOfName(l.articleNom)})</span>}
+                            {" "}— {l.fournisseurNom}
+                          </p>
                           <p className="text-xs text-muted-foreground">{l.dateAchat}{l.referenceFacture ? ` · Ref: ${l.referenceFacture}` : ""}</p>
                         </div>
                         <p className="font-bold shrink-0">{fmt(l.montant)} DH</p>
@@ -422,7 +435,10 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
             </div>
             <div className="bg-muted rounded-xl p-4 space-y-1 text-sm">
               <p><span className="text-muted-foreground">Fournisseur:</span> <strong>{paymentModal.fournisseurNom}</strong></p>
-              <p><span className="text-muted-foreground">Article:</span> <strong>{paymentModal.articleNom}</strong></p>
+              <p>
+                <span className="text-muted-foreground">Article:</span> <strong>{paymentModal.articleNom}</strong>
+                {nomArOfName(paymentModal.articleNom) && <span className="ml-1 text-muted-foreground font-arabic" dir="rtl" lang="ar">({nomArOfName(paymentModal.articleNom)})</span>}
+              </p>
               <p><span className="text-muted-foreground">Montant total:</span> <strong>{fmt(paymentModal.montant)} DH</strong></p>
               <p><span className="text-muted-foreground">Deja paye:</span> <strong className="text-green-700">{fmt(paymentModal.montantPaye)} DH</strong></p>
               <p><span className="text-muted-foreground">Reste:</span> <strong className="text-red-700">{fmt(paymentModal.montant - paymentModal.montantPaye)} DH</strong></p>
