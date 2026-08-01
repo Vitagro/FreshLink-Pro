@@ -32,7 +32,7 @@ const STATUT_PO_COLORS: Record<string, string> = {
   ouvert:       "bg-amber-100 text-amber-700 border-amber-200",
   "envoyé":     "bg-blue-100 text-blue-700 border-blue-200",
   "receptionné":"bg-emerald-100 text-emerald-700 border-emerald-200",
-  "annulé":     "bg-slate-100 text-slate-500 border-slate-200",
+  "annulé":     "bg-muted text-muted-foreground border-border",
 }
 
 // Dispo confirmations stored locally: fl_fournisseur_dispos
@@ -214,7 +214,7 @@ export default function MobileFournisseurPortail({ user }: Props) {
         {(["paiements", "demandes"] as SubTab[]).map(t => (
           <button key={t} onClick={() => setSubTab(t)}
             className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all
-              ${subTab === t ? "bg-green-700 text-white border-green-700 shadow" : "bg-white text-slate-600 border-slate-200"}`}>
+              ${subTab === t ? "bg-green-700 text-white border-green-700 shadow" : "bg-white text-muted-foreground border-border"}`}>
             {t === "paiements"
               ? `💰 Paiements${totalDu > 0 ? ` (${fmt(totalDu)} DH)` : ""}`
               : `📦 Demandes${openOrders > 0 ? ` (${openOrders})` : ""}`}
@@ -226,7 +226,7 @@ export default function MobileFournisseurPortail({ user }: Props) {
       {subTab === "paiements" && (
         <div className="px-3 space-y-3">
           {orders.length === 0 && (
-            <div className="text-center py-12 text-slate-400">
+            <div className="text-center py-12 text-muted-foreground">
               <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -268,45 +268,45 @@ export default function MobileFournisseurPortail({ user }: Props) {
             const pct        = po.total > 0 ? Math.min(100, (totalPaid / po.total) * 100) : 0
 
             return (
-              <div key={po.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+              <div key={po.id} className="bg-white rounded-2xl border border-border overflow-hidden shadow-sm">
                 <button className="w-full text-left px-4 py-3" onClick={() => setExpanded(isOpen ? null : po.id)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-black text-slate-700">{po.articleNom}</span>
-                        {nomArOf(po.articleId) && <span className="text-[10px] text-slate-400 font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
+                        <span className="text-xs font-black text-foreground">{po.articleNom}</span>
+                        {nomArOf(po.articleId) && <span className="text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${PAIEMENT_COLORS[statPay]}`}>
                           {PAIEMENT_LABELS[statPay]}
                         </span>
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
                         {po.date} · {po.quantite} {po.articleUnite}
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-black text-slate-800">{fmt(po.total ?? 0)} DH</div>
+                      <div className="text-sm font-black text-foreground">{fmt(po.total ?? 0)} DH</div>
                       {du > 0 && <div className="text-[10px] font-bold text-red-600">Dû : {fmt(du)} DH</div>}
                     </div>
                   </div>
 
                   {/* Payment bar */}
                   <div className="flex items-center gap-2 mt-2">
-                    <div className="flex-1 bg-slate-100 rounded-full h-1.5">
+                    <div className="flex-1 bg-muted rounded-full h-1.5">
                       <div
                         className={`h-1.5 rounded-full ${pct === 100 ? "bg-emerald-500" : pct > 0 ? "bg-amber-400" : "bg-red-300"}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-[10px] text-slate-400 w-8 text-right">{Math.round(pct)}%</span>
+                    <span className="text-[10px] text-muted-foreground w-8 text-right">{Math.round(pct)}%</span>
                   </div>
                 </button>
 
                 {isOpen && (
-                  <div className="px-4 pb-4 border-t border-slate-100 pt-3">
+                  <div className="px-4 pb-4 border-t border-border pt-3">
                     <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                      <div className="bg-slate-50 rounded-lg px-3 py-2">
-                        <div className="text-[10px] text-slate-400 font-semibold">Total commande</div>
-                        <div className="font-black text-slate-700">{fmt(po.total ?? 0)} DH</div>
+                      <div className="bg-muted rounded-lg px-3 py-2">
+                        <div className="text-[10px] text-muted-foreground font-semibold">Total commande</div>
+                        <div className="font-black text-foreground">{fmt(po.total ?? 0)} DH</div>
                       </div>
                       <div className="bg-emerald-50 rounded-lg px-3 py-2">
                         <div className="text-[10px] text-emerald-600 font-semibold">Payé</div>
@@ -316,7 +316,7 @@ export default function MobileFournisseurPortail({ user }: Props) {
 
                     {/* Payment history */}
                     {pays.filter(p => p.poId === po.id).map((p, i) => (
-                      <div key={i} className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+                      <div key={i} className="flex items-center justify-between text-[11px] text-muted-foreground mb-1">
                         <span>💳 {p.date}{p.note ? ` — ${p.note}` : ""}</span>
                         <span className="font-bold text-emerald-600">+{fmt(p.montant)} DH</span>
                       </div>
@@ -341,13 +341,13 @@ export default function MobileFournisseurPortail({ user }: Props) {
       {/* ════════════════ DEMANDES ════════════════ */}
       {subTab === "demandes" && (
         <div className="px-3 space-y-3">
-          <div className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-2">
+          <div className="text-xs text-muted-foreground bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-start gap-2">
             <span className="text-base">📦</span>
             <span>Les demandes d'approvisionnement envoyées par l'équipe apparaissent ici. Confirmez la disponibilité pour chaque article.</span>
           </div>
 
           {demandes.length === 0 && (
-            <div className="text-center py-12 text-slate-400">
+            <div className="text-center py-12 text-muted-foreground">
               <svg className="w-12 h-12 mx-auto mb-3 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
               </svg>
@@ -363,14 +363,14 @@ export default function MobileFournisseurPortail({ user }: Props) {
 
             return (
               <div key={po.id} className={`bg-white rounded-2xl border overflow-hidden shadow-sm
-                ${po.statut === "ouvert" && !confirmed ? "border-amber-300" : "border-slate-200"}`}>
+                ${po.statut === "ouvert" && !confirmed ? "border-amber-300" : "border-border"}`}>
                 <button className="w-full text-left px-4 py-3" onClick={() => setExpanded(isOpen ? null : `d_${po.id}`)}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-black text-slate-700">{po.articleNom}</span>
-                        {nomArOf(po.articleId) && <span className="text-[10px] text-slate-400 font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${STATUT_PO_COLORS[po.statut] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                        <span className="text-xs font-black text-foreground">{po.articleNom}</span>
+                        {nomArOf(po.articleId) && <span className="text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(po.articleId)}</span>}
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${STATUT_PO_COLORS[po.statut] ?? "bg-muted text-muted-foreground border-border"}`}>
                           {STATUT_PO_LABELS[po.statut] ?? po.statut}
                         </span>
                         {confirmed && (
@@ -379,16 +379,16 @@ export default function MobileFournisseurPortail({ user }: Props) {
                           </span>
                         )}
                       </div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
+                      <div className="text-[11px] text-muted-foreground mt-0.5">
                         {po.date} · Qté demandée : <strong>{po.quantite} {po.articleUnite}</strong>
                       </div>
                       {po.notes && (
-                        <div className="text-[11px] text-slate-400 italic mt-0.5 truncate">{po.notes}</div>
+                        <div className="text-[11px] text-muted-foreground italic mt-0.5 truncate">{po.notes}</div>
                       )}
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-sm font-black text-slate-800">{fmt(po.total ?? 0)} DH</div>
-                      <div className="text-[10px] text-slate-400">{po.prixUnitaire} DH/{po.articleUnite}</div>
+                      <div className="text-sm font-black text-foreground">{fmt(po.total ?? 0)} DH</div>
+                      <div className="text-[10px] text-muted-foreground">{po.prixUnitaire} DH/{po.articleUnite}</div>
                     </div>
                   </div>
 
@@ -402,16 +402,16 @@ export default function MobileFournisseurPortail({ user }: Props) {
                 </button>
 
                 {isOpen && (
-                  <div className="px-4 pb-4 border-t border-slate-100 pt-3">
+                  <div className="px-4 pb-4 border-t border-border pt-3">
                     {/* Order detail */}
                     <div className="grid grid-cols-2 gap-2 text-xs mb-4">
-                      <div className="bg-slate-50 rounded-lg px-3 py-2">
-                        <div className="text-[10px] text-slate-400 font-semibold">Qté commandée</div>
-                        <div className="font-black text-slate-700">{po.quantite} {po.articleUnite}</div>
+                      <div className="bg-muted rounded-lg px-3 py-2">
+                        <div className="text-[10px] text-muted-foreground font-semibold">Qté commandée</div>
+                        <div className="font-black text-foreground">{po.quantite} {po.articleUnite}</div>
                       </div>
-                      <div className="bg-slate-50 rounded-lg px-3 py-2">
-                        <div className="text-[10px] text-slate-400 font-semibold">Prix unitaire</div>
-                        <div className="font-black text-slate-700">{fmt(po.prixUnitaire)} DH</div>
+                      <div className="bg-muted rounded-lg px-3 py-2">
+                        <div className="text-[10px] text-muted-foreground font-semibold">Prix unitaire</div>
+                        <div className="font-black text-foreground">{fmt(po.prixUnitaire)} DH</div>
                       </div>
                       {po.commandeQty != null && (
                         <div className="bg-blue-50 rounded-lg px-3 py-2">
@@ -453,24 +453,24 @@ export default function MobileFournisseurPortail({ user }: Props) {
       {dispoModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl w-full max-w-md p-6 pb-10 shadow-2xl">
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+            <div className="w-10 h-1 bg-muted rounded-full mx-auto mb-5" />
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-xl">📦</div>
               <div>
-                <div className="font-black text-slate-800">Valider la disponibilité</div>
-                <div className="text-xs text-slate-500">
+                <div className="font-black text-foreground">Valider la disponibilité</div>
+                <div className="text-xs text-muted-foreground">
                   {dispoModal.articleNom}
                   {nomArOf(dispoModal.articleId) && <span className="ml-1 font-arabic" dir="rtl" lang="ar">({nomArOf(dispoModal.articleId)})</span>}
                 </div>
               </div>
             </div>
-            <p className="text-sm text-slate-600 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Confirmez la quantité disponible que vous pouvez livrer pour cette commande.
             </p>
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">
+                <label className="block text-xs font-bold text-muted-foreground mb-1">
                   Quantité disponible ({dispoModal.articleUnite})
                 </label>
                 <input
@@ -478,25 +478,25 @@ export default function MobileFournisseurPortail({ user }: Props) {
                   value={dispoQty}
                   onChange={e => setDispoQty(e.target.value)}
                   placeholder={`Max: ${dispoModal.quantite}`}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
-                <div className="text-[11px] text-slate-400 mt-1">Commandé : {dispoModal.quantite} {dispoModal.articleUnite}</div>
+                <div className="text-[11px] text-muted-foreground mt-1">Commandé : {dispoModal.quantite} {dispoModal.articleUnite}</div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Note (optionnel)</label>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">Note (optionnel)</label>
                 <input
                   type="text"
                   value={dispoNote}
                   onChange={e => setDispoNote(e.target.value)}
                   placeholder="Ex: Disponible dès demain matin..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
 
             <div className="flex gap-3">
               <button onClick={() => setDispoModal(null)}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">
+                className="flex-1 py-3 rounded-xl border border-border text-muted-foreground font-semibold text-sm">
                 Annuler
               </button>
               <button onClick={handleConfirmDispo} disabled={confirming}
@@ -512,12 +512,12 @@ export default function MobileFournisseurPortail({ user }: Props) {
       {payModal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-t-3xl w-full max-w-md p-6 pb-10 shadow-2xl">
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+            <div className="w-10 h-1 bg-muted rounded-full mx-auto mb-5" />
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-xl">✅</div>
               <div>
-                <div className="font-black text-slate-800">Confirmer paiement reçu</div>
-                <div className="text-xs text-slate-500">
+                <div className="font-black text-foreground">Confirmer paiement reçu</div>
+                <div className="text-xs text-muted-foreground">
                   {payModal.articleNom}
                   {nomArOf(payModal.articleId) && <span className="ml-1 font-arabic" dir="rtl" lang="ar">({nomArOf(payModal.articleId)})</span>}
                   {" "}— {payModal.date}
@@ -527,30 +527,30 @@ export default function MobileFournisseurPortail({ user }: Props) {
 
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Montant reçu (DH)</label>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">Montant reçu (DH)</label>
                 <input
                   type="number"
                   value={payMontant}
                   onChange={e => setPayMontant(e.target.value)}
                   placeholder="0.00"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 mb-1">Mode de paiement</label>
+                <label className="block text-xs font-bold text-muted-foreground mb-1">Mode de paiement</label>
                 <input
                   type="text"
                   value={payNote}
                   onChange={e => setPayNote(e.target.value)}
                   placeholder="Ex: Virement, Chèque, Espèces..."
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  className="w-full px-4 py-3 rounded-xl border border-border text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
             </div>
 
             <div className="flex gap-3">
               <button onClick={() => setPayModal(null)}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm">
+                className="flex-1 py-3 rounded-xl border border-border text-muted-foreground font-semibold text-sm">
                 Annuler
               </button>
               <button onClick={handleConfirmPay} disabled={paying}
