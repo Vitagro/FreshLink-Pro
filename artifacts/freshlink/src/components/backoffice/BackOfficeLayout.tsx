@@ -721,19 +721,6 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
     )
   })).filter(g => g.items.length > 0)
 
-  // ── Group icon colors by group label (light-theme friendly) ──
-  const GROUP_ICON_COLOR: Record<string, string> = {
-    "Vue d'ensemble":        "text-emerald-600",
-    "Achats":                "text-amber-600",
-    "Commercial":            "text-lime-600",
-    "Clients & Fournisseurs": "text-rose-600",
-    "Stock & Catalogue":     "text-orange-600",
-    "Logistique":            "text-sky-600",
-    "Finance & Contrôle":    "text-violet-600",
-    "RH & Equipe":           "text-indigo-600",
-    "Administration":        "text-slate-600",
-  }
-
   // ── Render ─────────────────────────────────────────────────
   return (
     <div className="flex h-screen overflow-hidden font-sans bg-slate-50 text-slate-800">
@@ -752,7 +739,6 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
           setNavSearch={setNavSearch}
           filteredGroups={filteredGroups}
           searchQ={searchQ}
-          GROUP_ICON_COLOR={GROUP_ICON_COLOR}
           navigate={navigate}
           onLogout={onLogout}
           onOpenProfil={() => setShowProfil(true)}
@@ -778,8 +764,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
               setNavSearch={setNavSearch}
               filteredGroups={filteredGroups}
               searchQ={searchQ}
-              GROUP_ICON_COLOR={GROUP_ICON_COLOR}
-              navigate={navigate}
+                  navigate={navigate}
               onLogout={onLogout}
               onOpenProfil={() => setShowProfil(true)}
               appName={companyBrand.appName || "FreshLink Pro"}
@@ -1037,7 +1022,6 @@ interface SidebarContentProps {
   setNavSearch: (v: string) => void
   filteredGroups: Array<{ label: string; labelAr: string; items: NavItem[] }>
   searchQ: string
-  GROUP_ICON_COLOR: Record<string, string>
   navigate: (t: Tab) => void
   onLogout: () => void
   onOpenProfil: () => void
@@ -1050,7 +1034,7 @@ interface SidebarContentProps {
 function SidebarContent({
   user, activeTab, sidebarCollapsed, setSidebarCollapsed,
   profilPhoto, navSearch, setNavSearch, filteredGroups, searchQ,
-  GROUP_ICON_COLOR, navigate, onLogout, onOpenProfil,
+  navigate, onLogout, onOpenProfil,
   appName, appSlogan, appLogo, lang,
 }: SidebarContentProps) {
   const BG = "#0d2218"
