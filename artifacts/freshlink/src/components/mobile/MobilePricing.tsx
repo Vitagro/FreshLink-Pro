@@ -85,6 +85,10 @@ export default function MobilePricing({ user }: Props) {
 
   useEffect(() => { load() }, [load])
 
+  // Nom arabe — les relevés de prix stockent le nom en texte libre (pas
+  // toujours lié à un articleId du catalogue), on tente un match par nom.
+  const nomArOfName = (nom: string) => articles.find(a => a.nom.toLowerCase() === nom.trim().toLowerCase())?.nomAr ?? ""
+
   function resetForm() {
     setType("fournisseur"); setArticleNom(""); setCategorie("Légumes fruits")
     setPrix(""); setUnite("kg"); setGrade("A"); setSource("visite")
@@ -250,6 +254,7 @@ export default function MobilePricing({ user }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-slate-800 text-sm truncate">{e.articleNom}</p>
+                      {nomArOfName(e.articleNom) && <span className="text-xs text-slate-400 font-arabic truncate" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</span>}
                       {e.qualiteGrade && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-white border border-slate-200 text-slate-600 shrink-0">
                           {e.qualiteGrade}
@@ -301,6 +306,7 @@ export default function MobilePricing({ user }: Props) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-slate-800 text-sm">{e.articleNom}</span>
+                  {nomArOfName(e.articleNom) && <span className="text-xs text-slate-400 font-arabic" dir="rtl" lang="ar">{nomArOfName(e.articleNom)}</span>}
                   <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${e.type === "fournisseur" ? "bg-amber-100 border-amber-300 text-amber-700" : "bg-blue-100 border-blue-300 text-blue-700"}`}>
                     {e.type === "fournisseur" ? "Fourn" : "Client"}
                   </span>

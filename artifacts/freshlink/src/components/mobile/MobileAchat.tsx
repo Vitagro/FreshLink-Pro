@@ -202,6 +202,9 @@ function POCameraCapture({ value, onChange }: { value: string; onChange: (url: s
 
 export default function MobileAchat({ user }: Props) {
   const [articles, setArticles] = useState<Article[]>([])
+  // Nom arabe — les lignes PO/entry ne le stockent pas toujours, on le
+  // retrouve via l'id dans le catalogue deja charge.
+  const nomArOf = (articleId: string) => articles.find(a => a.id === articleId)?.nomAr ?? ""
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [lignes, setLignes] = useState<LigneForm[]>([EMPTY_LIGNE()])
   const [fournisseurId, setFournisseurId] = useState("")
@@ -1045,6 +1048,9 @@ export default function MobileAchat({ user }: Props) {
                         <span className="text-[10px] font-mono" style={{ color: "oklch(0.52 0.010 145)" }}>{po.id}</span>
                       </div>
                       <p className="font-bold text-sm" style={{ color: "oklch(0.88 0.006 100)" }}>{po.articleNom}</p>
+                      {nomArOf(po.articleId) && (
+                        <p className="text-xs font-arabic" dir="rtl" lang="ar" style={{ color: "oklch(0.62 0.010 145)" }}>{nomArOf(po.articleId)}</p>
+                      )}
                       <p className="text-xs mt-0.5" style={{ color: "oklch(0.62 0.010 145)" }}>
                         Fournisseur: <span className="font-semibold">{po.fournisseurNom}</span>
                       </p>
@@ -1588,7 +1594,10 @@ export default function MobileAchat({ user }: Props) {
                     alt={`${art.nom} produit selectionne`}
                     className="w-8 h-8 rounded-lg object-cover border border-border shrink-0"
                     onError={e => { e.currentTarget.src = "https://placehold.co/32x32/e2e8f0/64748b?text=Art" }} />
-                  <span className="text-sm font-bold text-foreground">{art.nom}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-bold text-foreground">{art.nom}</span>
+                    {art.nomAr && <span className="text-xs text-muted-foreground font-arabic" dir="rtl" lang="ar">{art.nomAr}</span>}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {history.length > 0 && (
@@ -1854,7 +1863,10 @@ export default function MobileAchat({ user }: Props) {
                           <div className="flex flex-col gap-1">
                             {bon.lignes.map((l, i) => (
                               <div key={i} className="flex items-center justify-between text-xs">
-                                <span className="text-foreground">{l.articleNom}</span>
+                                <span className="text-foreground">
+                                  {l.articleNom}
+                                  {nomArOf(l.articleId) && <span className="block text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{nomArOf(l.articleId)}</span>}
+                                </span>
                                 <span className="font-semibold text-muted-foreground">
                                   {l.quantite} × {l.prixAchat} DH = {(l.quantite * l.prixAchat).toLocaleString("fr-MA")} DH
                                 </span>
@@ -1893,6 +1905,7 @@ export default function MobileAchat({ user }: Props) {
                 <div>
                   <p className="text-xs font-black uppercase tracking-widest text-green-700">Confirmer le bon d&apos;achat</p>
                   <p className="text-base font-bold text-slate-800 mt-0.5">{po.articleNom}</p>
+                  {poArt?.nomAr && <p className="text-xs text-slate-500 font-arabic" dir="rtl" lang="ar">{poArt.nomAr}</p>}
                   <p className="text-xs text-slate-500 font-mono">{po.id}</p>
                 </div>
                 <button onClick={() => setPoModalId(null)} className="p-2 rounded-lg hover:bg-green-100 text-slate-500">
@@ -2445,6 +2458,9 @@ function ChargesParArticle({ articles, acheteurNom }: { articles: Article[]; ach
             <div className="flex items-start justify-between px-4 py-3 bg-slate-50 border-b border-slate-100">
               <div>
                 <p className="font-bold text-slate-800 text-sm">{entry.articleNom}</p>
+                {articles.find(a => a.id === entry.articleId)?.nomAr && (
+                  <p className="text-xs text-slate-400 font-arabic" dir="rtl" lang="ar">{articles.find(a => a.id === entry.articleId)?.nomAr}</p>
+                )}
                 <p className="text-xs text-slate-500">{entry.date} — {entry.qteAchetee} {entry.unite} a {entry.prixAchat} DH</p>
               </div>
               <button onClick={() => remove(entry.id)} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">

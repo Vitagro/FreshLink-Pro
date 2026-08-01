@@ -324,7 +324,10 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
         const max = Math.max(...hist.map(h => h.prixAchat))
         return (
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-            <p className="text-xs font-bold text-blue-800 mb-2">Historique prix — {art.nom}</p>
+            <p className="text-xs font-bold text-blue-800 mb-2">
+              Historique prix — {art.nom}
+              {art.nomAr && <span className="ml-1 font-normal font-arabic" dir="rtl" lang="ar">({art.nomAr})</span>}
+            </p>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div>
                 <p className="text-sm font-black text-green-700">{min.toFixed(2)} DH</p>
@@ -510,7 +513,12 @@ Analyse cette photo et reponds UNIQUEMENT en JSON valide avec ce schema exact:
                 </span>
                 <div>
                   <p className="text-lg font-black text-slate-800">{result.score}/100</p>
-                  <p className="text-xs text-slate-500">{articles.find(a => a.id === selectedArticleId)?.nom}</p>
+                  <p className="text-xs text-slate-500">
+                    {articles.find(a => a.id === selectedArticleId)?.nom}
+                    {articles.find(a => a.id === selectedArticleId)?.nomAr && (
+                      <span className="ml-1 font-arabic" dir="rtl" lang="ar">({articles.find(a => a.id === selectedArticleId)?.nomAr})</span>
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
