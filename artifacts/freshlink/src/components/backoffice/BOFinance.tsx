@@ -96,6 +96,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   const [creditPaiNotes, setCreditPaiNotes] = useState("")
   // Credit filter
   const [creditFilter, setCreditFilter] = useState<"tous" | "alerte" | "retard" | "plafond">("tous")
+  const [confirmResetCredit, setConfirmResetCredit] = useState(false)
   // CashMan date range
   const [cashFilter, setCashFilter] = useState({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
@@ -1329,6 +1330,19 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
           setCreditPaiNotes("")
         }
 
+        // Remise a 0 du credit de TOUS les clients (regularisation en masse) —
+        // ne touche que le solde credit, jamais les commandes/BL/caisse.
+        const handleResetAllCredit = () => {
+          const actor = { ...user, role: user.role as UserRole }
+          if (!hasPermission(actor.role, "gerer_recouvrement")) { logAction(actor, "gerer_recouvrement", "denied", { type: "credit_reset_masse" }); return }
+          logAction(actor, "gerer_recouvrement", "success", { type: "credit_reset_masse", label: `${creditClients.length} client(s)` })
+          const allClients = store.getClients()
+          const updated = allClients.map(c => (c.creditSolde ?? 0) !== 0 ? { ...c, creditSolde: 0 } : c)
+          store.saveClients(updated)
+          refresh()
+          setConfirmResetCredit(false)
+        }
+
         return (
           <div className="flex flex-col gap-5">
             {/* KPI row */}
@@ -1359,16 +1373,31 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
             )}
 
             {/* Encaissement form toggle */}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <h3 className="text-sm font-bold text-foreground">Situation credit par client</h3>
-              <button onClick={() => setShowCreditPaiForm(v => !v)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
-                style={{ background: "oklch(0.38 0.18 155)" }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-                Encaissement
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                {!confirmResetCredit ? (
+                  <button onClick={() => setConfirmResetCredit(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    Remise a 0 — Credit clients
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-red-700">Remettre le credit de TOUS les clients a 0 ?</span>
+                    <button onClick={handleResetAllCredit} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700">Oui, remettre</button>
+                    <button onClick={() => setConfirmResetCredit(false)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">Annuler</button>
+                  </div>
+                )}
+                <button onClick={() => setShowCreditPaiForm(v => !v)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-white"
+                  style={{ background: "oklch(0.38 0.18 155)" }}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Encaissement
+                </button>
+              </div>
             </div>
 
             {/* Encaissement form */}
