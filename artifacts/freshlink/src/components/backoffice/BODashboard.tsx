@@ -241,9 +241,18 @@ export default function BODashboard({ user }: Props) {
   const cmdsEnAttente = commandes.filter(c => !["livre", "refuse", "retour"].includes(c.statut)).length
   const totalAchats   = bonsAchat.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0)
 
+  // Libelle dynamique de periode — reutilise pour tous les badges "Top X" afin
+  // que leur sous-titre reflete honnetement l'intervalle réellement agrégé
+  // (auparavant affiche "CA total"/"Toute periode" alors que les donnees en
+  // dessous ignoraient le selecteur de date : les classements "Top" restaient
+  // figes sur l'historique complet, jamais sur le jour/intervalle choisi).
+  const periodLabel = dateDebut === dateFin
+    ? (dateFin === today ? "Aujourd'hui" : dateFin)
+    : `${dateDebut} au ${dateFin}`
+
   // --- Top clients (CA) ---
   const clientsCA: Record<string, { nom: string; ca: number; cmds: number; tonnage: number }> = {}
-  commandesActives.forEach(c => {
+  cmdsToday.forEach(c => {
     const ca = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
     if (!clientsCA[c.clientId]) clientsCA[c.clientId] = { nom: c.clientNom, ca: 0, cmds: 0, tonnage: 0 }
     clientsCA[c.clientId].ca += ca
@@ -253,19 +262,26 @@ export default function BODashboard({ user }: Props) {
   const top10Clients = Object.entries(clientsCA).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
 
   // --- Top prevendeurs (CA) ---
+  const prevendeurs = users.filter(u => userHasRole(u, "prevendeur") && u.actif)
   const prevendeurCA: Record<string, { nom: string; ca: number; cmds: number; tonnage: number }> = {}
-  commandesActives.forEach(c => {
+  cmdsToday.forEach(c => {
     const ca = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
     if (!prevendeurCA[c.commercialId]) prevendeurCA[c.commercialId] = { nom: c.commercialNom, ca: 0, cmds: 0, tonnage: 0 }
     prevendeurCA[c.commercialId].ca += ca
     prevendeurCA[c.commercialId].cmds++
     prevendeurCA[c.commercialId].tonnage += c.lignes.reduce((s, l) => s + l.quantite, 0)
   })
+  // Complete avec les prevendeurs actifs sans commande sur la periode (CA=0)
+  // pour toujours afficher un top 10 plein tant qu'il y a ≥10 prevendeurs actifs,
+  // au lieu de tronquer la liste aux seuls prevendeurs ayant vendu.
+  prevendeurs.forEach(pv => {
+    if (!prevendeurCA[pv.id]) prevendeurCA[pv.id] = { nom: pv.name, ca: 0, cmds: 0, tonnage: 0 }
+  })
   const top10Prevendeurs = Object.entries(prevendeurCA).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
 
   // --- Top secteurs (CA) ---
   const secteurStats: Record<string, { nom: string; ca: number; cmds: number; tonnage: number }> = {}
-  commandesActives.forEach(c => {
+  cmdsToday.forEach(c => {
     const ca = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
     if (!secteurStats[c.secteur]) secteurStats[c.secteur] = { nom: c.secteur, ca: 0, cmds: 0, tonnage: 0 }
     secteurStats[c.secteur].ca += ca
@@ -276,7 +292,7 @@ export default function BODashboard({ user }: Props) {
 
   // --- Top clients retours ---
   const clientsRetour: Record<string, { nom: string; kg: number; nb: number }> = {}
-  retoursAll.forEach(r => r.lignes.forEach(l => {
+  retoursToday.forEach(r => r.lignes.forEach(l => {
     if (!clientsRetour[l.clientNom]) clientsRetour[l.clientNom] = { nom: l.clientNom, kg: 0, nb: 0 }
     clientsRetour[l.clientNom].kg += l.quantite
     clientsRetour[l.clientNom].nb++
@@ -285,7 +301,7 @@ export default function BODashboard({ user }: Props) {
 
   // --- Top motifs retour ---
   const motifsRetour: Record<string, { motif: string; kg: number; nb: number }> = {}
-  retoursAll.forEach(r => r.lignes.forEach(l => {
+  retoursToday.forEach(r => r.lignes.forEach(l => {
     if (!motifsRetour[l.motif]) motifsRetour[l.motif] = { motif: l.motif, kg: 0, nb: 0 }
     motifsRetour[l.motif].kg += l.quantite
     motifsRetour[l.motif].nb++
@@ -294,7 +310,7 @@ export default function BODashboard({ user }: Props) {
 
   // --- Top articles retournes ---
   const articlesRetour: Record<string, { nom: string; kg: number; nb: number }> = {}
-  retoursAll.forEach(r => r.lignes.forEach(l => {
+  retoursToday.forEach(r => r.lignes.forEach(l => {
     if (!articlesRetour[l.articleNom]) articlesRetour[l.articleNom] = { nom: l.articleNom, kg: 0, nb: 0 }
     articlesRetour[l.articleNom].kg += l.quantite
     articlesRetour[l.articleNom].nb++
@@ -303,7 +319,7 @@ export default function BODashboard({ user }: Props) {
 
   // --- Top prevendeurs retour ---
   const pvRetour: Record<string, { nom: string; kg: number; nb: number }> = {}
-  retoursAll.forEach(r => {
+  retoursToday.forEach(r => {
     // match BL to find prevendeur
     r.lignes.forEach(l => {
       const bl = bls.find(b => b.commandeId === l.commandeId)
@@ -317,7 +333,7 @@ export default function BODashboard({ user }: Props) {
 
   // --- Top livreurs retour ---
   const livRetour: Record<string, { nom: string; kg: number; nb: number }> = {}
-  retoursAll.forEach(r => {
+  retoursToday.forEach(r => {
     if (!livRetour[r.livreurNom]) livRetour[r.livreurNom] = { nom: r.livreurNom, kg: 0, nb: 0 }
     r.lignes.forEach(l => { livRetour[r.livreurNom].kg += l.quantite })
     livRetour[r.livreurNom].nb++
@@ -325,7 +341,6 @@ export default function BODashboard({ user }: Props) {
   const topLivRetour = Object.entries(livRetour).sort(([, a], [, b]) => b.kg - a.kg).slice(0, 6)
 
   // --- Prevendeurs stats ---
-  const prevendeurs = users.filter(u => userHasRole(u, "prevendeur") && u.actif)
   const getPrevendeurStats = (pv: User) => {
     const cdJ = commandesActives.filter(c => c.commercialId === pv.id && c.date >= dateDebut && c.date <= dateFin)
     const cdW = commandesActives.filter(c => c.commercialId === pv.id && c.date >= weekRange.start && c.date <= weekRange.end)
@@ -721,7 +736,7 @@ export default function BODashboard({ user }: Props) {
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                 <h3 className="text-sm font-bold text-foreground">Top 10 clients / أفضل الزبائن</h3>
-                <span className="text-xs text-muted-foreground">CA total</span>
+                <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {top10Clients.length === 0
                 ? <p className="px-4 py-6 text-sm text-center text-muted-foreground">Aucune commande</p>
@@ -743,7 +758,7 @@ export default function BODashboard({ user }: Props) {
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                 <h3 className="text-sm font-bold text-foreground">Top articles vendus / الأكثر مبيعاً</h3>
-                <span className="text-xs text-muted-foreground">Toute periode</span>
+                <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {artChartData.length === 0
                 ? <p className="px-4 py-6 text-sm text-center text-muted-foreground">Aucune commande</p>
@@ -764,7 +779,7 @@ export default function BODashboard({ user }: Props) {
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                 <h3 className="text-sm font-bold text-foreground">Top prevendeurs / أفضل مندوبي المبيعات</h3>
-                <span className="text-xs text-muted-foreground">CA total</span>
+                <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {top10Prevendeurs.length === 0
                 ? <p className="px-4 py-6 text-sm text-center text-muted-foreground">Aucune commande</p>
@@ -786,7 +801,7 @@ export default function BODashboard({ user }: Props) {
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
                 <h3 className="text-sm font-bold text-foreground">Top secteurs / أفضل القطاعات</h3>
-                <span className="text-xs text-muted-foreground">CA total</span>
+                <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {top10Secteurs.length === 0
                 ? <p className="px-4 py-6 text-sm text-center text-muted-foreground">Aucune commande</p>

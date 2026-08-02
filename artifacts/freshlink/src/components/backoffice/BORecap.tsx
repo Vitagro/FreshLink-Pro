@@ -892,7 +892,9 @@ export default function BORecap() {
                       <td className="px-3 py-3 text-center text-xs">
                         {crossdock ? (
                           r.caissesCommercial > 0
-                            ? <span className="font-semibold text-blue-700">{r.caissesCommercial} caisse{r.caissesCommercial > 1 ? "s" : ""}</span>
+                            ? <span className="font-semibold text-blue-700">
+                                {r.caissesCommercial} {r.um ? r.um.toLowerCase() + (r.caissesCommercial > 1 ? "s" : "") : `caisse${r.caissesCommercial > 1 ? "s" : ""}`}
+                              </span>
                             : <span className="text-muted-foreground">—</span>
                         ) : (
                           r.besoinNet > 0 ? (() => {
