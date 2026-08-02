@@ -4181,18 +4181,29 @@ export const store = {
   },
 
   // Auto-incremented Trip number: T001, T002…
+  // Suffixe anti-collision commun a tous les gen*Number() sequentiels
+  // ci-dessous — voir le commentaire detaille sur genCommande(). Le compteur
+  // (seq/max) est calcule depuis le cache local de CET appareil, jamais
+  // parfaitement synchronise avec les autres ; sans suffixe, deux appareils
+  // (ou deux clients traites dans la MEME boucle d'auto-generation avant le
+  // premier saveX(), ex: MobilePreparation.autoGenerateBLs sur un lot
+  // multi-clients) peuvent calculer le meme id pour deux enregistrements
+  // differents — l'upsert Supabase par id ecrase alors silencieusement l'un
+  // des deux (bon de livraison ou tournee perdu).
+  genUniqueSuffix: (): string => Math.random().toString(36).slice(2, 6).toUpperCase(),
+
   genTripNumber: (): string => {
     const trips = getLS<Trip[]>("fl_trips", [])
     // find highest existing T-number
     let max = 0
     for (const t of trips) {
-      const m = t.id.match(/^T(\d+)$/)
+      const m = t.id.match(/^T(\d+)-/)
       if (m) max = Math.max(max, parseInt(m[1], 10))
     }
-    return `T${String(max + 1).padStart(3, "0")}` // T001, T002…
+    return `T${String(max + 1).padStart(3, "0")}-${store.genUniqueSuffix()}` // T001-A1B2, T002-C3D4…
   },
 
-  // BL number: BL-260323-001 — sequential per day
+  // BL number: BL-260323-001-A1B2 — sequential per day
   genBL: (): string => {
     const now = new Date()
     const yy = String(now.getFullYear()).slice(-2)
@@ -4202,10 +4213,10 @@ export const store = {
     const bls = getLS<BonLivraison[]>("fl_bons_livraison", [])
     const todayBLs = bls.filter(b => b.id.startsWith(prefix))
     const seq = String(todayBLs.length + 1).padStart(3, "0")
-    return `${prefix}-${seq}` // e.g. "BL-260323-001"
+    return `${prefix}-${seq}-${store.genUniqueSuffix()}` // e.g. "BL-260323-001-A1B2"
   },
 
-  // Facture number: FAC-2603-001 — sequential per month
+  // Facture number: FAC-2603-001-A1B2 — sequential per month
   genFacture: (): string => {
     const now = new Date()
     const yy = String(now.getFullYear()).slice(-2)
@@ -4214,7 +4225,7 @@ export const store = {
     const bls = getLS<BonLivraison[]>("fl_bons_livraison", [])
     const monthBLs = bls.filter(b => b.id.startsWith(prefix))
     const seq = String(monthBLs.length + 1).padStart(3, "0")
-    return `${prefix}-${seq}` // e.g. "FAC-2603-001"
+    return `${prefix}-${seq}-${store.genUniqueSuffix()}` // e.g. "FAC-2603-001-A1B2"
   },
 
   // Commande number: CMD-260323-001-A1B2

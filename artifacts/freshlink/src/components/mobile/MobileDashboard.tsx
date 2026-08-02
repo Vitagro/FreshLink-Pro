@@ -47,7 +47,10 @@ export default function MobileDashboard({ user }: Props) {
   const yesterday = dateOffset(1)
   const wStart = weekStart()
 
-  const myCommandes = commandes.filter(c => c.commercialId === user.id)
+  // Exclut "refuse" (commande soft-supprimee par le prevendeur) — meme regle
+  // que MobileObjectifs.tsx/BODashboard.tsx (commandesActives) : sinon une
+  // commande annulee gonfle encore le CA/tonnage/objectifs affiches ici.
+  const myCommandes = commandes.filter(c => c.commercialId === user.id && c.statut !== "refuse")
 
   const forPeriod = myCommandes.filter(c => {
     if (period === "jour") return c.date === today
