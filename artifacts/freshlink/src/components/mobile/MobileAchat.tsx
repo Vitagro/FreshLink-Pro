@@ -675,12 +675,21 @@ export default function MobileAchat({ user }: Props) {
     import("@/lib/supabase/db").then(async db => {
       try {
         const [freshArtsRaw, freshFourns, { clients: freshClients }] = await Promise.all([
-          db.fetchArticles(), db.fetchFournisseurs(), db.fetchClients(),
+          db.fetchArticles(), db.fetchFournisseurs(), db.fetchClients(), db.fetchCommandes(),
         ])
         const freshArts = onlyActiveArticles(freshArtsRaw ?? [])
         if (freshArts.length) { setArticles(freshArts); setBesoinSKU(calcBesoinSKU(freshArts)) }
         if (freshFourns?.length) setFournisseurs(freshFourns)
         if (freshClients?.length) setClients(freshClients)
+        // ⚡ Re-génère APRÈS l'hydratation Supabase : le premier appel plus haut
+        // tournait sur le cache local de cet appareil (potentiellement partiel —
+        // article/commande neufs pas encore synchronisés), ce qui ne créait des
+        // PO que pour les 2-3 articles déjà en cache et n'en générait plus jamais
+        // pour les autres ensuite (garde anti-doublon par article+jour). Sans ce
+        // second appel, l'acheteur ne voyait qu'une poignée d'articles au lieu de
+        // toute la liste du besoin net réel.
+        store.autoGeneratePOsFromBesoin()
+        setPendingPOs(store.getPendingPOsForAcheteur())
       } catch { /* offline */ }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps

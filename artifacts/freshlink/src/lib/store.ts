@@ -4217,7 +4217,7 @@ export const store = {
     return `${prefix}-${seq}` // e.g. "FAC-2603-001"
   },
 
-  // Commande number: CMD-260323-001
+  // Commande number: CMD-260323-001-A1B2
   genCommande: (): string => {
     const now = new Date()
     const yy = String(now.getFullYear()).slice(-2)
@@ -4227,7 +4227,15 @@ export const store = {
     const cmds = getLS<Commande[]>("fl_commandes", [])
     const todayCmds = cmds.filter(c => c.id.startsWith(prefix))
     const seq = String(todayCmds.length + 1).padStart(3, "0")
-    return `${prefix}-${seq}` // e.g. "CMD-260323-001"
+    // Suffixe anti-collision : le "seq" est calcule depuis le cache local de
+    // CET appareil (mobile prevendeur ou BO), qui n'est jamais parfaitement
+    // synchronise avec les autres (sync asynchrone, pas de compteur atomique
+    // cote serveur). Deux appareils creant chacun une commande le meme jour
+    // pouvaient calculer le meme seq pour DEUX commandes differentes ; comme
+    // Supabase fait un upsert par id, la seconde ecrasait silencieusement la
+    // premiere (perte de commande, ex: "Driss" remplace par "Attar Hassan").
+    const rnd = Math.random().toString(36).slice(2, 6).toUpperCase()
+    return `${prefix}-${seq}-${rnd}` // e.g. "CMD-260323-001-A1B2"
   },
 
   // Date calendaire LOCALE (pas toISOString(), qui est en UTC — au Maroc
