@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { store, type CutoffNotification, type UserRole, type User, ROLE_LABELS } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // Rôles proposés pour cibler une étape (horaire) — les plus opérationnels
 const CUTOFF_ROLES: { v: UserRole; l: string }[] = [
@@ -50,7 +52,8 @@ const CIBLE_CONFIG: Record<Cutoff["cible"], { label: string; icon: string }> = {
   tous:     { label: "Tous flux", icon: "🌐" },
 }
 
-export default function BOCutoffs({ currentUserId }: { currentUserId?: string }) {
+export default function BOCutoffs({ user }: { user: User }) {
+  const currentUserId = user.id
   const [cutoffs, setCutoffs] = useState<Cutoff[]>([])
   const [seuilTonnage, setSeuilTonnage] = useState(0)
   const [seuilSaved, setSeuilSaved] = useState(false)
@@ -81,7 +84,12 @@ export default function BOCutoffs({ currentUserId }: { currentUserId?: string })
     patchTimed(id, { roles })
   }
   const addTimed = () => persistTimed([...timed, { id: `co_${Date.now().toString(36)}`, label: "Nouvelle étape", time: "08:00", message: "", active: true, roles: [], tache: "", assignedUserIds: [] }])
-  const removeTimed = (id: string) => { if (window.confirm("Supprimer cette étape horaire ?")) persistTimed(timed.filter(c => c.id !== id)) }
+  const removeTimed = (id: string) => {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "cutoff_timed_suppression", id }); return }
+    if (!window.confirm("Supprimer cette étape horaire ?")) return
+    logAction(user, "backup_restore", "success", { type: "cutoff_timed_suppression", id })
+    persistTimed(timed.filter(c => c.id !== id))
+  }
 
   // Formulaire de création
   const [form, setForm] = useState({
@@ -117,6 +125,8 @@ export default function BOCutoffs({ currentUserId }: { currentUserId?: string })
   }, [load])
 
   const toggleActif = async (c: Cutoff) => {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "cutoff", id: c.id }); return }
+    logAction(user, "backup_restore", "success", { type: "cutoff", id: c.id, label: !c.actif ? "activation" : "desactivation" })
     setCutoffs(prev => prev.map(x => x.id === c.id ? { ...x, actif: !x.actif } : x))
     try {
       await fetch("/api/ext/cutoffs", {
@@ -131,7 +141,9 @@ export default function BOCutoffs({ currentUserId }: { currentUserId?: string })
   }
 
   const remove = async (id: string) => {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "cutoff_suppression", id }); return }
     if (!window.confirm("Supprimer définitivement ce cutoff ?")) return
+    logAction(user, "backup_restore", "success", { type: "cutoff_suppression", id })
     setCutoffs(prev => prev.filter(x => x.id !== id))
     try {
       await fetch(`/api/ext/cutoffs?id=${encodeURIComponent(id)}`, { method: "DELETE" })

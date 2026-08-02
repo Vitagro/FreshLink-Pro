@@ -547,7 +547,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   shelf_life:          (_u) => <ShelfLifePanel />,
   forecast:            (_u) => <ForecastPanel />,
   camera_perms:      (u) => <CameraPermissionsPanel currentUser={u} />,
-  cutoffs:           (u)  => <BOCutoffsV3 currentUserId={u.id} />,
+  cutoffs:           (u)  => <BOCutoffsV3 user={u} />,
   deploy_guide:      (_u) => <DeployGuidePanel />,
   rh_productivite:   (u) => <BOResources user={u} />,
   rh_comptabilite:   (u) => <BOComptabiliteRH user={u} />,

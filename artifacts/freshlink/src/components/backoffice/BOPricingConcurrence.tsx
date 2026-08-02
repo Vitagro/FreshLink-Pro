@@ -18,6 +18,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { store, type Article, type User, type Notice } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import { getExternalPricesByArticle } from "@/lib/extCompetitorPrices"
 
 const LS_PRIX = "fl_intel_prix"   // CompetitorEntry[] (PA concurrent)
@@ -367,7 +369,9 @@ export default function BOPricingConcurrence({ user }: Props) {
   const diffuserPV = async (auto = false) => {
     const cible = rows.filter(r => r.pvImb > 0)
     if (cible.length === 0) { if (!auto) flash(false, "Aucun PV à diffuser."); return }
+    if (!hasPermission(user.role, "modifier_tarifs_segment")) { logAction(user, "modifier_tarifs_segment", "denied", { type: "diffusion_pv_imbattable", label: `${cible.length} article(s)` }); if (!auto) flash(false, "Action non autorisee."); return }
     if (!auto && !window.confirm(`Diffuser ${cible.length} PV imbattable(s) à la force de vente ?\nLes prévendeurs verront ces prix conseillés.`)) return
+    logAction(user, "modifier_tarifs_segment", "success", { type: "diffusion_pv_imbattable", label: `${cible.length} article(s)` })
     setBusy(true)
     const now = new Date().toISOString()
     const all = store.getArticles()

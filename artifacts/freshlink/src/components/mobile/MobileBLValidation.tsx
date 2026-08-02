@@ -310,8 +310,10 @@ export default function MobileBLValidation({ user }: { user: { id: string; name:
       const json = await res.json()
       const rows: { id: string; payload?: Record<string, unknown> }[] = json?.ok ? (json.data ?? []) : []
       let all = rows.filter(r => r.payload && !String(r.id).startsWith("__")).map(mapBL)
-      // Un livreur ne voit QUE ses propres BL (par id OU par nom)
-      if (user.role === "livreur") {
+      // Un livreur/conducteur ne voit QUE ses propres BL (par id OU par nom) —
+      // conducteur a acces au meme onglet "Mes BL" (MobileLayout.tsx) mais
+      // tombait auparavant dans aucune branche, donc voyait TOUS les BL.
+      if (user.role === "livreur" || user.role === "conducteur") {
         const uname = (user.name ?? "").trim().toLowerCase()
         all = all.filter(b => b.livreur_id === user.id || (b.livreur_nom ?? "").trim().toLowerCase() === uname)
       }
