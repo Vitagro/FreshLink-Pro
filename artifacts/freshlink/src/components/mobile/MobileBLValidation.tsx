@@ -6,7 +6,7 @@
 // Rôle cible : livreur
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { store } from "@/lib/store"
 
 // ── Types ─────────────────────────────────────────────────────
@@ -295,6 +295,10 @@ export default function MobileBLValidation({ user }: { user: { id: string; name:
   const [msg, setMsg]             = useState<{ ok: boolean; text: string } | null>(null)
   const [gpsLoading, setGpsLoading] = useState(false)
   const [gpsCaptured, setGpsCaptured] = useState<{ lat: number; lng: number } | null>(null)
+  // Recherche, filtre statut & tri — liste "Mes livraisons"
+  const [blSearch, setBlSearch] = useState("")
+  const [blStatutFilter, setBlStatutFilter] = useState<"tous" | "livre" | "attente">("tous")
+  const [blSort, setBlSort] = useState<"recent" | "ancien" | "montant">("recent")
 
   const company = store.getCompanyConfig()
 
@@ -450,6 +454,21 @@ export default function MobileBLValidation({ user }: { user: { id: string; name:
     setTimeout(() => { w.print() }, 500)
   }
 
+  // Recherche + filtre statut + tri appliques sur "Mes livraisons"
+  const visibleBls = useMemo(() => {
+    const q = blSearch.trim().toLowerCase()
+    let list = bls.filter(b =>
+      (!q || b.client_nom.toLowerCase().includes(q) || b.numero.toLowerCase().includes(q)) &&
+      (blStatutFilter === "tous" ||
+        (blStatutFilter === "livre" && b.statut === "livre") ||
+        (blStatutFilter === "attente" && (b.statut === "en_attente" || b.statut === "en_cours")))
+    )
+    if (blSort === "ancien") list = [...list].sort((a, b) => (a.date_livraison || "").localeCompare(b.date_livraison || ""))
+    else if (blSort === "montant") list = [...list].sort((a, b) => b.montant_total - a.montant_total)
+    else list = [...list].sort((a, b) => (b.date_livraison || "").localeCompare(a.date_livraison || ""))
+    return list
+  }, [bls, blSearch, blStatutFilter, blSort])
+
   // ─────────────────────────────────────────────────────────────
   // VUE LISTE
   // ─────────────────────────────────────────────────────────────
@@ -464,19 +483,35 @@ export default function MobileBLValidation({ user }: { user: { id: string; name:
         <div className={`px-4 py-3 rounded-2xl text-sm font-medium ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>{msg.text}</div>
       )}
 
-      {/* Stats rapides */}
+      {/* Stats rapides — cliquables pour filtrer */}
       <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Total", count: bls.length, color: "bg-slate-100 text-slate-700" },
-          { label: "Livrés", count: bls.filter(b => b.statut === "livre").length, color: "bg-green-100 text-green-700" },
-          { label: "En attente", count: bls.filter(b => b.statut === "en_attente" || b.statut === "en_cours").length, color: "bg-yellow-100 text-yellow-700" },
-        ].map(s => (
-          <div key={s.label} className={`rounded-2xl p-3 text-center ${s.color}`}>
+        {([
+          { key: "tous" as const,    label: "Total",       count: bls.length, color: "bg-slate-100 text-slate-700" },
+          { key: "livre" as const,   label: "Livrés",      count: bls.filter(b => b.statut === "livre").length, color: "bg-green-100 text-green-700" },
+          { key: "attente" as const, label: "En attente",  count: bls.filter(b => b.statut === "en_attente" || b.statut === "en_cours").length, color: "bg-yellow-100 text-yellow-700" },
+        ]).map(s => (
+          <button key={s.label} onClick={() => setBlStatutFilter(f => f === s.key ? "tous" : s.key)}
+            className={`rounded-2xl p-3 text-center transition-all ${s.color} ${blStatutFilter === s.key ? "ring-2 ring-offset-1 ring-green-500" : ""}`}>
             <div className="text-2xl font-black">{s.count}</div>
             <div className="text-xs font-semibold">{s.label}</div>
-          </div>
+          </button>
         ))}
       </div>
+
+      {/* Recherche & tri */}
+      {bls.length > 0 && (
+        <div className="flex items-center gap-2">
+          <input type="text" value={blSearch} onChange={e => setBlSearch(e.target.value)}
+            placeholder="Rechercher client, numero BL..."
+            className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+          <select value={blSort} onChange={e => setBlSort(e.target.value as typeof blSort)}
+            className="shrink-0 px-2.5 py-2 rounded-xl border border-border bg-background text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="recent">Plus recent</option>
+            <option value="ancien">Plus ancien</option>
+            <option value="montant">Montant</option>
+          </select>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-16 text-muted-foreground text-sm">Chargement…</div>
@@ -488,9 +523,14 @@ export default function MobileBLValidation({ user }: { user: { id: string; name:
           <p className="font-bold text-slate-700">Aucune livraison aujourd&apos;hui</p>
           <p className="text-sm text-muted-foreground">Vous n&apos;avez pas de BL assigné pour ce jour</p>
         </div>
+      ) : visibleBls.length === 0 ? (
+        <div className="text-center py-10 flex flex-col items-center gap-2">
+          <p className="font-bold text-slate-700 text-sm">Aucune livraison ne correspond</p>
+          <p className="text-xs text-muted-foreground">Modifiez la recherche ou le filtre.</p>
+        </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {bls.map(bl => (
+          {visibleBls.map(bl => (
             <button
               key={bl.id}
               onClick={() => { setSelected(bl); setEncaisse(String(bl.montant_total)); setNotes(bl.notes ?? ""); setGpsCaptured(null) }}
