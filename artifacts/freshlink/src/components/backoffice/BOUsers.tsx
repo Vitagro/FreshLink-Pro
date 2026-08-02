@@ -698,7 +698,7 @@ const DEFAULT_PERMS_BY_ROLE: Partial<Record<UserRole, PermFlags>> = {
 const EMPTY_USER: Omit<User, "id"> = {
   name: "", nom: "", prenom: "", username: "",
   email: "", password: "1234", role: "prevendeur", accessType: undefined, secteur: "", depotId: undefined,
-  phone: "", actif: true, isDemo: false,
+  phone: "", actif: true, isDemo: false, authorizedBySuperAdmin: false,
   mustChangePassword: true,   // ← forcer changement mot de passe à la première connexion
   canViewAchat: false, canViewCommercial: false, canViewLogistique: false,
   canViewStock: false, canViewCash: false, canViewFinance: false, canViewRecap: false,
@@ -1378,6 +1378,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
       email: u.email, password: u.password, role: u.role, accessType: u.accessType,
       roles: u.roles, activeRole: u.activeRole,
       secteur: u.secteur || "", depotId: u.depotId, phone: u.phone || "", actif: u.actif, isDemo: u.isDemo || false,
+      authorizedBySuperAdmin: u.authorizedBySuperAdmin || false,
       groupeId: u.groupeId,
       canViewAchat: u.canViewAchat || false, canViewCommercial: u.canViewCommercial || false,
       canViewLogistique: u.canViewLogistique || false, canViewStock: u.canViewStock || false,
@@ -2719,6 +2720,25 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                   <div className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${form.isDemo ? "bg-amber-500" : "bg-muted"}`}
                     onClick={() => setForm({ ...form, isDemo: !form.isDemo })}>
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${form.isDemo ? "left-6" : "left-1"}`} />
+                  </div>
+                </label>
+              )}
+
+              {/* Autorise par le Super Admin — reserve a Jawad. Debloque les
+                  actions verrouillees (reinitialisation des donnees,
+                  suppression de client, validation groupee des achats) sans
+                  avoir a promouvoir le compte en super_super_admin. */}
+              {isJawadUser && (
+                <label className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-rose-200 bg-rose-50 cursor-pointer">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-rose-800">Autorise par le Super Admin</p>
+                    <p className="text-xs text-rose-700 mt-0.5">
+                      Debloque pour ce compte les actions reservees au super_super_admin : reinitialisation des donnees, suppression de client, validation groupee des achats.
+                    </p>
+                  </div>
+                  <div className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${(form as { authorizedBySuperAdmin?: boolean }).authorizedBySuperAdmin ? "bg-rose-600" : "bg-muted"}`}
+                    onClick={() => setForm({ ...form, authorizedBySuperAdmin: !(form as { authorizedBySuperAdmin?: boolean }).authorizedBySuperAdmin } as typeof form)}>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${(form as { authorizedBySuperAdmin?: boolean }).authorizedBySuperAdmin ? "left-6" : "left-1"}`} />
                   </div>
                 </label>
               )}

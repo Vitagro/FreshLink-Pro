@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, FOURNISSEUR_TYPE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
+import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, FOURNISSEUR_TYPE_LABELS, paDeviationConfirmMessage, isSuperAdminOrAuthorized } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { CameraQualiteIA, ComparatifFournisseurs, NouveauFournisseurModal } from "@/components/mobile/AchatIAModules"
@@ -603,7 +603,7 @@ export default function MobileAchat({ user }: Props) {
     }
   }
   const validateAllPOs = () => {
-    if (photoAchatObligatoire || selectedPOs.size === 0) return
+    if (photoAchatObligatoire || selectedPOs.size === 0 || !isSuperAdminOrAuthorized(user)) return
     setBulkPOValidating(true)
     let count = 0
     selectedPOs.forEach(id => {
@@ -1131,8 +1131,14 @@ export default function MobileAchat({ user }: Props) {
               ) : (
             <div className="flex flex-col gap-2">
               {/* Selection multiple — valider plusieurs PO d'un coup avec leurs valeurs par defaut.
-                  Indisponible si la photo d'achat est obligatoire (regle non contournable en masse). */}
-              {photoAchatObligatoire ? (
+                  Indisponible si la photo d'achat est obligatoire (regle non contournable en masse),
+                  et reservee au super_super_admin ou a un compte qu'il a explicitement autorise
+                  (validation en masse = sans revue individuelle, risque d'erreur a l'echelle). */}
+              {!isSuperAdminOrAuthorized(user) ? (
+                <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "oklch(0.16 0.012 145)", color: "oklch(0.55 0.010 145)" }}>
+                  Validation groupée réservée au Super Admin ou à un compte autorisé. Validez les achats un par un.
+                </p>
+              ) : photoAchatObligatoire ? (
                 <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "oklch(0.16 0.012 145)", color: "oklch(0.55 0.010 145)" }}>
                   Photo obligatoire par achat (config) — validation groupée indisponible.
                 </p>

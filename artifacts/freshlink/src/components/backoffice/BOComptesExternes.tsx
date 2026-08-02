@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { store, isClientVisible, type User, type Client } from "@/lib/store"
+import { store, isClientVisible, type User, type Client, isSuperAdminOrAuthorized } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import { loadZonesConfig, resolveAffectation } from "@/lib/commercial/zones"
@@ -292,7 +292,10 @@ export default function BOComptesExternes({ user }: Props) {
 
   const canAdd    = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "creer_client")
   const canEditClient = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "modifier_client")
-  const canDelete = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "supprimer_client")
+  // Suppression definitive d'un client — reservee au super_super_admin ou a un
+  // compte qu'il a explicitement autorise (isSuperAdminOrAuthorized), au-dela
+  // du role/permission classique.
+  const canDelete = (ALLOWED_ROLES.includes(user.role) || !!user.canViewExternal) && hasPermission(user.role, "supprimer_client") && isSuperAdminOrAuthorized(user)
 
   // Garde anti-course : reload() est ré-appelé automatiquement à chaque
   // "fl_store_updated" (ex. store.addClient() déclenche un reload AVANT même
@@ -595,7 +598,7 @@ export default function BOComptesExternes({ user }: Props) {
   // ── Delete client ────────────────────────────────────────────────────────────
   const handleConfirmDelete = () => {
     if (!confirmDel) return
-    if (!hasPermission(user.role, "supprimer_client")) { logAction(user, "supprimer_client", "denied", { type: "client", id: confirmDel.id, label: confirmDel.nom }); return }
+    if (!hasPermission(user.role, "supprimer_client") || !isSuperAdminOrAuthorized(user)) { logAction(user, "supprimer_client", "denied", { type: "client", id: confirmDel.id, label: confirmDel.nom }); return }
     logAction(user, "supprimer_client", "success", { type: "client", id: confirmDel.id, label: confirmDel.nom })
     store.deleteClient(confirmDel.id)
     // ✅ Suppression Supabase en cascade

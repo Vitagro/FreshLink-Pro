@@ -24,6 +24,16 @@ export function isSuperSuperAdmin(user: { role: string }): boolean {
   return user.role === "super_super_admin"
 }
 
+// Verrou dedie aux actions les plus sensibles (reinitialisation des donnees,
+// suppression de client, validation groupee des achats...) : reserve au
+// super_super_admin, sauf si celui-ci a explicitement autorise ce compte
+// precis via le toggle "Autorise par le Super Admin" (BOUsers.tsx, visible
+// uniquement pour super_super_admin). Un role admin/super_admin classique ne
+// suffit plus a lui seul pour ces actions precises.
+export function isSuperAdminOrAuthorized(user: { role: string; authorizedBySuperAdmin?: boolean }): boolean {
+  return user.role === "super_super_admin" || user.authorizedBySuperAdmin === true
+}
+
 export function hasInvestorAccess(user: { role: string }): boolean {
   return user.role === "super_super_admin" || user.role === "super_admin" || user.role === "investisseur"
 }
@@ -128,6 +138,11 @@ export interface User {
   // Compte de démonstration — écriture bloquée, visible dans la liste déroulante
   // de connexion. Ne peut être coché qu'à la création par Jawad (super_super_admin).
   isDemo?: boolean
+  // Autorisation individuelle accordee par le super_super_admin pour les
+  // actions les plus sensibles (reinitialisation des donnees, suppression de
+  // client, validation groupee des achats) — voir isSuperAdminOrAuthorized().
+  // Modifiable uniquement par super_super_admin (BOUsers.tsx).
+  authorizedBySuperAdmin?: boolean
 }
 
 // Matrice RBAC + assignation automatique des droits : voir lib/rolePermissions.ts
