@@ -146,7 +146,7 @@ function normalizeBL(raw: Record<string, unknown>): BonLivraison {
     clientNom:    String(raw.clientNom ?? raw.client ?? "—"),
     transporteur: (raw.transporteur as BonLivraison["transporteur"]) ?? "non_affecte",
     statut:       statut as BLStatut,
-    date:         String(raw.date ?? raw.created_at ?? new Date().toISOString().split("T")[0]),
+    date:         String(raw.date ?? raw.created_at ?? store.today()),
     lignes,
     totalHT, totalTTC, tva,
     qcObligatoire: raw.qcObligatoire === true,
@@ -164,6 +164,19 @@ function getBLs(): BonLivraison[] {
 }
 function saveBLs(bls: BonLivraison[]) {
   localStorage.setItem(LS_BL, JSON.stringify(bls))
+}
+
+// Duplique les totaux vers les noms de champs canoniques utilisés par
+// lib/store.ts (BonLivraison.montantTotal/montantTTC, LigneBL.total) — ce
+// fichier a son propre type BonLivraison local (totalHT/totalTTC/totalLigne),
+// jamais aligné avec celui de store.ts, alors que les DEUX écrivent dans la
+// même clé fl_bons_livraison. Sans ce dual-write, tout écran qui lit un BL
+// créé/modifié ici via store.getBonsLivraison() (Caisse, Recap, Finance,
+// Fiscalité, Analyse Réception/Achat, export Sheets) obtient `undefined`
+// pour montantTotal/montantTTC et 0 pour lignes[].total.
+function withCanonicalTotals(bl: BonLivraison): BonLivraison {
+  const out = { ...bl, lignes: bl.lignes.map(l => ({ ...l, total: l.totalLigne })) }
+  return { ...out, montantTotal: bl.totalHT, montantTTC: bl.totalTTC } as unknown as BonLivraison
 }
 function genId() { return `VFBL${Date.now().toString(36).toUpperCase().slice(-3)}${Math.floor(Math.random()*9999).toString().padStart(4,"0")}` }
 function genNumero() {
@@ -201,7 +214,7 @@ function BLEditor({
   currentUser: User
   qcObligatoire: boolean
 }) {
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = store.today()
   const [form, setForm] = useState<Partial<BonLivraison>>({
     numero: genNumero(),
     transporteur: "non_affecte",
@@ -1079,7 +1092,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
   // Exclut TOUT bon déjà lié à un BL existant, quel que soit son statut
   // (brouillon/valide/livré) — sinon un import groupé répété créerait un
   // second BL en double pour la même préparation (fausse les chiffres).
-  const today = new Date().toISOString().split("T")[0]
+  const today = store.today()
   const bonsPrep = useMemo(() => {
     return store.getBonsPreparation().filter(b =>
       b.statut === "valide" &&
@@ -1202,7 +1215,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
     }
 
     if (newBLs.length === 0) return
-    const updated = [...newBLs, ...allBLs]
+    const updated = [...newBLs.map(withCanonicalTotals), ...allBLs]
     saveBLs(updated)
     store.saveBonsLivraison(updated as unknown as import("@/lib/store").BonLivraison[])
     setBLs(updated)
@@ -1211,7 +1224,8 @@ export default function BOBonLivraison({ user }: { user: User }) {
   }
 
   // ── Save / Delete / Validate ───────────────────────────────────────────────
-  const handleSave = (bl: BonLivraison) => {
+  const handleSave = (blRaw: BonLivraison) => {
+    const bl = withCanonicalTotals(blRaw)
     const existing = bls.find(b => b.id === bl.id)
     const updated = existing ? bls.map(b => b.id === bl.id ? bl : b) : [bl, ...bls]
     saveBLs(updated)

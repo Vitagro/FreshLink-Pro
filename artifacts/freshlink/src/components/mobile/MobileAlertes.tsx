@@ -148,7 +148,10 @@ export default function MobileAlertes({ user }: Props) {
     })
 
     // 4. Objectifs journaliers
-    const todayStr  = today.toISOString().split("T")[0]
+    // store.today() (calendaire local), pas today.toISOString() (UTC) — sinon
+    // une commande saisie apres minuit heure locale au Maroc (date locale
+    // correcte) ne matchait plus todayStr entre 00h00 et 00h59.
+    const todayStr  = store.today()
     // Exclut "refuse" (soft-delete) — meme regle que BODashboard/BORecap/MobileObjectifs.
     const todayCmds = allCommandes.filter(c => c.date === todayStr && c.commercialId === user.id && c.statut !== "refuse")
     const todayCA   = todayCmds.reduce((s, c) => s + c.lignes.reduce((t, l) => t + l.total, 0), 0)
@@ -231,7 +234,10 @@ export default function MobileAlertes({ user }: Props) {
 
   const articleAlerts = useMemo((): ArticleAlert[] => {
     if (!selectedClientId) return []
-    const commandes = store.getCommandes().filter(c => c.clientId === selectedClientId)
+    // Exclut "refuse" (commande annulee/soft-supprimee) — sinon une commande
+    // annulee d'un article peut faire croire qu'il vient d'etre re-livre au
+    // client (lastDate mis a jour), masquant l'alerte "article absent".
+    const commandes = store.getCommandes().filter(c => c.clientId === selectedClientId && c.statut !== "refuse")
     if (!commandes.length) return []
     const today    = new Date()
     const articles = store.getArticles()

@@ -29,7 +29,7 @@ const EVOL_ICON: Record<PriceEvolution, string> = {
 }
 
 function uid() { return `pe_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }
-function today() { return new Date().toISOString().split("T")[0] }
+function today() { return store.today() }
 
 function calcEvolution(current: number, prev: number | undefined): PriceEvolution | undefined {
   if (!prev || prev === 0) return undefined

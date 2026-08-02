@@ -107,10 +107,14 @@ export default function BORapportLivraison({ user: _user }: Props) {
     const p = livreurPerfMap[nom]
     p.trips++
     p.clients += trip.commandeIds.length
-    p.livres += tripBls.filter(bl => bl.statutLivraison === "livre").length
+    const tripBlsLivres = tripBls.filter(bl => bl.statutLivraison === "livre")
+    p.livres += tripBlsLivres.length
     p.retours += tripBls.filter(bl => bl.statutLivraison === "retour").length
-    p.tonnage += tripBls.reduce((s, bl) => s + bl.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
-    p.caTotal += tripBls.reduce((s, bl) => s + (bl.montantTTC ?? bl.montantTotal), 0)
+    // Tonnage/CA uniquement sur les BL reellement livres — un BL "retour" (ou
+    // encore en cours : premier_passage/deuxieme_passage) ne doit pas gonfler
+    // le CA/tonnage du livreur alors qu'il est deja compte a part dans p.retours.
+    p.tonnage += tripBlsLivres.reduce((s, bl) => s + bl.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
+    p.caTotal += tripBlsLivres.reduce((s, bl) => s + (bl.montantTTC ?? bl.montantTotal), 0)
 
     // Timing analysis per BL
     for (const bl of tripBls.filter(b => b.statutLivraison === "livre")) {
@@ -372,12 +376,13 @@ export default function BORapportLivraison({ user: _user }: Props) {
                   <tr><td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">Aucun trip dans la période</td></tr>
                 ) : filteredTrips.map((trip, i) => {
                   const tripBls = bls.filter(bl => bl.tripId === trip.id)
-                  const livres = tripBls.filter(bl => bl.statutLivraison === "livre").length
+                  const tripBlsLivres = tripBls.filter(bl => bl.statutLivraison === "livre")
+                  const livres = tripBlsLivres.length
                   const retours = tripBls.filter(bl => bl.statutLivraison === "retour").length
                   const clients = trip.commandeIds.length
                   const taux = clients > 0 ? Math.round((livres / clients) * 100) : 0
-                  const tonnage = tripBls.reduce((s, bl) => s + bl.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
-                  const ca = tripBls.reduce((s, bl) => s + (bl.montantTTC ?? bl.montantTotal), 0)
+                  const tonnage = tripBlsLivres.reduce((s, bl) => s + bl.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
+                  const ca = tripBlsLivres.reduce((s, bl) => s + (bl.montantTTC ?? bl.montantTotal), 0)
                   return (
                     <tr key={trip.id}
                       style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>

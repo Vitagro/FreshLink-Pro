@@ -118,8 +118,11 @@ function autoAxes(cfg: PLConfig, pl: ReturnType<typeof calcPL>): AxeAuto[] {
 
 // ── Daily Report Email ────────────────────────────────────────────────────────
 async function sendDailyReport(toEmail: string) {
-  const today = new Date().toISOString().split("T")[0]
-  const commandes = store.getCommandes().filter((c: {date?: string}) => c.date === today)
+  const today = store.today()
+  // Exclut "refuse" (commande annulee/soft-supprimee) — sinon le CA envoye
+  // chaque jour a la direction par email est gonfle par des commandes annulees,
+  // meme regle que commandesActives sur BODashboard/BORecap.
+  const commandes = store.getCommandes().filter((c: {date?: string; statut?: string}) => c.date === today && c.statut !== "refuse")
   const bonsAchat = store.getBonsAchat().filter((b: {date?: string}) => b.date === today)
   const bls = store.getBonsLivraison ? store.getBonsLivraison().filter((b: {date?: string}) => b.date === today) : []
 
@@ -209,8 +212,8 @@ export default function BOFinanceControlGestion({ user }: { user: User }) {
 
   // Real daily data for dynamic axes
   const realData = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0]
-    const commandes = store.getVisibleCommandes().filter((c: {date?: string}) => c.date === today)
+    const today = store.today()
+    const commandes = store.getVisibleCommandes().filter((c: {date?: string; statut?: string}) => c.date === today && c.statut !== "refuse")
     const bonsAchat = store.getBonsAchat().filter((b: {date?: string}) => b.date === today)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const caToday = commandes.reduce((s: number, c: any) => s + (c.lignes?.reduce((si: number, l: {total: number}) => si + l.total, 0) ?? 0), 0)

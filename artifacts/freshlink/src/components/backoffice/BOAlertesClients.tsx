@@ -74,7 +74,10 @@ export default function BOAlertesClients({ user }: Props) {
   // ── Construction des alertes : fréquence (client × article) ─────────────────
   const alerts = useMemo<ClientArticleAlert[]>(() => {
     const cfg       = store.getAlertConfig()
-    const commandes = store.getVisibleCommandes()
+    // Exclut "refuse" (commande annulee/soft-supprimee) — sinon une commande
+    // annulee d'un article peut faire croire qu'il vient d'etre re-livre au
+    // client (lastDate mis a jour), masquant l'alerte "article absent".
+    const commandes = store.getVisibleCommandes().filter(c => c.statut !== "refuse")
     const clientById  = new Map(store.getVisibleClients().map(c => [c.id, c]))
     const articleById = new Map(store.getArticles().map(a => [a.id, a]))
     const userById    = new Map(store.getUsers().map(u => [u.id, u]))

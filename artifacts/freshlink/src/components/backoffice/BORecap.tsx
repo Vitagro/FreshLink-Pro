@@ -190,6 +190,7 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
       }
     })
     .filter(r => r.commandeTotal > 0)
+    .sort((a, b) => a.articleNom.localeCompare(b.articleNom, "fr"))
 }
 
 interface EcartRow {
@@ -892,7 +893,9 @@ export default function BORecap() {
                       <td className="px-3 py-3 text-center text-xs">
                         {crossdock ? (
                           r.caissesCommercial > 0
-                            ? <span className="font-semibold text-blue-700">{r.caissesCommercial} caisse{r.caissesCommercial > 1 ? "s" : ""}</span>
+                            ? <span className="font-semibold text-blue-700">
+                                {r.caissesCommercial} {r.um ? r.um.toLowerCase() + (r.caissesCommercial > 1 ? "s" : "") : `caisse${r.caissesCommercial > 1 ? "s" : ""}`}
+                              </span>
                             : <span className="text-muted-foreground">—</span>
                         ) : (
                           r.besoinNet > 0 ? (() => {

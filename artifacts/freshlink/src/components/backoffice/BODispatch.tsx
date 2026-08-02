@@ -384,13 +384,13 @@ export default function BODispatch({ user }: Props) {
                 return { articleNom: l.articleNom, quantite: qte, prixUnitaire: prixU, total: qte * prixU }
               })
               const total = lignes.reduce((s, l) => s + l.total, 0)
-              const tva = 0.20
+              const tva = store.getFiscalConfig().tauxTVA
               store.addBonLivraison({
                 id: store.genBL(), date: store.today(), tripId: id,
                 commandeId: cid, commandeIds: [cid], clientId: cmd.clientId, clientNom: cmd.clientNom, secteur: cmd.secteur, zone: cmd.zone,
                 livreurNom: trip.livreurNom, prevendeurNom: cmd.commercialNom,
                 lignes,
-                montantTotal: total, tva, montantTTC: total * (1 + tva),
+                montantTotal: total, tva, montantTTC: Math.round(total * (1 + tva / 100) * 100) / 100,
                 statut: "émis", statutLivraison: "livre", valideMagasinier: false,
               })
             }

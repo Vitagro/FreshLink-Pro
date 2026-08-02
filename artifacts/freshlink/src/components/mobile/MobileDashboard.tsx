@@ -5,16 +5,24 @@ import { store, type User, type Commande, type Message } from "@/lib/store"
 
 interface Props { user: User }
 
+// Dates calendaires LOCALES (comme store.today()/yesterday()) — jamais
+// toISOString(), qui est en UTC : au Maroc (UTC+1, sans heure d'ete), ces
+// fonctions renvoyaient la veille au lieu d'aujourd'hui/de la semaine
+// courante entre 00h00 et 00h59 heure locale (today, lui, utilise deja
+// store.today() correctement — melange des deux bases dans le meme filtre).
+function fmtLocalDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
 function dateOffset(n: number) {
   const d = new Date()
   d.setDate(d.getDate() - n)
-  return d.toISOString().split("T")[0]
+  return fmtLocalDate(d)
 }
 function weekStart() {
   const d = new Date()
   const day = d.getDay()
   d.setDate(d.getDate() - ((day + 6) % 7))
-  return d.toISOString().split("T")[0]
+  return fmtLocalDate(d)
 }
 
 type Period = "jour" | "j1" | "semaine"
@@ -47,7 +55,10 @@ export default function MobileDashboard({ user }: Props) {
   const yesterday = dateOffset(1)
   const wStart = weekStart()
 
-  const myCommandes = commandes.filter(c => c.commercialId === user.id)
+  // Exclut "refuse" (commande soft-supprimee par le prevendeur) — meme regle
+  // que MobileObjectifs.tsx/BODashboard.tsx (commandesActives) : sinon une
+  // commande annulee gonfle encore le CA/tonnage/objectifs affiches ici.
+  const myCommandes = commandes.filter(c => c.commercialId === user.id && c.statut !== "refuse")
 
   const forPeriod = myCommandes.filter(c => {
     if (period === "jour") return c.date === today

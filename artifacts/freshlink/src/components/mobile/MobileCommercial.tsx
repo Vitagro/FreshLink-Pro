@@ -1268,8 +1268,8 @@ export default function MobileCommercial({ user }: Props) {
                   {c.nom[0]}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-sm font-semibold text-foreground truncate">{c.nom}</p>
+                  <div className="flex items-start gap-1.5">
+                    <p className="text-sm font-semibold text-foreground break-words">{c.nom}</p>
                     {isPrevendeur && c.prevendeurId === user.id && (
                       <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">MON CLIENT</span>
                     )}
@@ -1657,7 +1657,7 @@ export default function MobileCommercial({ user }: Props) {
           </svg>
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-foreground truncate">
+          <p className="text-sm font-bold text-foreground break-words">
             {clients.find(c => c.id === selectedClientId)?.nom ?? "—"}
           </p>
           <p className="text-xs text-muted-foreground">Livraison : {heurelivraison || "—"}</p>

@@ -53,7 +53,11 @@ export default function BORapportMarche() {
 
     // Rapport commandes par prévendeur (à partir des commandes du jour)
     const today = store.today()
-    const cmds = store.getCommandes().filter(c => (c.date ?? "").slice(0, 10) === today)
+    // Exclut "refuse" (commande annulee) — sinon ce recap "qui a commande
+    // combien aujourd'hui" est incoherent avec le besoin d'achat juste
+    // au-dessus (computeBesoinNet exclut deja refuse via son whitelist de
+    // statuts en_attente/valide).
+    const cmds = store.getCommandes().filter(c => (c.date ?? "").slice(0, 10) === today && c.statut !== "refuse")
     const parPrev: Record<string, { nb: number; kg: number; montant: number }> = {}
     cmds.forEach(c => {
       const nom = c.commercialNom || "—"
