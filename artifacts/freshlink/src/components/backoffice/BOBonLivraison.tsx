@@ -210,7 +210,7 @@ function BLEditor({
     // Livraison prévue = date du BL par défaut — l'utilisateur peut la changer.
     dateLivraisonPrevue: todayStr,
     lignes: [],
-    totalHT: 0, totalTTC: 0, tva: 20,
+    totalHT: 0, totalTTC: 0, tva: store.getFiscalConfig().tauxTVA,
     qcObligatoire,
     notesBL: "",
     ...bl,
