@@ -356,7 +356,7 @@ function BLEditor({
   useEffect(() => {
     const totalHT = lignes.reduce((s, l) => s + l.totalLigne, 0)
     const tva = form.tva ?? 20
-    const totalTTC = totalHT * (1 + tva / 100)
+    const totalTTC = Math.round(totalHT * (1 + tva / 100) * 100) / 100
     setForm(f => ({ ...f, lignes, totalHT, totalTTC }))
   }, [lignes, form.tva])
 
@@ -1149,7 +1149,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
         const totalHT = lignes.reduce((s, l) => s + l.totalLigne, 0)
         const bl: BonLivraison = {
           id: genId(), numero: genNumero(), transporteur: "non_affecte",
-          statut: "valide", date: today, lignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100)), tva: tauxTVA,
+          statut: "valide", date: today, lignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100) * 100) / 100, tva: tauxTVA,
           qcObligatoire, clientId: "", clientNom: bon.nom ?? "—",
           createdBy: user.id, updatedAt: new Date().toISOString(),
           notesBL: `Importe depuis Bon Prep: ${bon.nom}`,
@@ -1188,7 +1188,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
           const totalHT = blLignes.reduce((s, l) => s + l.totalLigne, 0)
           const bl: BonLivraison = {
             id: genId(), numero: genNumero(), transporteur: "non_affecte",
-            statut: "valide", date: today, lignes: blLignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100)), tva: tauxTVA,
+            statut: "valide", date: today, lignes: blLignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100) * 100) / 100, tva: tauxTVA,
             qcObligatoire, clientId: cid, clientNom: client?.nom ?? cid,
             clientAdresse: client?.adresse, clientIce: client?.ice,
             clientModalitePaiement: client?.modalitePaiement,

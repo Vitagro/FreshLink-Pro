@@ -127,7 +127,7 @@ export function autoGenerateBLs(bon: BonPreparation, operateurId: string, operat
       lignes: lignesBL,
       montantTotal,
       tva: tauxTVA,
-      montantTTC: Math.round(montantTotal * (1 + tauxTVA / 100)),
+      montantTTC: Math.round(montantTotal * (1 + tauxTVA / 100) * 100) / 100,
       statut: "émis" as const,
       statutLivraison: "premier_passage" as const,
       numero: `BL-${y}-${String(seqThisYear).padStart(4, "0")}`,

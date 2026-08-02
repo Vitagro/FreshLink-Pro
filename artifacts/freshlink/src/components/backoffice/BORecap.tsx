@@ -157,9 +157,12 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         const l = r.lignes.find(l => l.articleId === art.id)
         return s + (l?.quantite ?? 0)
       }, 0)
+      // Non clampe a 0 (comme store.computeBesoinNet) : negatif = surplus,
+      // utile pour le suivi/export excel meme si l'UI n'affiche que "Stock OK"
+      // en dessous de 0 (selected/badge restent bases sur > 0, inchanges).
       const besoinNet = crossdock
-        ? Math.max(0, commandeTotal - retourQty)
-        : Math.max(0, commandeTotal - art.stockDisponible - retourQty)
+        ? commandeTotal - retourQty
+        : commandeTotal - art.stockDisponible - retourQty
 
       // Trouver le fournisseur habituel
       const fHabituel = getFournisseurHabituel(art.id)

@@ -745,7 +745,9 @@ export default function BOMarketplace({ user }: Props) {
   // Recopie le stock réel ERP → stock web alloué (pour les articles publiés)
   // Pratique pour aligner d'un coup, puis ajuster manuellement si besoin.
   const handleAutoSync = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "articles", label: "auto-sync stock web" }); return }
     if (!window.confirm("Recopier le stock réel actuel vers le stock web alloué de tous les articles publiés ?")) return
+    logAction(user, "catalogue_toggle", "success", { type: "articles", label: "auto-sync stock web" })
     const toSync: Article[] = []
     const all = articles.map(a => {
       if (!a.marketplaceActif) return a
@@ -768,6 +770,7 @@ export default function BOMarketplace({ user }: Props) {
   // ── Allocation par famille : stock web + statut affiché, en 1 clic ──────────
   // famAllocSel "" = toutes les familles (= tous les articles).
   const applyFamilyAllocation = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "articles", label: `allocation famille ${famAllocSel || "toutes"}` }); return }
     const cible = articles.filter(a => !famAllocSel || a.famille === famAllocSel)
     if (cible.length === 0) { setSyncMsg({ ok: false, text: "Aucun article dans cette famille." }); return }
     const changeStock = famAllocStock.trim() !== ""
@@ -783,6 +786,7 @@ export default function BOMarketplace({ user }: Props) {
       (changeStatut ? `• Statut affiché = ${famAllocStatut}\n` : "") +
       (famAllocPublish ? "• Publier sur le site\n" : "")
     )) return
+    logAction(user, "catalogue_toggle", "success", { type: "articles", label: `allocation ${libelle} (${cible.length})` })
 
     const touched: Article[] = []
     const all = articles.map(a => {

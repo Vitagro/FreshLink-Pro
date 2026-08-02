@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react"
 import type { User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import TurnUsageCard from "./TurnUsageCard"
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -154,7 +156,9 @@ export default function BODeviceAccess({ user }: Props) {
   }
 
   async function deleteRow(deviceId: string, nom: string | null) {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "device_access_suppression", id: deviceId, label: nom ?? deviceId }); return }
     if (!confirm(`Supprimer la demande de ${nom ?? deviceId} ? Action irréversible.`)) return
+    logAction(user, "backup_restore", "success", { type: "device_access_suppression", id: deviceId, label: nom ?? deviceId })
     const row = rows.find(r => r.device_id === deviceId || r.id === deviceId)
     try {
       await fetch("/api/sync-write", {
@@ -192,6 +196,7 @@ export default function BODeviceAccess({ user }: Props) {
 
   // ── Activer / désactiver le contrôle d'accès global ─────────────────────────
   async function toggleEnforce(next: boolean) {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "device_access_enforce", label: next ? "activation" : "desactivation" }); return }
     if (next) {
       const authorized = rows.filter(r => r.statut === "autorise").length
       if (!confirm(
@@ -201,6 +206,7 @@ export default function BODeviceAccess({ user }: Props) {
         `Astuce : autorisez d'abord les appareils à garder (bouton « Autoriser ») avant d'activer.\n\nContinuer ?`
       )) return
     }
+    logAction(user, "backup_restore", "success", { type: "device_access_enforce", label: next ? "activation" : "desactivation" })
     setSavingCfg(true)
     const ok = await writeRow("__config", {
       enforce: next,
