@@ -67,7 +67,7 @@ function findDuplicateArticle(all: Article[], nom: string, nomAr: string, exclud
   })
 }
 
-const UM_OPTIONS = ["Caisse", "Demi caisse", "Carton", "Palette", "Sac", "Plateau", "Botte", "Pièce"]
+const UM_OPTIONS = ["Caisse", "Demi caisse", "Carton", "Cagette", "Palette", "Sac", "Plateau", "Botte", "Pièce"]
 
 export default function BOArticles({ user }: { user: { id: string; name: string } }) {
   const [tab, setTab] = useState<"articles" | "caisses" | "zones" | "bulk-zones" | "import-prep">("articles")

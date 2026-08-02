@@ -16,7 +16,7 @@ const SOURCES: { id: PriceSource; emoji: string; label: string }[] = [
 ]
 
 function uid() { return `pe_${Date.now()}_${Math.random().toString(36).slice(2, 7)}` }
-function today() { return new Date().toISOString().split("T")[0] }
+function today() { return store.today() }
 
 function calcEvolution(current: number, prev?: number): "hausse" | "baisse" | "stable" | undefined {
   if (!prev || prev === 0) return undefined

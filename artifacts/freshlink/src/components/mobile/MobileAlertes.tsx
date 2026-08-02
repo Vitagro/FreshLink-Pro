@@ -231,7 +231,10 @@ export default function MobileAlertes({ user }: Props) {
 
   const articleAlerts = useMemo((): ArticleAlert[] => {
     if (!selectedClientId) return []
-    const commandes = store.getCommandes().filter(c => c.clientId === selectedClientId)
+    // Exclut "refuse" (commande annulee/soft-supprimee) — sinon une commande
+    // annulee d'un article peut faire croire qu'il vient d'etre re-livre au
+    // client (lastDate mis a jour), masquant l'alerte "article absent".
+    const commandes = store.getCommandes().filter(c => c.clientId === selectedClientId && c.statut !== "refuse")
     if (!commandes.length) return []
     const today    = new Date()
     const articles = store.getArticles()

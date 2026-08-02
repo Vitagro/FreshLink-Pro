@@ -99,7 +99,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
     logAction(session, "faire_inventaire", "success", { label: `${Object.keys(invEntries).length} article(s)` })
     const all = store.getArticles()
     const ecarts: { nom: string; ecart: number; unite: string }[] = []
-    const now = new Date().toISOString().split("T")[0]
+    const now = store.today()
     Object.entries(invEntries).forEach(([artId, e]) => {
       const idx = all.findIndex(a => a.id === artId)
       if (idx < 0) return
@@ -263,7 +263,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
     const art = articles.find(a => a.id === transForm.articleId)
     if (!art) return
     const t: TransfertStock = {
-      id: store.genId(), date: new Date().toISOString().split("T")[0],
+      id: store.genId(), date: store.today(),
       articleId: art.id, articleNom: art.nom, quantite: transForm.quantite,
       sens: transForm.sens, motif: transForm.motif, operateurId: user.id,
     }

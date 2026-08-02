@@ -331,7 +331,7 @@ export default function BOGPSTracker({ user }: Props) {
   }
 
   // ── Visit heatmap data ──────────────────────────────────────────────────
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = store.today()
   const weekStart = (() => {
     const d = new Date()
     const day = d.getDay() === 0 ? 6 : d.getDay() - 1
