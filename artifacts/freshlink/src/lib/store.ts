@@ -3834,6 +3834,9 @@ export const store = {
   saveTransferts: (t: TransfertStock[]) => setLS("fl_transferts", t),
   addTransfert: (t: TransfertStock) => {
     const ts = store.getTransferts(); ts.push(t); store.saveTransferts(ts)
+    // Pas de mouvement de stock entrepot en mode crossdocking (rien a transferer) —
+    // le transfert reste enregistre pour la tracabilite, sans impact sur stockDisponible/stockDefect.
+    if (store.isCrossdockMode()) return
     if (t.sens === "conforme_vers_defect") {
       store.updateStock(t.articleId, -t.quantite, false)
       store.updateStock(t.articleId, t.quantite, true)

@@ -132,13 +132,17 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
     setTimeout(() => setInvSaved(false), 2500)
   }
 
-  // Reset stock to 0 for all or selected articles in inventory
-  const handleResetStockInventaire = (field: "stockDisponible" | "stockDefect", ids?: Set<string>) => {
+  // Reset stock to 0 for all (filtered) or selected articles in inventory —
+  // confirmation inline en deux temps (pas de confirm() natif), meme pattern que BOArticles.
+  const [pendingReset, setPendingReset] = useState<{ field: "stockDisponible" | "stockDefect"; scope: "global" | "selection" } | null>(null)
+  const doResetStockInventaire = () => {
+    if (!pendingReset) return
+    const { field, scope } = pendingReset
+    const ids = scope === "selection" ? selectedStockIds : undefined
     const session = store.getSession()
     const label = field === "stockDisponible" ? "stock CONFORME" : "stock DEFECT"
     const count = ids ? ids.size : filtered.length
-    if (!hasPermission(session?.role, "ajuster_stock")) { logAction(session, "ajuster_stock", "denied", { label: `${label} — ${count} article(s)` }); return }
-    if (!confirm(`Remettre le ${label} a 0 pour ${count} article(s) ?`)) return
+    if (!hasPermission(session?.role, "ajuster_stock")) { logAction(session, "ajuster_stock", "denied", { label: `${label} — ${count} article(s)` }); setPendingReset(null); return }
     logAction(session, "ajuster_stock", "success", { label: `${label} — ${count} article(s)` })
     const all = store.getArticles()
     all.forEach((a, i) => {
@@ -150,6 +154,8 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
     reload()
     setSaved(`${label} remis a 0 pour ${count} article(s)`)
     setTimeout(() => setSaved(""), 2500)
+    if (scope === "selection") setSelectedStockIds(new Set())
+    setPendingReset(null)
   }
   const [search, setSearch] = useState("")
   const [famille, setFamille] = useState("")
@@ -258,14 +264,9 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
       articleId: art.id, articleNom: art.nom, quantite: transForm.quantite,
       sens: transForm.sens, motif: transForm.motif, operateurId: user.id,
     }
-    if (store.addTransfert) store.addTransfert(t)
-    if (transForm.sens === "conforme_vers_defect") {
-      store.updateStock(art.id, -transForm.quantite, false)
-      store.updateStock(art.id, transForm.quantite, true)
-    } else {
-      store.updateStock(art.id, transForm.quantite, false)
-      store.updateStock(art.id, -transForm.quantite, true)
-    }
+    // store.addTransfert applique deja le mouvement de stock conforme<->defect en interne —
+    // ne pas le refaire ici, sous peine de doubler le mouvement (bug precedent).
+    store.addTransfert(t)
     reload(); setShowTransfert(false)
     setSaved("Transfert enregistré"); setTimeout(() => setSaved(""), 2000)
   }
@@ -363,6 +364,11 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
           <p className="text-sm text-muted-foreground">{articles.length} articles — valeur totale: {DH(valeurStock)}</p>
         </div>
         <div className="flex gap-2">
+          <button onClick={reload}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold border border-border text-muted-foreground hover:bg-muted transition-colors">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+            Actualiser
+          </button>
           <button onClick={() => { setShowTransfert(true) }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-amber-400 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
@@ -462,33 +468,24 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                     <td colSpan={7} className="px-4 py-2.5 bg-blue-50 border-b border-blue-200">
                       <div className="flex items-center gap-3 flex-wrap text-sm text-blue-800">
                         <span className="font-bold">{selectedStockIds.size} article(s) selectionne(s)</span>
+                        {pendingReset?.scope === "selection" ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-red-700">
+                              Confirmer remise a 0 du {pendingReset.field === "stockDisponible" ? "stock CONFORME" : "stock DEFECT"} pour {selectedStockIds.size} article(s) ?
+                            </span>
+                            <button onClick={doResetStockInventaire} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700">Oui, remettre</button>
+                            <button onClick={() => setPendingReset(null)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">Annuler</button>
+                          </div>
+                        ) : (
                         <div className="flex gap-2 flex-wrap">
                           <button
-                            onClick={() => {
-                              if (!confirm(`Remettre le stock CONFORME a 0 pour ${selectedStockIds.size} article(s) ?`)) return
-                              const all = store.getArticles()
-                              all.forEach((a, i) => { if (selectedStockIds.has(a.id)) all[i] = { ...a, stockDisponible: 0 } })
-                              store.saveArticles(all)
-                              reload()
-                              setSaved(`Stock remis a 0 pour ${selectedStockIds.size} article(s)`)
-                              setTimeout(() => setSaved(""), 2500)
-                              setSelectedStockIds(new Set())
-                            }}
+                            onClick={() => setPendingReset({ field: "stockDisponible", scope: "selection" })}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-100 text-red-700 border border-red-200 hover:bg-red-200 transition-colors">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                             Remettre stock a 0
                           </button>
                           <button
-                            onClick={() => {
-                              if (!confirm(`Remettre le stock DEFECT a 0 pour ${selectedStockIds.size} article(s) ?`)) return
-                              const all = store.getArticles()
-                              all.forEach((a, i) => { if (selectedStockIds.has(a.id)) all[i] = { ...a, stockDefect: 0 } })
-                              store.saveArticles(all)
-                              reload()
-                              setSaved(`Defect remis a 0 pour ${selectedStockIds.size} article(s)`)
-                              setTimeout(() => setSaved(""), 2500)
-                              setSelectedStockIds(new Set())
-                            }}
+                            onClick={() => setPendingReset({ field: "stockDefect", scope: "selection" })}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-200 transition-colors">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                             Remettre defect a 0
@@ -497,6 +494,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                             Deselectionner tout
                           </button>
                         </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -727,17 +725,29 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
               <h3 className="text-sm font-bold text-foreground">Inventaire physique / الجرد الفعلي</h3>
               <p className="text-xs text-muted-foreground">Saisie stock theorique (UM/base) + stock reel magasinier. Le systeme calcule et alerte les ecarts +/-.</p>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              <button onClick={() => handleResetStockInventaire("stockDisponible")}
+            <div className="flex gap-2 flex-wrap items-center">
+              {pendingReset?.scope === "global" ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-red-700">
+                    Confirmer RAZ {pendingReset.field === "stockDisponible" ? "stock conforme" : "defect"} pour {filtered.length} article(s) ?
+                  </span>
+                  <button onClick={doResetStockInventaire} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700">Oui, remettre</button>
+                  <button onClick={() => setPendingReset(null)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">Annuler</button>
+                </div>
+              ) : (
+              <>
+              <button onClick={() => setPendingReset({ field: "stockDisponible", scope: "global" })}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-colors">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 RAZ Stock conforme
               </button>
-              <button onClick={() => handleResetStockInventaire("stockDefect")}
+              <button onClick={() => setPendingReset({ field: "stockDefect", scope: "global" })}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-amber-50 border border-amber-200 text-amber-700 hover:bg-amber-100 transition-colors">
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                 RAZ Defect
               </button>
+              </>
+              )}
               {invSaved && (
                 <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-semibold">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
