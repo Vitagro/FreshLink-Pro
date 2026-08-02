@@ -601,6 +601,16 @@ export default function MobileLogistique({ user }: Props) {
     retour: "Retour",
   }
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible.
+  const LOG_TAB_IDS = ["validation", "trip", "map", "reception"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "logistique", id)
+  const visibleLogTabIds = LOG_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(activeTab) && visibleLogTabIds.length > 0) setActiveTab(visibleLogTabIds[0] as LogTab)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, user.role])
+
   return (
     <div className="flex flex-col">
       {/* Sub tabs */}
@@ -612,6 +622,7 @@ export default function MobileLogistique({ user }: Props) {
           { id: "reception",  label: "Reception",  icon: "M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4", roles: ["magasinier", "resp_logistique", "admin", "super_admin", "super_super_admin"] },
         ] as const)
           .filter(t => !t.roles || (t.roles as readonly string[]).includes(user.role))
+          .filter(t => tabVisible(t.id))
           .map(t => (
           <button
             key={t.id}

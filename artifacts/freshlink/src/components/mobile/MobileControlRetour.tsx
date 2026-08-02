@@ -172,6 +172,17 @@ export default function MobileControlRetour({ user }: Props) {
     return "Rejete"
   }
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible. Doit s'executer
+  // avant tout return conditionnel (regles des hooks).
+  const RETOUR_TAB_IDS = ["declarer", "valider"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "ctrl_retour", id)
+  const visibleRetourTabIds = RETOUR_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(tab) && visibleRetourTabIds.length > 0) setTab(visibleRetourTabIds[0] as "declarer" | "valider")
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user.role])
+
   // Camera IA overlay
   if (showCamera && selected) {
     return (
@@ -210,7 +221,7 @@ export default function MobileControlRetour({ user }: Props) {
 
       {/* Tabs */}
       <div className="flex rounded-xl overflow-hidden border border-border">
-        {(["declarer","valider"] as const).map(t => (
+        {(["declarer","valider"] as const).filter(t => tabVisible(t)).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`flex-1 py-2.5 text-xs font-bold transition-colors ${
               tab === t ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"

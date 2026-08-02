@@ -196,6 +196,16 @@ export default function MobileMagasinier({ user }: Props) {
 
   const pendingBLs = bls.length
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible.
+  const MAG_TAB_IDS = ["reception", "po_achat", "besoin_sku", "besoin_achat", "validation_bl"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "magasinier", id)
+  const visibleTabIds = MAG_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(tab) && visibleTabIds.length > 0) setTab(visibleTabIds[0] as MagTab)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user.role])
+
   return (
     <div className="flex flex-col min-h-screen bg-background pb-4">
 
@@ -227,7 +237,7 @@ export default function MobileMagasinier({ user }: Props) {
             { id: "besoin_sku",   label: "Besoin SKU",      badge: besoinNet.filter(b => b.besoinNet > 0).length, icon: "M4 6h16M4 10h16M4 14h16M4 18h16" },
             { id: "besoin_achat", label: "Besoin Achat",    badge: bonsAchat.filter(b => b.statut === "brouillon").length, icon: "M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" },
             { id: "validation_bl",label: "Valid. BL",        badge: pendingBLs, icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" },
-          ] as { id: MagTab; label: string; badge: number; icon: string }[]).map(t => (
+          ] as { id: MagTab; label: string; badge: number; icon: string }[]).filter(t => tabVisible(t.id)).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex-shrink-0 flex items-center justify-center gap-1 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all ${tab === t.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">

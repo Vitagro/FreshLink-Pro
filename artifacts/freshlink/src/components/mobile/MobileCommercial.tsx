@@ -980,6 +980,17 @@ export default function MobileCommercial({ user }: Props) {
     if (updated) import("@/lib/supabase/db").then(db => db.upsertCommande(updated)).catch(e => console.error("[MobileCommercial] sync deleted commande error:", e))
   }
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible. Doit s'executer
+  // avant tout return conditionnel (regles des hooks).
+  const COMM_TAB_IDS = ["nouvelle", "mes_commandes"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "commercial", id)
+  const visibleCommTabIds = COMM_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(commTab) && visibleCommTabIds.length > 0) setCommTab(visibleCommTabIds[0] as CommTab)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commTab, user.role])
+
   // ── GPS blocking screens ──────────────────────────────────────────────────
   if (gpsStatus === "loading") {
     return (
@@ -1048,10 +1059,13 @@ export default function MobileCommercial({ user }: Props) {
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted">
+        {tabVisible("nouvelle") && (
         <button onClick={() => { setCommTab("nouvelle"); setEditCmd(null); setOrderStep(1) }}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${commTab === "nouvelle" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Nouvelle commande
         </button>
+        )}
+        {tabVisible("mes_commandes") && (
         <button onClick={() => setCommTab("mes_commandes")}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${commTab === "mes_commandes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Mes cmds
@@ -1061,6 +1075,7 @@ export default function MobileCommercial({ user }: Props) {
             </span>
           )}
         </button>
+        )}
       </div>
 
       {commTab === "nouvelle" && (<>
