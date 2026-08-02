@@ -237,6 +237,28 @@ export default function BODashboard({ user }: Props) {
   })
   const top10Clients = Object.entries(clientsCA).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
 
+  // --- Top prevendeurs (CA) ---
+  const prevendeurCA: Record<string, { nom: string; ca: number; cmds: number; tonnage: number }> = {}
+  commandesActives.forEach(c => {
+    const ca = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
+    if (!prevendeurCA[c.commercialId]) prevendeurCA[c.commercialId] = { nom: c.commercialNom, ca: 0, cmds: 0, tonnage: 0 }
+    prevendeurCA[c.commercialId].ca += ca
+    prevendeurCA[c.commercialId].cmds++
+    prevendeurCA[c.commercialId].tonnage += c.lignes.reduce((s, l) => s + l.quantite, 0)
+  })
+  const top10Prevendeurs = Object.entries(prevendeurCA).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
+
+  // --- Top secteurs (CA) ---
+  const secteurStats: Record<string, { nom: string; ca: number; cmds: number; tonnage: number }> = {}
+  commandesActives.forEach(c => {
+    const ca = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
+    if (!secteurStats[c.secteur]) secteurStats[c.secteur] = { nom: c.secteur, ca: 0, cmds: 0, tonnage: 0 }
+    secteurStats[c.secteur].ca += ca
+    secteurStats[c.secteur].cmds++
+    secteurStats[c.secteur].tonnage += c.lignes.reduce((s, l) => s + l.quantite, 0)
+  })
+  const top10Secteurs = Object.entries(secteurStats).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
+
   // --- Top clients retours ---
   const clientsRetour: Record<string, { nom: string; kg: number; nb: number }> = {}
   retoursAll.forEach(r => r.lignes.forEach(l => {
@@ -716,6 +738,52 @@ export default function BODashboard({ user }: Props) {
                       <span className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center shrink-0 bg-amber-50 text-amber-700">{i + 1}</span>
                       <p className="flex-1 text-sm font-semibold truncate text-foreground">{a.name}</p>
                       <span className="font-bold text-sm shrink-0 text-amber-600">{KG(a.kg)}</span>
+                    </div>
+                  ))}
+                </div>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Top prevendeurs (CA) */}
+            <div className="rounded-2xl overflow-hidden bg-card border border-border">
+              <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                <h3 className="text-sm font-bold text-foreground">Top prevendeurs / أفضل مندوبي المبيعات</h3>
+                <span className="text-xs text-muted-foreground">CA total</span>
+              </div>
+              {top10Prevendeurs.length === 0
+                ? <p className="px-4 py-6 text-sm text-center text-muted-foreground">Aucune commande</p>
+                : <div className="divide-y divide-border">
+                  {top10Prevendeurs.map(([id, p], i) => (
+                    <div key={id} className="px-4 py-2.5 flex items-center gap-3 row-hover">
+                      <span className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center shrink-0 bg-sky-50 text-sky-700">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate text-foreground">{p.nom}</p>
+                        <p className="text-xs text-muted-foreground">{p.cmds} cmd(s) · {KG(p.tonnage)}</p>
+                      </div>
+                      <span className="font-bold text-sm shrink-0 text-sky-600">{DH(p.ca)}</span>
+                    </div>
+                  ))}
+                </div>}
+            </div>
+
+            {/* Top secteurs (CA) */}
+            <div className="rounded-2xl overflow-hidden bg-card border border-border">
+              <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+                <h3 className="text-sm font-bold text-foreground">Top secteurs / أفضل القطاعات</h3>
+                <span className="text-xs text-muted-foreground">CA total</span>
+              </div>
+              {top10Secteurs.length === 0
+                ? <p className="px-4 py-6 text-sm text-center text-muted-foreground">Aucune commande</p>
+                : <div className="divide-y divide-border">
+                  {top10Secteurs.map(([id, s], i) => (
+                    <div key={id} className="px-4 py-2.5 flex items-center gap-3 row-hover">
+                      <span className="w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center shrink-0 bg-violet-50 text-violet-700">{i + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate text-foreground">{s.nom}</p>
+                        <p className="text-xs text-muted-foreground">{s.cmds} cmd(s) · {KG(s.tonnage)}</p>
+                      </div>
+                      <span className="font-bold text-sm shrink-0 text-violet-600">{DH(s.ca)}</span>
                     </div>
                   ))}
                 </div>}

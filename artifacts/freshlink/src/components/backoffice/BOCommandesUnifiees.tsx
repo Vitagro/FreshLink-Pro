@@ -829,6 +829,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
   const erpCount  = cmds.filter(c => c.source === "erp").length
   const newCount  = cmds.filter(c => ["nouveau","en_attente"].includes(c.statut)).length
   const totalCA   = filtered.reduce((s, c) => s + c.montant, 0)
+  const totalTonnage = filtered.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
 
   const cutoffCfg = store.getCommandeCutoffConfig()
 
@@ -1187,7 +1188,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       )}
 
       {/* ── Stats ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="bg-white rounded-xl border border-border p-4 text-center">
           <div className="text-2xl font-black text-foreground">{cmds.length}</div>
           <div className="text-xs font-semibold text-muted-foreground mt-1 uppercase">Total</div>
@@ -1199,6 +1200,12 @@ export default function BOCommandesUnifiees({ user }: Props) {
         <div className="bg-amber-50 rounded-xl border border-amber-100 p-4 text-center">
           <div className="text-2xl font-black text-amber-700">{erpCount}</div>
           <div className="text-xs font-semibold text-amber-400 mt-1 uppercase">📱 Terrain</div>
+        </div>
+        <div className="bg-orange-50 rounded-xl border border-orange-100 p-4 text-center">
+          <div className="text-lg font-black text-orange-700 leading-tight">
+            {totalTonnage.toLocaleString("fr-MA", { maximumFractionDigits: 0 })} kg
+          </div>
+          <div className="text-xs font-semibold text-orange-400 mt-1 uppercase">Tonnage filtré</div>
         </div>
         <div className="bg-green-50 rounded-xl border border-green-100 p-4 text-center">
           <div className="text-lg font-black text-green-700 leading-tight">
@@ -1369,6 +1376,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
                 <th className="text-left px-4 py-3 font-semibold">Date</th>
                 <th className="text-left px-4 py-3 font-semibold">Client</th>
                 <th className="text-left px-4 py-3 font-semibold">Articles</th>
+                <th className="text-right px-4 py-3 font-semibold">Tonnage</th>
                 <th className="text-right px-4 py-3 font-semibold">Total</th>
                 <th className="text-left px-4 py-3 font-semibold">Source</th>
                 <th className="text-left px-4 py-3 font-semibold">Statut</th>
@@ -1438,6 +1446,10 @@ export default function BOCommandesUnifiees({ user }: Props) {
                     {/* Articles */}
                     <td className="px-4 py-3 text-muted-foreground text-xs max-w-44 truncate" title={articlesLabel}>
                       {articlesLabel}
+                    </td>
+                    {/* Tonnage */}
+                    <td className="px-4 py-3 text-right text-muted-foreground text-xs whitespace-nowrap">
+                      {cmd.lignes.reduce((s, l) => s + l.quantite, 0).toLocaleString("fr-MA")} kg
                     </td>
                     {/* Total */}
                     <td className="px-4 py-3 text-right font-bold text-green-700 whitespace-nowrap">
