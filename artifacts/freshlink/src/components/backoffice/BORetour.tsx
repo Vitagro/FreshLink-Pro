@@ -19,11 +19,14 @@ export default function BORetour() {
     r.validePar = "magasinier"
     r.dateValidation = store.today()
     // Restore stock — SKIP lines with motifQualite = true (quality issue: product not put back)
-    r.lignes.forEach(l => {
-      if (!l.motifQualite) {
-        store.updateStock(l.articleId, l.quantite)
-      }
-    })
+    // et SKIP entierement en mode crossdocking (pas de stock entrepot a restaurer)
+    if (!store.isCrossdockMode()) {
+      r.lignes.forEach(l => {
+        if (!l.motifQualite) {
+          store.updateStock(l.articleId, l.quantite)
+        }
+      })
+    }
     store.saveRetours(retours_)
     setRetours(store.getRetours())
   }
@@ -34,11 +37,12 @@ export default function BORetour() {
       const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
       return ls + l.quantite * pv
     }, 0), 0)
+  const totalTonnage = filtered.reduce((s, r) => s + r.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
 
   return (
     <div className="flex flex-col gap-5">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-card rounded-xl border border-border p-4 text-center">
           <p className="text-2xl font-bold text-red-600 font-sans">{filtered.length}</p>
           <p className="text-sm text-muted-foreground font-sans">Retours</p>
@@ -46,6 +50,10 @@ export default function BORetour() {
         <div className="bg-card rounded-xl border border-border p-4 text-center">
           <p className="text-xl font-bold text-orange-600 font-sans">{filtered.filter(r => r.statut === "en_attente").length}</p>
           <p className="text-sm text-muted-foreground font-sans">En attente</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4 text-center">
+          <p className="text-xl font-bold text-orange-700 font-sans">{totalTonnage.toLocaleString("fr-MA")} kg</p>
+          <p className="text-sm text-muted-foreground font-sans">Tonnage</p>
         </div>
         <div className="bg-card rounded-xl border border-border p-4 text-center">
           <p className="text-xl font-bold text-foreground font-sans">{totalRetour.toLocaleString("fr-MA", { minimumFractionDigits: 2 })} DH</p>
