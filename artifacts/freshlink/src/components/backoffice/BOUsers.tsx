@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { store, type User, type UserRole, type UserAccessType, type GranularPermissions, type Civilite, ROLE_LABELS, ROLE_COLORS, JAWAD_ID, FAMILLES_ARTICLES, getAllSecteurs, effectiveGroupId } from "@/lib/store"
-import { autoAssignPermissions } from "@/lib/rolePermissions"
+import { store, type User, type UserRole, type UserAccessType, type GranularPermissions, type Civilite, ROLE_LABELS, ROLE_COLORS, JAWAD_ID, FAMILLES_ARTICLES, getAllSecteurs, effectiveGroupId, roleRequiresEmail, generateUsername } from "@/lib/store"
+import { autoAssignPermissions, mergeRolePermissions } from "@/lib/rolePermissions"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import { sendEmail } from "@/lib/email"
@@ -696,7 +696,8 @@ const DEFAULT_PERMS_BY_ROLE: Partial<Record<UserRole, PermFlags>> = {
 }
 
 const EMPTY_USER: Omit<User, "id"> = {
-  name: "", email: "", password: "1234", role: "prevendeur", accessType: undefined, secteur: "", depotId: undefined,
+  name: "", nom: "", prenom: "", username: "",
+  email: "", password: "1234", role: "prevendeur", accessType: undefined, secteur: "", depotId: undefined,
   phone: "", actif: true, isDemo: false,
   mustChangePassword: true,   // ← forcer changement mot de passe à la première connexion
   canViewAchat: false, canViewCommercial: false, canViewLogistique: false,
@@ -1367,8 +1368,15 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
   const openEdit = (u: User) => {
     if (!canEditUser(u)) return
     setEditing(u)
+    // Comptes legacy sans nom/prenom structures : pre-remplir depuis `name`
+    // (premier mot = prenom, reste = nom) pour edition — best-effort.
+    const legacyParts = (u.name ?? "").trim().split(/\s+/)
+    const fallbackPrenom = u.nom || u.prenom ? "" : (legacyParts[0] ?? "")
+    const fallbackNom = u.nom || u.prenom ? "" : legacyParts.slice(1).join(" ")
     setForm({
-      name: u.name, email: u.email, password: u.password, role: u.role, accessType: u.accessType,
+      name: u.name, nom: u.nom ?? fallbackNom, prenom: u.prenom ?? fallbackPrenom, username: u.username ?? "",
+      email: u.email, password: u.password, role: u.role, accessType: u.accessType,
+      roles: u.roles, activeRole: u.activeRole,
       secteur: u.secteur || "", depotId: u.depotId, phone: u.phone || "", actif: u.actif, isDemo: u.isDemo || false,
       groupeId: u.groupeId,
       canViewAchat: u.canViewAchat || false, canViewCommercial: u.canViewCommercial || false,
@@ -1393,7 +1401,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
   }
 
   const handleSave = () => {
-    if (!(form.name ?? "").trim() || !(form.email ?? "").trim()) return
+    if (!(form.name ?? "").trim() || (roleRequiresEmail(form.role as UserRole) && !(form.email ?? "").trim())) return
     const permKey = editing ? "modifier_utilisateur" : "creer_utilisateur"
     if (editing ? !canModifierUtilisateur : !canCreerUtilisateur) { logAction(currentUser, permKey, "denied", { type: "utilisateur", id: editing?.id, label: form.name }); return }
     logAction(currentUser, permKey, "success", { type: "utilisateur", id: editing?.id, label: form.name })
@@ -1992,11 +2000,12 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                       <p className="font-semibold text-foreground">{u.name}</p>
                     </div>
                   </td>
-                  {/* Contact — always visible (phone + email) */}
+                  {/* Contact — always visible (phone + email + identifiant) */}
                   <td className="px-4 py-3">
                     <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                       {u.phone && <span>{u.phone}</span>}
-                      <span>{u.email}</span>
+                      {u.email ? <span>{u.email}</span> : <span className="italic">Pas d&apos;email</span>}
+                      {u.username && <span className="font-mono text-[10px] text-violet-600">@{u.username}</span>}
                     </div>
                   </td>
                   {/* Role badge */}
@@ -2105,7 +2114,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleSave}
-                  disabled={!(form.name ?? "").trim() || !(form.email ?? "").trim()}
+                  disabled={!(form.name ?? "").trim() || (roleRequiresEmail(form.role as UserRole) && !(form.email ?? "").trim())}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-opacity hover:opacity-90"
                   style={{ background: "oklch(0.38 0.2 260)" }}>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
@@ -2202,16 +2211,70 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                   </div>
 
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-foreground">Nom complet *</label>
-                    <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+                    <label className="text-xs font-semibold text-foreground">Prenom *</label>
+                    <input type="text" value={(form as { prenom?: string }).prenom ?? ""}
+                      onChange={e => {
+                        const prenom = e.target.value
+                        const nom = (form as { nom?: string }).nom ?? ""
+                        const name = `${prenom} ${nom}`.trim()
+                        const curUsername = (form as { username?: string }).username ?? ""
+                        const autoUsername = curUsername || (prenom.trim() && nom.trim()
+                          ? generateUsername(prenom, nom, users.filter(u => u.id !== editing?.id).map(u => u.username ?? "").filter(Boolean))
+                          : curUsername)
+                        setForm({ ...form, prenom, name, username: autoUsername } as typeof form)
+                      }}
                       className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Mohamed Alami" />
+                      placeholder="Mohamed" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-foreground">Email *</label>
+                    <label className="text-xs font-semibold text-foreground">Nom *</label>
+                    <input type="text" value={(form as { nom?: string }).nom ?? ""}
+                      onChange={e => {
+                        const nom = e.target.value
+                        const prenom = (form as { prenom?: string }).prenom ?? ""
+                        const name = `${prenom} ${nom}`.trim()
+                        const curUsername = (form as { username?: string }).username ?? ""
+                        const autoUsername = curUsername || (prenom.trim() && nom.trim()
+                          ? generateUsername(prenom, nom, users.filter(u => u.id !== editing?.id).map(u => u.username ?? "").filter(Boolean))
+                          : curUsername)
+                        setForm({ ...form, nom, name, username: autoUsername } as typeof form)
+                      }}
+                      className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Alami" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      Nom d&apos;utilisateur
+                      <span className="text-[9px] font-normal text-muted-foreground">(genere automatiquement — identifiant de connexion)</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <input type="text" value={(form as { username?: string }).username ?? ""}
+                        onChange={e => setForm({ ...form, username: e.target.value } as typeof form)}
+                        className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+                        placeholder="mohamed.alami" />
+                      <button type="button"
+                        onClick={() => {
+                          const prenom = (form as { prenom?: string }).prenom ?? ""
+                          const nom = (form as { nom?: string }).nom ?? ""
+                          const existing = users.filter(u => u.id !== editing?.id).map(u => u.username ?? "").filter(Boolean)
+                          setForm({ ...form, username: generateUsername(prenom, nom, existing) } as typeof form)
+                        }}
+                        title="Regenerer l'identifiant"
+                        className="px-3 py-2.5 rounded-xl border border-violet-300 bg-violet-50 text-violet-700 text-xs font-semibold hover:bg-violet-100 transition-colors shrink-0">
+                        Generer
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-semibold text-foreground">
+                      Email {roleRequiresEmail(form.role as UserRole) ? "*" : ""}
+                    </label>
                     <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
                       className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="user@freshlink.ma" />
+                      placeholder={roleRequiresEmail(form.role as UserRole) ? "user@freshlink.ma" : "Optionnel pour ce role"} />
+                    {!roleRequiresEmail(form.role as UserRole) && (
+                      <p className="text-[10px] text-muted-foreground">Optionnel pour ce role — la connexion se fait via le nom d&apos;utilisateur ci-dessus.</p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-xs font-semibold text-foreground">Mot de passe</label>
@@ -2407,7 +2470,10 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                                   const next = isChecked
                                     ? base.filter(x => x !== r)
                                     : [...base, r]
-                                  setForm(prev => ({ ...prev, roles: next.length > 1 ? next : undefined }))
+                                  // Un compte multi-rôle voit les rubriques/fonctions de TOUS ses
+                                  // rôles (union des permissions), pas seulement du rôle principal.
+                                  const merged = next.length > 1 ? mergeRolePermissions(next) : {}
+                                  setForm(prev => ({ ...prev, roles: next.length > 1 ? next : undefined, ...merged }))
                                 }}
                                 className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all
                                   ${isChecked
@@ -2673,7 +2739,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                 Annuler
               </button>
               <button onClick={handleSave}
-                disabled={!(form.name ?? "").trim() || !(form.email ?? "").trim()}
+                disabled={!(form.name ?? "").trim() || (roleRequiresEmail(form.role as UserRole) && !(form.email ?? "").trim())}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-opacity hover:opacity-90"
                 style={{ background: "oklch(0.38 0.2 260)" }}>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>

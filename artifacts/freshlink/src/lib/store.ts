@@ -48,6 +48,14 @@ export type Civilite = "M." | "Mme" | "Dr." | "Pr."
 export interface User {
   id: string
   name: string
+  // Nom/prenom structures — alimentent `name` (calcule automatiquement) pour
+  // affichage coherent sur les KPI et les donnees RH. Optionnels pour les
+  // comptes legacy qui n'ont que `name`.
+  nom?: string
+  prenom?: string
+  // Identifiant systeme genere automatiquement (prenom.nom) — permet la
+  // connexion sans email pour les comptes terrain/mobile.
+  username?: string
   email: string
   password: string
   civilite?: Civilite        // M. / Mme / Dr. / Pr.
@@ -2578,6 +2586,32 @@ export function isDemoUser(user: User | null): boolean {
   return DEMO_EMAILS.has((user.email ?? "").toLowerCase())
 }
 
+// Rôles pour lesquels l'email reste obligatoire (comptes admin/responsable —
+// notifications système, réinitialisation mot de passe). Les comptes terrain
+// (prévendeur, magasinier, livreur...) peuvent être créés sans email, avec un
+// simple identifiant système (username) pour se connecter.
+const EMAIL_REQUIRED_ROLES = new Set<UserRole>([
+  "super_super_admin", "super_admin", "admin",
+  "resp_commercial", "resp_logistique", "resp_achat", "rh_manager", "chef_depot", "team_leader",
+])
+export function roleRequiresEmail(role: UserRole): boolean {
+  return EMAIL_REQUIRED_ROLES.has(role)
+}
+
+// Génère un identifiant système unique (prenom.nom, sans accents/espaces) —
+// utilisé comme identifiant de connexion pour les comptes sans email.
+export function generateUsername(prenom: string, nom: string, existingUsernames: string[]): string {
+  const clean = (s: string) => s
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "")
+  const base = [clean(prenom), clean(nom)].filter(Boolean).join(".") || "user"
+  const used = new Set(existingUsernames.map(u => u.toLowerCase()))
+  if (!used.has(base)) return base
+  let i = 2
+  while (used.has(`${base}${i}`)) i++
+  return `${base}${i}`
+}
+
 // Wraps a write function — silently no-ops for demo users
 function guardWrite<T extends unknown[]>(
   fn: (...args: T) => void,
@@ -2790,6 +2824,7 @@ export const store = {
       const idMatch =
         (u.email ?? "").toLowerCase() === id ||
         (u.name ?? "").toLowerCase() === id ||
+        (u.username ?? "").toLowerCase() === id ||
         (!!u.telephone && idPhone.length >= 8 && normPhone((u.telephone ?? "").toLowerCase()) === idPhone)
       if (!idMatch || !u.actif) return false
       // Check all password variants
@@ -2808,7 +2843,8 @@ export const store = {
     const u = users.find(u => {
       const idMatch =
         (u.email ?? "").toLowerCase() === identifier.toLowerCase() ||
-        (u.name ?? "").toLowerCase() === identifier.toLowerCase()
+        (u.name ?? "").toLowerCase() === identifier.toLowerCase() ||
+        (u.username ?? "").toLowerCase() === identifier.toLowerCase()
       return idMatch && u.actif
     })
     if (!u) return null
