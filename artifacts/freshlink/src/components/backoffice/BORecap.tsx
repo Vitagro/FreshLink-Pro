@@ -39,6 +39,8 @@ interface BesoinRow extends BesoinLigneEmail {
   selected: boolean
   um?: string             // libelle UM (ex: "Caisse") si l'article en a une
   colisageParUM?: number  // kg par UM — sert au calcul du nombre de caisses
+  colisageCaisses?: number      // kg par caisse gros dediee au caissage achat (prioritaire sur colisageParUM)
+  colisageDemiCaisses?: number  // kg par demi-caisse dediee (si different de colisageCaisses/2)
   articleNomAr?: string
   // Nombre de caisses tel que saisi directement par le commercial sur ses commandes
   // (quantiteUM des lignes de commande). En mode crossdocking le colisage achat differe
@@ -172,6 +174,8 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         selected:       besoinNet > 0,
         um:             art.um,
         colisageParUM:  art.colisageParUM,
+        colisageCaisses: art.colisageCaisses,
+        colisageDemiCaisses: art.colisageDemiCaisses,
         articleNomAr:   art.nomAr,
         caissesCommercial,
       }
@@ -487,7 +491,7 @@ export default function BORecap() {
           Selectionne: r.selected ? "oui" : "non",
         }
       }
-      const c = r.besoinNet > 0 ? computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM) : { gros: 0, demi: 0 }
+      const c = r.besoinNet > 0 ? computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM, r.colisageCaisses, r.colisageDemiCaisses) : { gros: 0, demi: 0 }
       return {
         Article: r.articleNom,
         ArticleAr: r.articleNomAr ?? "",
@@ -883,7 +887,7 @@ export default function BORecap() {
                             : <span className="text-muted-foreground">—</span>
                         ) : (
                           r.besoinNet > 0 ? (() => {
-                            const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM)
+                            const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM, r.colisageCaisses, r.colisageDemiCaisses)
                             if (c.gros === 0 && c.demi === 0) return <span className="text-muted-foreground">—</span>
                             return (
                               <span className="font-semibold text-blue-700">

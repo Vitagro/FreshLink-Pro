@@ -1039,22 +1039,35 @@ export interface LignePreparation {
   qtesPreparedParClient?: Record<string, number>
 }
 
-// Capacité (kg) d'une caisse gros / demi-caisse — basée sur le colisage
-// PROPRE À L'ARTICLE (Article.colisageParUM, ex: 28 kg/Caisse), le même que
-// celui déjà utilisé pour l'affichage "X Caisse" (qté / UM) sur la ligne de
-// préparation. Une demi-caisse = la moitié de cette capacité. Si l'article
-// n'a pas de colisage défini, on retombe sur une capacité par défaut (30kg)
-// pour ne jamais renvoyer une division par zéro.
+// Capacité (kg) d'une caisse gros / demi-caisse — priorise Article.colisageCaisses/
+// colisageDemiCaisses (dedies au calcul de caissage PO, ex: 30kg gros / 15kg demi),
+// et retombe sur Article.colisageParUM (le colisage vente, ex: 28 kg/Caisse) si
+// absent, meme celui deja utilise pour l'affichage "X Caisse" (qté / UM) sur la
+// ligne de préparation. Une demi-caisse = la moitié de cette capacité si
+// colisageDemiCaisses n'est pas defini. Si l'article n'a aucun colisage défini,
+// on retombe sur une capacité par défaut (30kg) pour ne jamais renvoyer une
+// division par zéro. `reste`/`totalKg` : excedent commande en arrondissant au
+// caissage superieur (utile pour l'apercu "caissage automatique" du PO).
 export const CAISSE_GROS_CAPACITE_KG_DEFAUT = 30
-export function computeCaissesAuto(qteKg: number, unite?: string, colisageParUM?: number): { gros: number; demi: number } {
-  if (unite && unite !== "kg") return { gros: 0, demi: 0 }
-  if (!qteKg || qteKg <= 0) return { gros: 0, demi: 0 }
-  const grosKg = colisageParUM && colisageParUM > 0 ? colisageParUM : CAISSE_GROS_CAPACITE_KG_DEFAUT
-  const demiKg = grosKg / 2
+export function computeCaissesAuto(
+  qteKg: number,
+  unite?: string,
+  colisageParUM?: number,
+  colisageCaisses?: number,
+  colisageDemiCaisses?: number
+): { gros: number; demi: number; reste: number; totalKg: number } {
+  if (unite && unite !== "kg") return { gros: 0, demi: 0, reste: 0, totalKg: 0 }
+  if (!qteKg || qteKg <= 0) return { gros: 0, demi: 0, reste: 0, totalKg: 0 }
+  const grosKg = colisageCaisses && colisageCaisses > 0
+    ? colisageCaisses
+    : (colisageParUM && colisageParUM > 0 ? colisageParUM : CAISSE_GROS_CAPACITE_KG_DEFAUT)
+  const demiKg = colisageDemiCaisses && colisageDemiCaisses > 0 ? colisageDemiCaisses : grosKg / 2
   const gros = Math.floor(qteKg / grosKg)
-  const reste = qteKg - gros * grosKg
-  const demi = reste > 0 ? Math.ceil(reste / demiKg) : 0
-  return { gros, demi }
+  const resteApresGros = qteKg - gros * grosKg
+  const demi = resteApresGros > 0 ? Math.ceil(resteApresGros / demiKg) : 0
+  const totalKg = gros * grosKg + demi * demiKg
+  const reste = Math.max(0, totalKg - qteKg)
+  return { gros, demi, reste, totalKg }
 }
 
 export type SequenceModePrep = "horaire" | "itineraire"

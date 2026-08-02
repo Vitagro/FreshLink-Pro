@@ -653,6 +653,30 @@ export default function BOAchat() {
             )
           })()}
 
+          {/* Stats sur les bons d'achat */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-2xl font-bold text-foreground font-sans">{bons.length}</p>
+              <p className="text-sm text-muted-foreground font-sans">Bons d&apos;achat</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-xl font-bold text-yellow-600 font-sans">{bons.filter(b => b.statut === "brouillon").length}</p>
+              <p className="text-sm text-muted-foreground font-sans">Brouillons</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-xl font-bold text-orange-600 font-sans">
+                {bons.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite, 0), 0).toLocaleString("fr-MA")} kg
+              </p>
+              <p className="text-sm text-muted-foreground font-sans">Tonnage</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-xl font-bold text-primary font-sans">
+                {bons.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0).toLocaleString("fr-MA")} DH
+              </p>
+              <p className="text-sm text-muted-foreground font-sans">Montant cumulé</p>
+            </div>
+          </div>
+
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm font-sans">
               <thead className="bg-muted">

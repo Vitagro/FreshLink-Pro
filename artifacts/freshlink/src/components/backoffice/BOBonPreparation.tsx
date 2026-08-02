@@ -314,10 +314,16 @@ function DigitalPrepaView({
   // ligne n'a jamais été rectifiée manuellement — l'utilisateur voit
   // directement une suggestion au lieu de 0, et peut la corriger.
   const [localCaisseGros, setLocalCaisseGros] = useState<Record<string, number>>(
-    Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseGros ?? computeCaissesAuto(l.qteCommandee, l.unite, articles.find(a => a.id === l.articleId)?.colisageParUM).gros]))
+    Object.fromEntries(bon.lignes.map(l => {
+      const art = articles.find(a => a.id === l.articleId)
+      return [l.articleId, l.nbCaisseGros ?? computeCaissesAuto(l.qteCommandee, l.unite, art?.colisageParUM, art?.colisageCaisses, art?.colisageDemiCaisses).gros]
+    }))
   )
   const [localCaisseDemi, setLocalCaisseDemi] = useState<Record<string, number>>(
-    Object.fromEntries(bon.lignes.map(l => [l.articleId, l.nbCaisseDemi ?? computeCaissesAuto(l.qteCommandee, l.unite, articles.find(a => a.id === l.articleId)?.colisageParUM).demi]))
+    Object.fromEntries(bon.lignes.map(l => {
+      const art = articles.find(a => a.id === l.articleId)
+      return [l.articleId, l.nbCaisseDemi ?? computeCaissesAuto(l.qteCommandee, l.unite, art?.colisageParUM, art?.colisageCaisses, art?.colisageDemiCaisses).demi]
+    }))
   )
   // Saisie en attente de validation pour la "quantité préparée" par client
   // (onglet Par Client) — keyed par `${articleId}__${clientId}`.
@@ -551,7 +557,8 @@ function DigitalPrepaView({
                     const ordered = l.qtesParClient[ci.clientId] ?? 0
                     const prepared = l.qtesPreparedParClient?.[ci.clientId] ?? 0
                     const reste = Math.max(0, ordered - prepared)
-                    const autoCaisses = computeCaissesAuto(ordered, l.unite, articles.find(a => a.id === l.articleId)?.colisageParUM)
+                    const artL = articles.find(a => a.id === l.articleId)
+                    const autoCaisses = computeCaissesAuto(ordered, l.unite, artL?.colisageParUM, artL?.colisageCaisses, artL?.colisageDemiCaisses)
                     const caissesClient = l.caissesParClient?.[ci.clientId] ?? autoCaisses
                     const prepKey = `${l.articleId}__${ci.clientId}`
                     return (
@@ -1026,16 +1033,16 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     const li = arr[idx].lignes.findIndex(l => l.articleId === articleId)
     if (li < 0) return
     const ligne = arr[idx].lignes[li]
-    const colisage = articles.find(a => a.id === articleId)?.colisageParUM
+    const artForCaisse = articles.find(a => a.id === articleId)
     const current = ligne.caissesParClient ?? {}
-    const auto = computeCaissesAuto(ligne.qtesParClient[clientId] ?? 0, ligne.unite, colisage)
+    const auto = computeCaissesAuto(ligne.qtesParClient[clientId] ?? 0, ligne.unite, artForCaisse?.colisageParUM, artForCaisse?.colisageCaisses, artForCaisse?.colisageDemiCaisses)
     const prev = current[clientId] ?? auto
     ligne.caissesParClient = { ...current, [clientId]: { ...prev, [type]: Math.max(0, newVal) } }
     // Recalcule le total article = somme sur tous les clients affectés (valeur
     // rectifiée si présente, sinon calcul auto pour ce client).
     let totalGros = 0, totalDemi = 0
     for (const cid of Object.keys(ligne.qtesParClient)) {
-      const v = ligne.caissesParClient[cid] ?? computeCaissesAuto(ligne.qtesParClient[cid] ?? 0, ligne.unite, colisage)
+      const v = ligne.caissesParClient[cid] ?? computeCaissesAuto(ligne.qtesParClient[cid] ?? 0, ligne.unite, artForCaisse?.colisageParUM, artForCaisse?.colisageCaisses, artForCaisse?.colisageDemiCaisses)
       totalGros += v.gros; totalDemi += v.demi
     }
     ligne.nbCaisseGros = totalGros
