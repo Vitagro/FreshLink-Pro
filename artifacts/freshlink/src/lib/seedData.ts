@@ -957,7 +957,7 @@ export const SEED_BONS_LIVRAISON: BonLivraison[] = [
       { articleNom: "Bananes Cavendish", unite: "kg", quantite: 60, prixUnitaire: 9.9, total: 594 },
     ],
     montantTotal: 2258.4,
-    tva: 451.68,
+    tva: 20,
     montantTTC: 2710.08,
     statut: "encaissé",
     statutLivraison: "livre",

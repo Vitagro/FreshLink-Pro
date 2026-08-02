@@ -1,7 +1,7 @@
 ﻿"use client"
 
 import { useState, useEffect } from "react"
-import { store, type Depot, type User, DEFAULT_DEPOT } from "@/lib/store"
+import { store, type Depot, type User, DEFAULT_DEPOT, userHasRole } from "@/lib/store"
 
 const EMPTY_FORM: Omit<Depot, "id"> = {
   nom: "", adresse: "", ville: "Casablanca", actif: true,
@@ -48,7 +48,7 @@ export default function BODepots({ user }: { user: User }) {
   const [gpsLoading, setGpsLoading] = useState(false)
   const [expandedDepot, setExpandedDepot] = useState<string | null>(null)
 
-  const isSuperAdmin = user.role === "super_admin" || user.role === "super_super_admin"
+  const isSuperAdmin = userHasRole(user, "super_admin") || userHasRole(user, "super_super_admin")
 
   const notify = (msg: string, type: "ok" | "err" = "ok") => {
     setToast({ msg, type })

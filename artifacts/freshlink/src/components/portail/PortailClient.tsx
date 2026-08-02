@@ -6,11 +6,14 @@ import { upsertCommande } from "@/lib/supabase/db"
 import { createClient as createSbClient } from "@/lib/supabase/client"
 import FreshLinkLogo from "@/components/ui/FreshLinkLogo"
 
-// Returns tomorrow's date as YYYY-MM-DD (J+1 default)
+// Returns tomorrow's date as YYYY-MM-DD (J+1 default) — calendaire locale
+// (store.today()), pas toISOString() (UTC) : au Maroc, entre minuit et 1h du
+// matin heure locale, toISOString() pouvait encore retomber sur J au lieu de
+// J+1, cassant la regle "livraison a J+1 minimum" (min du selecteur de date).
 function getJ1(): string {
-  const d = new Date()
+  const d = new Date(`${store.today()}T00:00:00`)
   d.setDate(d.getDate() + 1)
-  return d.toISOString().split("T")[0]
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
 }
 
 interface Props { user: User; onLogout: () => void }
