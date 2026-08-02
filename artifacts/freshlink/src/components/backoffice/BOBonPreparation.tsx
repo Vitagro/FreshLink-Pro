@@ -68,6 +68,49 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
   // All articles
   const allArticleIds = bon.lignes.map(l => l.articleId)
 
+  // ── Contenu a imprimer selon le mode/format ────────────────────────────
+  // Cross-dock : pas de stock entrepot a picker, la liste "Totaux par
+  // article" (section silo) n'a pas de sens dans ce mode.
+  // Numerique : le preparateur pique deja sur tablette (MobilePreparation) —
+  // seule la liste de balisage (a glisser physiquement dans la commande)
+  // a encore besoin d'un papier.
+  const showFullDoc = bon.format !== "numerique"
+  const showPickingList = showFullDoc && bon.type !== "cross_dock"
+
+  // ── Caisses theoriques + articles manquants par client (pour la liste
+  //    de balisage) — priorise la rectification manuelle (caissesParClient)
+  //    sur le calcul auto, comme partout ailleurs dans ce fichier.
+  const clientCaissesTheorique: Record<string, { gros: number; demi: number }> = {}
+  const clientArticlesManquants: Record<string, number[]> = {}
+  orderedClients.forEach(ci => {
+    let gros = 0, demi = 0
+    const manquants: number[] = []
+    bon.lignes.forEach((l, li) => {
+      const attendu = l.qtesParClient[ci.clientId] ?? 0
+      if (attendu <= 0) return
+      const rectif = l.caissesParClient?.[ci.clientId]
+      if (rectif) {
+        gros += rectif.gros; demi += rectif.demi
+      } else {
+        const art = store.getArticles().find(a => a.id === l.articleId)
+        const c = computeCaissesAuto(attendu, l.unite, art?.colisageParUM, art?.colisageCaisses, art?.colisageDemiCaisses)
+        gros += c.gros; demi += c.demi
+      }
+      // Manquants : seulement calculable une fois le bon valide (avant ça,
+      // qtesPreparedParClient n'est pas encore significatif — laisser vide
+      // pour remplissage manuel au chargement). Repli sur `attendu` (= pas de
+      // manque) quand qtesPreparedParClient n'est pas renseigne — "Valider
+      // tout" ne le remplit pas toujours (ligne jamais touchee manuellement),
+      // un repli sur 0 marquerait a tort CHAQUE article comme manquant.
+      if (bon.statut === "valide") {
+        const prepare = l.qtesPreparedParClient?.[ci.clientId] ?? attendu
+        if (prepare < attendu) manquants.push(li + 1)
+      }
+    })
+    clientCaissesTheorique[ci.clientId] = { gros, demi }
+    clientArticlesManquants[ci.clientId] = manquants
+  })
+
   // Nombre d'UM (caisse, carton...) équivalent à une quantité — le magasinier
   // voit tout de suite combien de caisses préparer, pas seulement le poids.
   const articlesRef = store.getArticles()
@@ -150,6 +193,15 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
   table.cbtable tbody td{padding:6px 10px}
   table.cbtable tfoot tr{background:#f0fdf4;font-weight:900;border-top:2px solid #166534}
   table.cbtable tfoot td{padding:6px 10px}
+  /* LISTE DE BALISAGE — tags a decouper et glisser dans chaque commande */
+  .balisage-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .balisage-card{border:1.5px dashed #94a3b8;border-radius:8px;padding:10px 12px;page-break-inside:avoid}
+  .balisage-head{display:flex;align-items:center;gap:8px;border-bottom:2px solid #166534;padding-bottom:6px;margin-bottom:6px}
+  .balisage-prio{width:22px;height:22px;border-radius:50%;background:#166534;color:#fff;font-size:10pt;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .balisage-client{font-size:11pt;font-weight:900;color:#111}
+  .balisage-row{display:flex;justify-content:space-between;align-items:center;font-size:8.5pt;padding:3px 0;border-bottom:1px dotted #e5e7eb}
+  .balisage-row span:first-child{color:#6b7280;font-weight:600}
+  .balisage-row b{color:#166534}
   @media print{body{padding:12px 16px}.no-print{display:none}}
 </style>
 </head><body>
@@ -189,8 +241,9 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
   })()}
 </div>
 
-<!-- SECTION 1 : TOTAUX PAR ARTICLE -->
-<div class="section-title">1. Totaux par article — Quantités à préparer</div>
+${!showPickingList ? "" : `
+<!-- SECTION 1 : BON DE PREPARATION SILO — totaux a picker depuis le stock -->
+<div class="section-title">Bon de Préparation Silo — Quantités totales à picker</div>
 <table class="totaux">
   <thead>
     <tr>
@@ -225,25 +278,28 @@ function openPrintPrep(bon: BonPreparation, commandes: Commande[]) {
       <td></td>
     </tr>
   </tfoot>
-</table>
+</table>`}
 
+${!showFullDoc ? "" : `
 <!-- SECTION 2 : RÉPARTITION PAR CLIENT (séquencé) — 1 client par page, ou 2
      si les deux ont peu de lignes, pour optimiser la lecture au picking -->
-<div class="section-title">2. Répartition par client — Séquence de livraison (${seqMode === "horaire" ? "ordre horaire" : "itinéraire GPS"})</div>
+<div class="section-title">Répartition par client — Séquence de livraison (${seqMode === "horaire" ? "ordre horaire" : "itinéraire GPS"})</div>
 ${(() => {
-  // Précalcule les lignes par client, puis décide du saut de page : max 2
-  // clients par page, et jamais 2 si leur total de lignes dépasse ~14
-  // (au-delà, un seul client suffit à remplir la page proprement).
+  // Précalcule les lignes par client (en gardant l'index global — même
+  // numérotation que la section silo, pour que "articles manquants" sur la
+  // liste de balisage renvoie aux mêmes numéros), puis décide du saut de
+  // page : max 2 clients par page, et jamais 2 si leur total de lignes
+  // dépasse ~14 (au-delà, un seul client suffit à remplir la page proprement).
   const perClient = orderedClients.map((ci, idx) => ({
     ci, idx,
-    lignes: allArticleIds
-      .map(artId => bon.lignes.find(l => l.articleId === artId))
-      .filter((l): l is typeof bon.lignes[number] => !!l && (l.qtesParClient[ci.clientId] ?? 0) > 0),
+    lignes: bon.lignes
+      .map((l, li) => ({ l, li }))
+      .filter(({ l }) => (l.qtesParClient[ci.clientId] ?? 0) > 0),
   }))
   let clientsOnPage = 0
   let linesOnPage = 0
   return perClient.map(({ ci, idx, lignes }) => {
-    const rowTotal = lignes.reduce((s, l) => s + (l.qtesParClient[ci.clientId] ?? 0), 0)
+    const rowTotal = lignes.reduce((s, { l }) => s + (l.qtesParClient[ci.clientId] ?? 0), 0)
     const breakBefore = clientsOnPage > 0 && (clientsOnPage >= 2 || linesOnPage + lignes.length > 14)
     if (breakBefore) { clientsOnPage = 0; linesOnPage = 0 }
     clientsOnPage += 1
@@ -255,15 +311,37 @@ ${(() => {
         <span class="cb-meta">${ci.secteur}${ci.zone ? " — " + ci.zone : ""}${ci.heurelivraison ? " · " + ci.heurelivraison : ""}</span>
       </div>
       <table class="cbtable">
-        <thead><tr><th>Article</th><th class="r" style="width:90px">Nb UM</th><th class="r" style="width:110px">Quantité</th></tr></thead>
+        <thead><tr><th style="width:28px">#</th><th>Article</th><th class="r" style="width:90px">Nb UM</th><th class="r" style="width:110px">Quantité</th></tr></thead>
         <tbody>
-          ${lignes.map(l => `<tr><td>${l.articleNom}${(l as unknown as { articleNomAr?: string }).articleNomAr ? ` <span style="font-family:'Noto Sans Arabic',Arial,sans-serif;color:#6b7280;direction:rtl">/ ${(l as unknown as { articleNomAr?: string }).articleNomAr}</span>` : ""}</td><td class="r">${umLabelPrint(l.articleId, l.qtesParClient[ci.clientId] ?? 0)}</td><td class="r">${(l.qtesParClient[ci.clientId] ?? 0).toFixed(1)} ${l.unite}</td></tr>`).join("")}
+          ${lignes.map(({ l, li }) => `<tr><td style="color:#9ca3af;font-size:8pt">${li + 1}</td><td>${l.articleNom}${(l as unknown as { articleNomAr?: string }).articleNomAr ? ` <span style="font-family:'Noto Sans Arabic',Arial,sans-serif;color:#6b7280;direction:rtl">/ ${(l as unknown as { articleNomAr?: string }).articleNomAr}</span>` : ""}</td><td class="r">${umLabelPrint(l.articleId, l.qtesParClient[ci.clientId] ?? 0)}</td><td class="r">${(l.qtesParClient[ci.clientId] ?? 0).toFixed(1)} ${l.unite}</td></tr>`).join("")}
         </tbody>
-        <tfoot><tr><td>TOTAL</td><td></td><td class="r">${rowTotal.toFixed(1)} kg</td></tr></tfoot>
+        <tfoot><tr><td></td><td>TOTAL</td><td></td><td class="r">${rowTotal.toFixed(1)} kg</td></tr></tfoot>
       </table>
     </div>`
   }).join("")
-})()}
+})()}`}
+
+<!-- LISTE DE BALISAGE — a glisser physiquement dans chaque commande preparee -->
+<div class="section-title">Liste de Balisage — à insérer dans la commande préparée</div>
+<div class="balisage-grid">
+${orderedClients.map((ci, idx) => {
+  const cais = clientCaissesTheorique[ci.clientId] ?? { gros: 0, demi: 0 }
+  const manquants = clientArticlesManquants[ci.clientId] ?? []
+  const preparateurConnu = !!bon.preparateurId && !!bon.preparateurNom
+  return `
+  <div class="balisage-card">
+    <div class="balisage-head">
+      <span class="balisage-prio">${idx + 1}</span>
+      <span class="balisage-client">${ci.clientNom}</span>
+    </div>
+    <div class="balisage-row"><span>Priorité de chargement</span><b>${idx + 1}</b></div>
+    <div class="balisage-row"><span>Nb caisses théorique</span><b>${cais.gros}G + ${cais.demi}D</b></div>
+    <div class="balisage-row"><span>Nb caisses réel</span><span class="sign-box" style="width:80px"></span></div>
+    <div class="balisage-row"><span>Préparateur</span>${preparateurConnu ? `<b>${bon.preparateurNom}</b>` : `<span class="sign-box" style="width:110px"></span>`}</div>
+    <div class="balisage-row"><span>Articles manquants (n°)</span><span>${manquants.length > 0 ? manquants.join(", ") : `<span class="sign-box" style="width:110px"></span>`}</span></div>
+  </div>`
+}).join("")}
+</div>
 
 <!-- SIGNATURES -->
 <div class="sigs">
