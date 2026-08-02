@@ -49,7 +49,11 @@ function TabBtn({ id, label, active, onClick }: { id: View; label: string; activ
 export default function AnalyseReceptionPanel() {
   const [view, setView] = useState<View>("global")
   const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10)
+    // Calendaire locale (comme dateTo/store.today() juste en dessous), pas
+    // toISOString() (UTC) — les deux bornes de cette fenetre glissante
+    // doivent utiliser la meme convention temporelle.
+    const d = new Date(`${store.today()}T00:00:00`); d.setDate(d.getDate() - 30)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
   })
   const [dateTo, setDateTo] = useState(store.today())
   const [filterArticle, setFilterArticle] = useState("")

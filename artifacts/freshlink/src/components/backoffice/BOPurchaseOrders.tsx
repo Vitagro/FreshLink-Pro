@@ -1,10 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type PurchaseOrder, type Article, type Fournisseur, type DemandeAchat, computeCaissesAuto } from "@/lib/store"
+import { store, type PurchaseOrder, type Article, type Fournisseur, type DemandeAchat, type User, computeCaissesAuto } from "@/lib/store"
 import { sendEmail } from "@/lib/email"
 import { printPO } from "@/lib/print"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 const fmtDH = (n: number) => n.toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " DH"
 const fmtDate = () => new Date().toLocaleDateString("fr-FR")
@@ -159,7 +161,7 @@ const STATUT_COLORS: Record<string, string> = {
   annulé: "bg-red-100 text-red-800",
 }
 
-export default function BoPurchaseOrders() {
+export default function BoPurchaseOrders({ user }: { user: User }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([])
   const [demandesAchat, setDemandesAchat] = useState<DemandeAchat[]>([])
   const [articles, setArticles] = useState<Article[]>([])
@@ -278,6 +280,8 @@ export default function BoPurchaseOrders() {
   }
 
   const handleUpdateStatut = (id: string, statut: PurchaseOrder["statut"]) => {
+    if (!hasPermission(user.role, "valider_achat")) { logAction(user, "valider_achat", "denied"); return }
+    logAction(user, "valider_achat", "success", { type: "purchase_order", id, label: statut })
     store.updatePurchaseOrder(id, { statut })
     refresh()
   }

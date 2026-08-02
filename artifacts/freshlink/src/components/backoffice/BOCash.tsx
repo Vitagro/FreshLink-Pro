@@ -515,7 +515,11 @@ export default function BOCash({ user }: { user: User }) {
     const id = store.genId("FAC")
     const numero = nextFacNumero()
     const montantHT  = selectedBLs.reduce((s, b) => s + b.montantTotal, 0)
-    const tvaTotal   = selectedBLs.reduce((s, b) => s + (b.tva ?? 0), 0)
+    // Montant TVA reel en DH (TTC - HT), PAS la somme de b.tva : ce champ est
+    // un TAUX en % (ex. 20), pas un montant — l'additionner directement pour
+    // plusieurs BL produisait une "TVA" de facture sans aucun sens (ex. 40
+    // pour 2 BL a 20%) au lieu du vrai montant du au fisc.
+    const tvaTotal   = selectedBLs.reduce((s, b) => s + (blTTC(b) - b.montantTotal), 0)
     const montantTTC = selectedBLs.reduce((s, b) => s + blTTC(b), 0)
     const lignes: FactLigne[] = selectedBLs.flatMap(b => b.lignes.map(l => ({
       articleNom: l.articleNom, quantite: l.quantite, unite: (l as { unite?: string }).unite,
