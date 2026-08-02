@@ -2647,12 +2647,21 @@ export function computeEchelonAuto(clientId: string, commandes: Commande[], eche
 
 // ── Visibilité des onglets mobile (contrôle back-office) ──────────────────────
 // Registre statique des écrans mobile pilotables et de leurs onglets — sert à
-// la fois à MobileAchat (filtre le rendu de sa barre d'onglets) et à l'écran
-// back-office (Paramètres → Onglets Mobile) qui génère ses cases à cocher à
-// partir de cette liste, sans dupliquer les libellés à deux endroits.
-export const MOBILE_TABS_REGISTRY: { id: string; label: string; role: UserRole; tabs: { id: string; label: string }[] }[] = [
+// la fois aux écrans mobile (chacun filtre le rendu de sa propre barre
+// d'onglets via isMobileTabVisible) et à l'écran back-office (Paramètres →
+// Onglets Mobile) qui génère ses cases à cocher à partir de cette liste, sans
+// dupliquer les libellés à deux endroits.
+//
+// `screenId` = identifiant technique passé à isMobileTabVisible (doit
+// correspondre exactement à celui utilisé côté écran mobile). Plusieurs
+// entrées peuvent partager le même `screenId` quand un même écran est
+// accessible à plusieurs rôles (ex: "commercial" pour prévendeur/chef
+// d'équipe/resp. commercial) — le stockage est de toute façon scindé par
+// rôle, donc chaque rôle doit avoir sa propre entrée pour être réglable
+// depuis le BO. `id` reste la clé unique du tableau (React key).
+export const MOBILE_TABS_REGISTRY: { id: string; screenId: string; label: string; role: UserRole; tabs: { id: string; label: string }[] }[] = [
   {
-    id: "achat", label: "Achat (Acheteur)", role: "acheteur",
+    id: "achat", screenId: "achat", label: "Achat (Acheteur)", role: "acheteur",
     tabs: [
       { id: "besoin", label: "DA — Demande d'Achat" },
       { id: "bon", label: "Bon d'achat" },
@@ -2665,6 +2674,42 @@ export const MOBILE_TABS_REGISTRY: { id: string; label: string; role: UserRole; 
       { id: "avis", label: "Avis" },
     ],
   },
+  {
+    id: "magasinier", screenId: "magasinier", label: "Réception (Magasinier)", role: "magasinier",
+    tabs: [
+      { id: "reception", label: "Réception" },
+      { id: "po_achat", label: "PO Achat" },
+      { id: "besoin_sku", label: "Besoin SKU" },
+      { id: "besoin_achat", label: "Besoin Achat" },
+      { id: "validation_bl", label: "Validation BL" },
+    ],
+  },
+  ...(["prevendeur", "team_leader", "resp_commercial"] as UserRole[]).map(role => ({
+    id: `commercial_${role}`, screenId: "commercial",
+    label: `Commande (${ROLE_LABELS[role] ?? role})`, role,
+    tabs: [
+      { id: "nouvelle", label: "Nouvelle commande" },
+      { id: "mes_commandes", label: "Mes commandes" },
+    ],
+  })),
+  ...(["resp_logistique", "dispatcheur"] as UserRole[]).map(role => ({
+    id: `logistique_${role}`, screenId: "logistique",
+    label: `Logistique (${ROLE_LABELS[role] ?? role})`, role,
+    tabs: [
+      { id: "validation", label: "Validation" },
+      { id: "trip", label: "Tournée" },
+      { id: "map", label: "Carte GPS" },
+      { id: "reception", label: "Réception" },
+    ],
+  })),
+  ...(["team_leader", "resp_commercial", "resp_logistique", "dispatcheur", "livreur", "conducteur"] as UserRole[]).map(role => ({
+    id: `ctrl_retour_${role}`, screenId: "ctrl_retour",
+    label: `Contrôle Retour (${ROLE_LABELS[role] ?? role})`, role,
+    tabs: [
+      { id: "declarer", label: "Déclarer un retour" },
+      { id: "valider", label: "Valider les retours" },
+    ],
+  })),
 ]
 
 // ============================================================

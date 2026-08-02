@@ -76,6 +76,9 @@ function BarRow({ label, value, max, color, unit }: { label: string; value: numb
 export default function MobileObjectifs({ user }: Props) {
   const [commandes, setCommandes] = useState(store.getVisibleCommandes())
   const [visites, setVisites] = useState(store.getVisites())
+  // Tri & recherche — liste "Mes commandes ce mois" en bas de l'ecran
+  const [bilanSearch, setBilanSearch] = useState("")
+  const [bilanSort, setBilanSort] = useState<"recent" | "ancien" | "montant">("recent")
   const today = store.today()
   const week = getWeekRange(today)
   const month = getMonthRange(today)
@@ -239,13 +242,35 @@ export default function MobileObjectifs({ user }: Props) {
       )}
 
       {/* Recent commandes */}
-      {cdM.length > 0 && (
+      {cdM.length > 0 && (() => {
+        const q = bilanSearch.trim().toLowerCase()
+        let list = q ? cdM.filter(c => c.clientNom.toLowerCase().includes(q)) : cdM
+        if (bilanSort === "ancien") list = [...list].sort((a, b) => a.date.localeCompare(b.date))
+        else if (bilanSort === "montant") list = [...list].sort((a, b) =>
+          b.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0) - a.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0))
+        else list = [...list].sort((a, b) => b.date.localeCompare(a.date))
+        const visible = q ? list : list.slice(0, 15)
+        return (
         <div className="bg-card rounded-xl border border-border overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
+          <div className="px-4 py-3 border-b border-border flex flex-col gap-2">
             <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Mes commandes ce mois ({cdM.length})</p>
+            <div className="flex items-center gap-2">
+              <input type="text" value={bilanSearch} onChange={e => setBilanSearch(e.target.value)}
+                placeholder="Rechercher client..."
+                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary" />
+              <select value={bilanSort} onChange={e => setBilanSort(e.target.value as typeof bilanSort)}
+                className="shrink-0 px-2 py-1.5 rounded-lg border border-border bg-background text-[11px] font-semibold focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="recent">Plus recent</option>
+                <option value="ancien">Plus ancien</option>
+                <option value="montant">Montant</option>
+              </select>
+            </div>
           </div>
+          {visible.length === 0 ? (
+            <p className="px-4 py-4 text-xs text-muted-foreground text-center">Aucune commande ne correspond</p>
+          ) : (
           <div className="divide-y divide-border max-h-60 overflow-y-auto">
-            {[...cdM].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 15).map(c => {
+            {visible.map(c => {
               const total = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
               return (
                 <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
@@ -266,8 +291,10 @@ export default function MobileObjectifs({ user }: Props) {
               )
             })}
           </div>
+          )}
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

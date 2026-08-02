@@ -21,6 +21,13 @@ interface LigneForm {
 type CommTab = "nouvelle" | "mes_commandes"
 type ArticleSort = "rotation" | "stock" | "tous" | "famille"
 
+const CMD_STATUT_LABELS: Record<string, string> = {
+  en_attente: "En attente", en_attente_approbation: "Attente appro", valide: "Validee",
+  en_preparation: "En prepa", charge: "Chargee", en_transit: "En transit",
+  livre: "Livree", refuse: "Refusee", retour: "Retour",
+}
+type CmdSort = "recent" | "ancien" | "montant"
+
 // How many ms before a commande becomes locked (1 hour)
 const EDIT_WINDOW_MS = 60 * 60 * 1000
 
@@ -273,6 +280,25 @@ export default function MobileCommercial({ user }: Props) {
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 50)
     )
+
+  // Tri & filtre — "Mes commandes"
+  const [cmdSearch, setCmdSearch] = useState("")
+  const [cmdStatutFilter, setCmdStatutFilter] = useState<string>("tous")
+  const [cmdSort, setCmdSort] = useState<CmdSort>("recent")
+  const cmdStatutsPresents = useMemo(() =>
+    [...new Set(myCommandes.map(c => c.statut))], [myCommandes])
+  const filteredCommandes = useMemo(() => {
+    const q = cmdSearch.trim().toLowerCase()
+    let list = myCommandes.filter(c =>
+      (cmdStatutFilter === "tous" || c.statut === cmdStatutFilter) &&
+      (!q || c.clientNom.toLowerCase().includes(q) || c.id.toLowerCase().includes(q) || c.secteur.toLowerCase().includes(q))
+    )
+    if (cmdSort === "ancien") list = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    else if (cmdSort === "montant") list = [...list].sort((a, b) =>
+      (b.lignes ?? []).reduce((s, l) => s + (Number(l.total) || 0), 0) - (a.lignes ?? []).reduce((s, l) => s + (Number(l.total) || 0), 0))
+    // "recent" garde l'ordre deja trie desc par date de myCommandes
+    return list
+  }, [myCommandes, cmdSearch, cmdStatutFilter, cmdSort])
 
   // Edit commande state — opens inline editor
   const [editCmd, setEditCmd] = useState<Commande | null>(null)
@@ -954,6 +980,17 @@ export default function MobileCommercial({ user }: Props) {
     if (updated) import("@/lib/supabase/db").then(db => db.upsertCommande(updated)).catch(e => console.error("[MobileCommercial] sync deleted commande error:", e))
   }
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible. Doit s'executer
+  // avant tout return conditionnel (regles des hooks).
+  const COMM_TAB_IDS = ["nouvelle", "mes_commandes"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "commercial", id)
+  const visibleCommTabIds = COMM_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(commTab) && visibleCommTabIds.length > 0) setCommTab(visibleCommTabIds[0] as CommTab)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commTab, user.role])
+
   // ── GPS blocking screens ──────────────────────────────────────────────────
   if (gpsStatus === "loading") {
     return (
@@ -1022,10 +1059,13 @@ export default function MobileCommercial({ user }: Props) {
 
       {/* Tab switcher */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted">
+        {tabVisible("nouvelle") && (
         <button onClick={() => { setCommTab("nouvelle"); setEditCmd(null); setOrderStep(1) }}
           className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${commTab === "nouvelle" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Nouvelle commande
         </button>
+        )}
+        {tabVisible("mes_commandes") && (
         <button onClick={() => setCommTab("mes_commandes")}
           className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-semibold transition-all ${commTab === "mes_commandes" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
           Mes cmds
@@ -1035,6 +1075,7 @@ export default function MobileCommercial({ user }: Props) {
             </span>
           )}
         </button>
+        )}
       </div>
 
       {commTab === "nouvelle" && (<>
@@ -2467,16 +2508,49 @@ export default function MobileCommercial({ user }: Props) {
                 </div>
               )}
 
+              {/* Filtres & tri */}
+              <div className="flex flex-col gap-2">
+                <input type="text" value={cmdSearch} onChange={e => setCmdSearch(e.target.value)}
+                  placeholder="Rechercher client, secteur, ref..."
+                  className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                  <select value={cmdSort} onChange={e => setCmdSort(e.target.value as CmdSort)}
+                    className="shrink-0 px-2.5 py-1.5 rounded-lg border border-border bg-background text-xs font-semibold text-foreground">
+                    <option value="recent">Plus recent</option>
+                    <option value="ancien">Plus ancien</option>
+                    <option value="montant">Montant le plus eleve</option>
+                  </select>
+                  <div className="w-px h-5 bg-border shrink-0" />
+                  <button onClick={() => setCmdStatutFilter("tous")}
+                    className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${cmdStatutFilter === "tous" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>
+                    Tous
+                  </button>
+                  {cmdStatutsPresents.map(s => (
+                    <button key={s} onClick={() => setCmdStatutFilter(s)}
+                      className={`shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold border ${cmdStatutFilter === s ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground"}`}>
+                      {CMD_STATUT_LABELS[s] ?? s}
+                    </button>
+                  ))}
+                </div>
+                {(cmdSearch || cmdStatutFilter !== "tous") && (
+                  <p className="text-[11px] text-muted-foreground">{filteredCommandes.length} resultat{filteredCommandes.length !== 1 ? "s" : ""}</p>
+                )}
+              </div>
+
               {/* Commandes list — grouped by date */}
-              {(() => {
+              {filteredCommandes.length === 0 ? (
+                <div className="bg-card rounded-xl border border-border p-8 text-center">
+                  <p className="text-sm font-semibold text-muted-foreground">Aucune commande ne correspond</p>
+                </div>
+              ) : (() => {
                 // Group commandes by date for visual clarity
                 const grouped: Record<string, typeof myCommandes> = {}
-                myCommandes.forEach(cmd => {
+                filteredCommandes.forEach(cmd => {
                   if (!grouped[cmd.date]) grouped[cmd.date] = []
                   grouped[cmd.date].push(cmd)
                 })
                 return Object.entries(grouped)
-                  .sort(([a], [b]) => b.localeCompare(a))
+                  .sort(([a], [b]) => cmdSort === "ancien" ? a.localeCompare(b) : b.localeCompare(a))
                   .map(([date, cmds]) => (
                     <div key={date} className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">

@@ -196,6 +196,16 @@ export default function MobileMagasinier({ user }: Props) {
 
   const pendingBLs = bls.length
 
+  // Onglets masqués/affichés par le back-office (Paramètres → Onglets Mobile) —
+  // cf. store.ts MOBILE_TABS_REGISTRY / isMobileTabVisible.
+  const MAG_TAB_IDS = ["reception", "po_achat", "besoin_sku", "besoin_achat", "validation_bl"] as const
+  const tabVisible = (id: string) => store.isMobileTabVisible(user.role, "magasinier", id)
+  const visibleTabIds = MAG_TAB_IDS.filter(tabVisible)
+  useEffect(() => {
+    if (!tabVisible(tab) && visibleTabIds.length > 0) setTab(visibleTabIds[0] as MagTab)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user.role])
+
   return (
     <div className="flex flex-col min-h-screen bg-background pb-4">
 
@@ -227,7 +237,7 @@ export default function MobileMagasinier({ user }: Props) {
             { id: "besoin_sku",   label: "Besoin SKU",      badge: besoinNet.filter(b => b.besoinNet > 0).length, icon: "M4 6h16M4 10h16M4 14h16M4 18h16" },
             { id: "besoin_achat", label: "Besoin Achat",    badge: bonsAchat.filter(b => b.statut === "brouillon").length, icon: "M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" },
             { id: "validation_bl",label: "Valid. BL",        badge: pendingBLs, icon: "M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" },
-          ] as { id: MagTab; label: string; badge: number; icon: string }[]).map(t => (
+          ] as { id: MagTab; label: string; badge: number; icon: string }[]).filter(t => tabVisible(t.id)).map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex-shrink-0 flex items-center justify-center gap-1 px-2.5 py-2 rounded-lg text-xs font-semibold transition-all ${tab === t.id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"}`}>
               <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -517,6 +527,20 @@ function ReceptionTab({
   onRefresh: () => void
 }) {
   const [selected, setSelected]     = useState<ReceptionItem | null>(null)
+  // Recherche & tri locaux — appliques par-dessus le filtre depot/showAll du parent.
+  const [search, setSearch]         = useState("")
+  const [sortMode, setSortMode]     = useState<"recent" | "ancien" | "montant">("recent")
+  const visibleItems = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let list = items.filter(it =>
+      !q || it.fournisseurNom.toLowerCase().includes(q) || it.id.toLowerCase().includes(q)
+    )
+    if (sortMode === "ancien") list = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    else if (sortMode === "montant") list = [...list].sort((a, b) =>
+      b.lignes.reduce((s, l) => s + l.quantite * l.prixAchat, 0) - a.lignes.reduce((s, l) => s + l.quantite * l.prixAchat, 0))
+    // "recent" garde l'ordre deja trie desc par date fourni par le parent (items)
+    return list
+  }, [items, search, sortMode])
   const [qtesRecues, setQtesRecues] = useState<Record<string, string>>({})
   const [uniteMode, setUniteMode]   = useState<Record<string, string>>({})
   const [prixRecus, setPrixRecus]   = useState<Record<string, string>>({})
@@ -948,6 +972,19 @@ function ReceptionTab({
             </select>
           )}
         </div>
+
+        {/* Recherche & tri */}
+        <div className="flex items-center gap-2">
+          <input type="text" value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher fournisseur, ref..."
+            className="flex-1 min-w-0 px-3 py-1.5 rounded-xl border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary" />
+          <select value={sortMode} onChange={e => setSortMode(e.target.value as typeof sortMode)}
+            className="shrink-0 px-2.5 py-1.5 rounded-xl border border-border bg-background text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="recent">Plus recent</option>
+            <option value="ancien">Plus ancien</option>
+            <option value="montant">Montant le plus eleve</option>
+          </select>
+        </div>
       </div>
 
       {/* Debug hint when empty */}
@@ -977,8 +1014,14 @@ function ReceptionTab({
         </div>
       )}
 
+      {items.length > 0 && visibleItems.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          <p className="text-sm font-semibold text-amber-800">Aucun resultat pour cette recherche</p>
+        </div>
+      )}
+
       {/* Items list */}
-      {items.map(item => {
+      {visibleItems.map(item => {
         const prevRecs  = receptions.filter(r =>
           item.source === "purchase_order"
             ? r.purchaseOrderId === item.id
@@ -1072,16 +1115,25 @@ function ValidationBLTab({
   const [saving, setSaving]         = useState(false)
   const [success, setSuccess]       = useState("")
   const [searchQ, setSearchQ]       = useState("")
+  const [sortMode, setSortMode]     = useState<"recent" | "ancien" | "montant">("recent")
 
   const filtered = useMemo(() => {
-    if (!searchQ.trim()) return bls
-    const q = searchQ.toLowerCase()
-    return bls.filter(b =>
-      b.id.toLowerCase().includes(q) ||
-      b.clientNom?.toLowerCase().includes(q) ||
-      b.livreurNom?.toLowerCase().includes(q)
-    )
-  }, [bls, searchQ])
+    let list = bls
+    if (searchQ.trim()) {
+      const q = searchQ.toLowerCase()
+      list = list.filter(b =>
+        b.id.toLowerCase().includes(q) ||
+        b.clientNom?.toLowerCase().includes(q) ||
+        b.livreurNom?.toLowerCase().includes(q)
+      )
+    }
+    if (sortMode === "recent") list = [...list].sort((a, b) => b.date.localeCompare(a.date))
+    else if (sortMode === "ancien") list = [...list].sort((a, b) => a.date.localeCompare(b.date))
+    else if (sortMode === "montant") list = [...list].sort((a, b) =>
+      (b.lignes ?? []).reduce((s: number, l: { total?: number }) => s + (l.total ?? 0), 0) -
+      (a.lignes ?? []).reduce((s: number, l: { total?: number }) => s + (l.total ?? 0), 0))
+    return list
+  }, [bls, searchQ, sortMode])
 
   const handleAction = (action: "valider" | "refuser") => {
     if (!selectedBL) return
@@ -1220,6 +1272,14 @@ function ValidationBLTab({
           </button>
         )}
       </div>
+
+      {/* Tri */}
+      <select value={sortMode} onChange={e => setSortMode(e.target.value as typeof sortMode)}
+        className="self-start px-2.5 py-1.5 rounded-xl border border-border bg-background text-xs font-semibold text-foreground focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="recent">Plus recent</option>
+        <option value="ancien">Plus ancien</option>
+        <option value="montant">Montant le plus eleve</option>
+      </select>
 
       <div className="bg-card rounded-xl border border-border p-4">
         <p className="text-sm font-bold text-foreground">BL en attente de validation</p>

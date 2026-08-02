@@ -144,11 +144,11 @@ function MobileTabsVisibilityContent() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {screen.tabs.map(t => {
-              const visible = store.isMobileTabVisible(screen.role, screen.id, t.id)
+              const visible = store.isMobileTabVisible(screen.role, screen.screenId, t.id)
               return (
                 <label key={t.id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border cursor-pointer hover:bg-muted/50">
                   <input type="checkbox" checked={visible}
-                    onChange={e => { store.setMobileTabVisible(screen.role, screen.id, t.id, e.target.checked); forceRerender(n => n + 1) }}
+                    onChange={e => { store.setMobileTabVisible(screen.role, screen.screenId, t.id, e.target.checked); forceRerender(n => n + 1) }}
                     className="w-4 h-4 rounded accent-primary shrink-0" />
                   <span className="text-sm text-foreground">{t.label}</span>
                 </label>
