@@ -81,7 +81,7 @@ const LS = {
     try {
       const bls = JSON.parse(localStorage.getItem("fl_bons_livraison") ?? "[]") as any[]
       return bls
-        .filter((b: any) => (b.date ?? "").startsWith(periode) && b.statut === "livré")
+        .filter((b: any) => (b.date ?? "").startsWith(periode) && b.statutLivraison === "livre")
         .reduce((s: number, b: any) => {
           const total = (b.lignes ?? []).reduce((ls: number, l: any) =>
             ls + Number(l.quantite ?? 0) * Number(l.prixVente ?? 0), 0)
