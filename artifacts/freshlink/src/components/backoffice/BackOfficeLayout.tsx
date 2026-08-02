@@ -189,7 +189,7 @@ export type Tab =
   | "mobile_gestion"
   | "commandes_unifiees"
   | "alertes_clients"
-  | "moteur_commercial" | "gifts_v3" | "loterie" | "pa_historique" | "gestion_pa" | "cutoffs_v3" | "feedbacks_v3"
+  | "moteur_commercial" | "gifts_v3" | "loterie" | "pa_historique" | "gestion_pa"
   | "import_externe"
   | "messagerie"
 
@@ -516,8 +516,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   gestion_pa:        (u)  => <BOGestionPA user={u} />,
   gifts_v3:          (_u) => <BOGiftsV3 />,
   loterie:           (u)  => <BOLoterie user={u} />,
-  cutoffs_v3:        (u)  => <BOCutoffsV3 currentUserId={u.id} />,
-  feedbacks_v3:      (u) => <FeedbackPanel user={u} />,
   commandes_unifiees:  (u) => <BOCommandesUnifiees user={u} />,
   alertes_clients:     (u) => <BOAlertesClients user={u} />,
   category_pricing:  (u) => <BOCategoryPricing user={u} />,
