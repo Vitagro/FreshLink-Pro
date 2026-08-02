@@ -3571,6 +3571,99 @@ export const store = {
     if (idx >= 0) { bls[idx] = { ...bls[idx], ...updates }; store.saveBonsLivraison(bls) }
   },
 
+  // --- Action BO : marquer en masse les commandes comme livrees ---
+  // Regularisation d'un backlog de commandes bloquees avant livraison : au lieu
+  // de changer uniquement Commande.statut, on reconstitue la trace normale du
+  // processus (Bon de Livraison "livre/encaisse" + encaissement caisse) comme
+  // le ferait une livraison reelle — les ecrans caisse/facturation/BL
+  // s'appuient sur ces enregistrements, pas seulement sur le statut brut.
+  // Cible : toutes les commandes pas encore livrees ni refusees.
+  bulkMarkCommandesLivrees: (operateurId: string, operateurNom: string): number => {
+    const commandes = store.getCommandes().filter(c => c.statut !== "livre" && c.statut !== "refuse")
+    const clients = store.getClients()
+    const yearCounters: Record<number, number> = {}
+    const numeroFor = (dateStr: string): string => {
+      const y = new Date(dateStr).getFullYear()
+      if (yearCounters[y] === undefined) {
+        yearCounters[y] = store.getBonsLivraison().filter(b => ((b as unknown as { numero?: string }).numero ?? b.id).includes(`BL-${y}`)).length
+      }
+      yearCounters[y]++
+      return `BL-${y}-${String(yearCounters[y]).padStart(4, "0")}`
+    }
+    let count = 0
+    commandes.forEach(commande => {
+      const tva = 19
+      const montantTotal = commande.lignes.reduce((s, l) => s + l.quantite * (l.prixVente ?? l.prixUnitaire ?? 0), 0)
+      const montantTTC = Math.round(montantTotal * (1 + tva / 100))
+      const clientRecord = clients.find(cl => cl.id === commande.clientId)
+      const heure = new Date().toTimeString().slice(0, 5)
+      const existingBL = store.getBonsLivraison().find(b => b.commandeId === commande.id)
+      let blId: string
+      if (existingBL) {
+        blId = existingBL.id
+        store.updateBonLivraison(existingBL.id, {
+          statutLivraison: "livre",
+          statut: "encaissé",
+          heureLivraisonReelle: existingBL.heureLivraisonReelle ?? heure,
+        })
+      } else {
+        blId = store.genBL()
+        store.addBonLivraison({
+          id: blId,
+          date: commande.date,
+          tripId: "",
+          commandeId: commande.id,
+          clientNom: commande.clientNom,
+          secteur: commande.secteur,
+          zone: commande.zone,
+          livreurNom: operateurNom,
+          prevendeurNom: commande.commercialNom,
+          lignes: commande.lignes.map(l => ({
+            articleNom: l.articleNom, unite: l.unite, quantite: l.quantite,
+            quantiteUM: l.quantiteUM, um: l.um, prixUnitaire: l.prixVente,
+            total: l.quantite * l.prixVente,
+          })),
+          montantTotal, tva, montantTTC,
+          statut: "encaissé",
+          statutLivraison: "livre",
+          heureLivraisonReelle: heure,
+          ...(clientRecord ? {
+            clientAdresse: clientRecord.adresse,
+            clientIce: clientRecord.ice,
+            clientModalitePaiement: clientRecord.modalitePaiement,
+            clientCreditSolde: clientRecord.creditSolde,
+            clientCreditAutorise: clientRecord.creditAutorise,
+            clientDelaiRecouvrement: clientRecord.delaiRecouvrement,
+          } : {}),
+          numero: numeroFor(commande.date),
+          clientId: commande.clientId,
+          transporteur: "non_affecte",
+          qcObligatoire: false,
+          createdBy: operateurId,
+          updatedAt: new Date().toISOString(),
+        } as BonLivraison)
+      }
+
+      store.updateCommande(commande.id, { statut: "livre" })
+
+      const dejaEncaisse = store.getCaisseEntries().some(e => e.reference === blId && e.categorie === "vente")
+      if (!dejaEncaisse) {
+        store.addCaisseEntry({
+          id: store.genId(),
+          date: commande.date,
+          libelle: `Livraison (régularisation) — ${commande.clientNom}`,
+          type: "entree",
+          categorie: "vente",
+          montant: montantTotal,
+          reference: blId,
+          createdBy: operateurId,
+        })
+      }
+      count++
+    })
+    return count
+  },
+
   // --- Bons de Préparation ---
   getBonsPreparation: (): BonPreparation[] => getLS("fl_bons_preparation", []),
   // Bons de préparation touchant au moins un client visible par l'utilisateur

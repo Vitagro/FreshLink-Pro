@@ -667,8 +667,10 @@ function ReceptionTab({
         }
       }
 
-      // Update stock
-      lignes.forEach(l => { if (l.quantiteRecue > 0) store.updateStock(l.articleId, l.quantiteRecue) })
+      // Update stock — pas en mode crossdocking (marchandise triee/expediee direct, jamais stockee)
+      if (!store.isCrossdockMode()) {
+        lignes.forEach(l => { if (l.quantiteRecue > 0) store.updateStock(l.articleId, l.quantiteRecue) })
+      }
 
       // Log caisse mouvement
       try {
@@ -686,7 +688,9 @@ function ReceptionTab({
         }
       } catch { /* caisse non obligatoire */ }
 
-      const label = statut === "validée" ? "Reception validee avec succes!" : statut === "partielle" ? "Reception partielle enregistree." : "Reception en attente enregistree."
+      const label = statut === "validée"
+        ? (store.isCrossdockMode() ? "Reception validee — pret pour tri/expedition!" : "Reception validee avec succes!")
+        : statut === "partielle" ? "Reception partielle enregistree." : "Reception en attente enregistree."
       setSuccess(label)
       setSelected(null)
       onRefresh()

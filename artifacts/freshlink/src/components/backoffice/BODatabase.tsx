@@ -94,6 +94,8 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
   const [writeTestLoading, setWriteTestLoading] = useState(false)
   const [forceSyncLoading, setForceSyncLoading] = useState(false)
   const [forceSyncResult, setForceSyncResult] = useState<{ table: string; count: number; error?: string }[] | null>(null)
+  const [bulkLivrerLoading, setBulkLivrerLoading] = useState(false)
+  const [bulkLivrerResult, setBulkLivrerResult] = useState<{ count: number } | null>(null)
   const csvRef = useRef<HTMLInputElement>(null)
   const canAccess = user.role === "super_super_admin" || user.role === "admin" || user.role === "super_admin"
 
@@ -295,6 +297,27 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
     }
     setForceSyncResult(results)
     setForceSyncLoading(false)
+  }
+
+  // Regularisation en masse : toutes les commandes pas encore livrees/refusees
+  // passent en "livre" avec la trace normale du processus (Bon de Livraison +
+  // encaissement caisse) — cf. store.bulkMarkCommandesLivrees.
+  const handleBulkLivrer = () => {
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "backup_restore")) { logAction(session, "backup_restore", "denied", { type: "bulk_livrer_commandes" }); return }
+    const nbConcernees = store.getCommandes().filter(c => c.statut !== "livre" && c.statut !== "refuse").length
+    if (nbConcernees === 0) { setBulkLivrerResult({ count: 0 }); return }
+    if (!confirm(
+      `⚠️ Cette action va marquer ${nbConcernees} commande(s) comme "livree" (toutes sauf celles deja livrees ou refusees), en creant pour chacune le Bon de Livraison et l'encaissement caisse correspondants (trace normale du processus).\n\nCette action est irreversible en un clic. Continuer ?`
+    )) return
+    setBulkLivrerLoading(true)
+    logAction(session, "backup_restore", "success", { type: "bulk_livrer_commandes", label: `${nbConcernees} commande(s)` })
+    const count = store.bulkMarkCommandesLivrees(session?.id ?? user.id, session?.name ?? "Admin")
+    setBulkLivrerResult({ count })
+    setBulkLivrerLoading(false)
+    if (section === "commandes") {
+      setData(store.getCommandes())
+    }
   }
 
   const handleClientImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -536,6 +559,37 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
           </div>
         </div>
       </div>
+
+      {/* Regularisation en masse — commandes bloquees avant livraison */}
+      {section === "commandes" && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <h3 className="font-semibold text-red-900 text-sm">Regularisation — marquer les commandes comme livrees</h3>
+          </div>
+          <p className="text-xs text-red-700">
+            Passe toutes les commandes qui ne sont pas encore livrees ni refusees au statut « livree », en creant pour
+            chacune le Bon de Livraison et l&apos;encaissement caisse correspondants (trace normale du processus, pas
+            seulement un changement de statut).
+          </p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={handleBulkLivrer}
+              disabled={bulkLivrerLoading}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-opacity ${bulkLivrerLoading ? "opacity-60 pointer-events-none" : "hover:opacity-90"}`}
+              style={{ background: "oklch(0.55 0.20 25)" }}>
+              {bulkLivrerLoading
+                ? <><div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Traitement...</>
+                : <>Marquer toutes les commandes en attente comme livrees</>}
+            </button>
+            {bulkLivrerResult && (
+              <span className={`text-xs font-medium px-3 py-1.5 rounded-lg border ${bulkLivrerResult.count > 0 ? "bg-green-50 border-green-200 text-green-800" : "bg-muted border-border text-muted-foreground"}`}>
+                {bulkLivrerResult.count > 0 ? `✓ ${bulkLivrerResult.count} commande(s) marquee(s) livree(s).` : "Aucune commande concernee — deja livrees ou refusees."}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Universal Import banner — all sections support CSV/JSON import */}
       <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col gap-3">

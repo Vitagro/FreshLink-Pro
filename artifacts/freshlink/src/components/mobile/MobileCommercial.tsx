@@ -268,15 +268,16 @@ export default function MobileCommercial({ user }: Props) {
       .filter(Boolean) as Article[]
   }, [clientHabits, lignes, articles, selectedClientId])
 
-  // My commandes — show last 7 days (not only today) so prevendeur can always see their history
+  // My commandes — show last 7 days (not only today) so prevendeur can always see their history.
+  // Une fois livree, la commande disparait de "Mes commandes" (elle reste consultable en BO).
   const [myCommandes, setMyCommandes] = useState(
-    store.getCommandes().filter(c => c.commercialId === user.id)
+    store.getCommandes().filter(c => c.commercialId === user.id && c.statut !== "livre")
       .sort((a, b) => b.date.localeCompare(a.date))
       .slice(0, 50)
   )
   const refreshMyCommandes = () =>
     setMyCommandes(
-      store.getCommandes().filter(c => c.commercialId === user.id)
+      store.getCommandes().filter(c => c.commercialId === user.id && c.statut !== "livre")
         .sort((a, b) => b.date.localeCompare(a.date))
         .slice(0, 50)
     )

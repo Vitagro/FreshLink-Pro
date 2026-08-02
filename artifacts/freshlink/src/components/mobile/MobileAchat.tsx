@@ -419,80 +419,83 @@ export default function MobileAchat({ user }: Props) {
     setPoModalId(po.id)
   }
 
-  const confirmPO = () => {
-    if (!poModalId) return
+  // Extrait de confirmPO — prend poId/detail en parametres explicites (au lieu
+  // de lire poModalId/poDetail depuis le state) pour pouvoir etre appele soit
+  // depuis la modale (un seul PO), soit en boucle depuis "Valider tout" (bulk,
+  // avec les valeurs par defaut du PO — cf validateAllPOs). Retourne false si
+  // bloque par une regle metier (photo/agriculteur/plafond cash).
+  const confirmPOItem = (poId: string, detail: typeof poDetail): boolean => {
     // Photo marchandise obligatoire uniquement si activé dans la config process
     const photoObligatoire = store.getProcessConfig().photoAchatObligatoire !== false
-    if (photoObligatoire && !poDetail.photoAchat) {
+    if (photoObligatoire && !detail.photoAchat) {
       alert("Photo obligatoire — veuillez prendre ou importer une photo de la marchandise.")
-      return
+      return false
     }
     // Auto-facturation "Production Agricole" — nom + CIN de l'agriculteur
     // obligatoires (traçabilité fiscale, flux exonéré de TVA).
-    if (poDetail.typeFlux === "agriculteur_direct" && (!poDetail.agriculteurNom.trim() || !poDetail.agriculteurCIN.trim())) {
+    if (detail.typeFlux === "agriculteur_direct" && (!detail.agriculteurNom.trim() || !detail.agriculteurCIN.trim())) {
       alert("Nom et CIN de l'agriculteur obligatoires pour ce flux (auto-facturation Production Agricole).")
-      return
+      return false
     }
     // Plafond cash achat/jour/fournisseur (seuil de déductibilité fiscale
     // CGI Maroc) — secteur informel = paiement quasi-systématiquement en
     // espèces ; on cumule le montant réglé aujourd'hui pour ce fournisseur.
-    const montantPayeAuj = Number(poDetail.montantPaye) || 0
-    if (montantPayeAuj > 0 && poDetail.fournisseurId) {
+    const montantPayeAuj = Number(detail.montantPaye) || 0
+    if (montantPayeAuj > 0 && detail.fournisseurId) {
       const cfg = store.getFiscalConfig()
       const today = store.today()
       const dejaRegleAuj = store.getPurchaseOrders()
-        .filter(p => p.fournisseurId === poDetail.fournisseurId && p.date === today && p.id !== poModalId)
+        .filter(p => p.fournisseurId === detail.fournisseurId && p.date === today && p.id !== poId)
         .reduce((s, p) => s + (Number((p as unknown as { montantPaye?: number }).montantPaye) || 0), 0)
       const cumulApres = dejaRegleAuj + montantPayeAuj
       if (cumulApres > cfg.plafondCashAchatJour && !confirm(
         `⚠️ Ce fournisseur atteindra ${cumulApres.toFixed(2)} DH réglés en espèces aujourd'hui, au-dessus du seuil de déductibilité fiscale (${cfg.plafondCashAchatJour} DH/jour). Continuer quand même ?`
-      )) return
+      )) return false
     }
-    setPoSaving(true)
-    const qty = Number(poDetail.quantite)
-    const pu = Number(poDetail.prixUnitaire)
+    const qty = Number(detail.quantite)
+    const pu = Number(detail.prixUnitaire)
     const total = qty * pu
-    const fourNom = fournisseurs.find(f => f.id === poDetail.fournisseurId)?.nom ?? ""
-    const po = store.getPurchaseOrders().find(p => p.id === poModalId)
+    const fourNom = fournisseurs.find(f => f.id === detail.fournisseurId)?.nom ?? ""
+    const po = store.getPurchaseOrders().find(p => p.id === poId)
     // Charges par article (plusieurs possibles) — coût de revient. Le montant
     // retenu est celui affiché à l'écran (override acheteur si saisi, sinon
     // la valeur par défaut du catalogue BO) — jamais divergent de l'aperçu.
-    const selectedCharges = poDetail.chargeIds
+    const selectedCharges = detail.chargeIds
       .map((id, idx) => {
         const c = chargesArticle.find(c => c.id === id)
         if (!c) return null
-        return { id: c.id, nom: c.nom, montant: chargeMontantAt(idx, id) }
+        return { id: c.id, nom: c.nom, montant: detail.chargeMontants[idx] !== undefined && detail.chargeMontants[idx] !== "" ? (Number(detail.chargeMontants[idx]) || 0) : (Number(c.montant) || 0) }
       })
       .filter((c): c is { id: string; nom: string; montant: number } => !!c)
     const chargeMontant = selectedCharges.reduce((s, c) => s + (Number(c.montant) || 0), 0)
     // Taxe communale 7% — marché de gros uniquement, comptabilisée comme une
     // CHARGE (classe 6), jamais comme de la TVA récupérable.
-    const taxeCommunale = poDetail.typeFlux === "marche_gros" ? Math.round(total * 0.07 * 100) / 100 : undefined
-    store.updatePurchaseOrder(poModalId, {
+    const taxeCommunale = detail.typeFlux === "marche_gros" ? Math.round(total * 0.07 * 100) / 100 : undefined
+    store.updatePurchaseOrder(poId, {
       statut: "envoyé",
       quantite: qty,
       prixUnitaire: pu,
       total,
-      fournisseurId: poDetail.fournisseurId,
+      fournisseurId: detail.fournisseurId,
       fournisseurNom: fourNom,
-      montantPaye: Number(poDetail.montantPaye) || 0,
-      statutPaiement: poDetail.statutPaiement,
-      notePaiement: poDetail.notePaiement,
+      montantPaye: Number(detail.montantPaye) || 0,
+      statutPaiement: detail.statutPaiement,
+      notePaiement: detail.notePaiement,
       chargeArticleId: selectedCharges[0]?.id || undefined,   // back-compat
       chargesIds: selectedCharges.map(c => c.id),
       chargesDetail: selectedCharges.map(c => ({ nom: c.nom, montant: Number(c.montant) || 0 })),
       chargeMontant,
       coutRevientUnitaire: pu + chargeMontant,
       totalCharges: chargeMontant * qty,
-      typeFlux: poDetail.typeFlux,
+      typeFlux: detail.typeFlux,
       taxeCommunale,
-      agriculteurNom: poDetail.typeFlux === "agriculteur_direct" ? poDetail.agriculteurNom.trim() : undefined,
-      agriculteurCIN: poDetail.typeFlux === "agriculteur_direct" ? poDetail.agriculteurCIN.trim() : undefined,
+      agriculteurNom: detail.typeFlux === "agriculteur_direct" ? detail.agriculteurNom.trim() : undefined,
+      agriculteurCIN: detail.typeFlux === "agriculteur_direct" ? detail.agriculteurCIN.trim() : undefined,
       // La photo était capturée/obligatoire côté UI mais jamais persistée sur
       // le PO (seulement recopiée dans fl_credits_fournisseurs, et uniquement
       // si le paiement n'était pas soldé) — désormais toujours sauvegardée ici.
-      photoAchat: poDetail.photoAchat || undefined,
-      caissesFournisseur: poDetail.caissesFournisseur
+      photoAchat: detail.photoAchat || undefined,
+      caissesFournisseur: detail.caissesFournisseur
         .filter(c => Number(c.quantite) > 0)
         .map(c => ({ type: c.type, quantite: Number(c.quantite), sens: c.sens, code: c.code.trim() || undefined })),
     })
@@ -501,7 +504,7 @@ export default function MobileAchat({ user }: Props) {
     // d'ajouter à cet écran) ne remontait jamais à Supabase, donc n'apparaissait
     // jamais côté back-office (BOFournisseurDetail lit /api/portal/supplier via
     // Supabase, pas le localStorage du téléphone de l'acheteur).
-    const updatedPo = store.getPurchaseOrders().find(p => p.id === poModalId)
+    const updatedPo = store.getPurchaseOrders().find(p => p.id === poId)
     if (updatedPo) {
       import("@/lib/supabase/db").then(db => db.upsertPurchaseOrder(updatedPo)).catch(e => console.error("[MobileAchat] sync PO error:", e))
     }
@@ -511,19 +514,19 @@ export default function MobileAchat({ user }: Props) {
     // chez nous ; une caisse "donnée" à l'achat (restitution immédiate, pas
     // liée à une sortie en livraison antérieure) est directement classée
     // retournée.
-    if (poDetail.caissesFournisseur.some(c => Number(c.quantite) > 0)) {
+    if (detail.caissesFournisseur.some(c => Number(c.quantite) > 0)) {
       const today = store.today()
-      const nouvellesCaisses: CaisseEtrangere[] = poDetail.caissesFournisseur
+      const nouvellesCaisses: CaisseEtrangere[] = detail.caissesFournisseur
         .filter(c => Number(c.quantite) > 0)
         .map(c => ({
           id: store.genId(),
           type: c.type,
           quantite: Number(c.quantite),
           code: c.code.trim() || undefined,
-          fournisseurId: poDetail.fournisseurId,
+          fournisseurId: detail.fournisseurId,
           fournisseurNom: fourNom,
           statut: c.sens === "recue" ? "en_stock" : "retournee",
-          poId: poModalId,
+          poId,
           dateReception: today,
           dateRetour: c.sens === "donnee" ? today : undefined,
         }))
@@ -534,16 +537,16 @@ export default function MobileAchat({ user }: Props) {
     }
 
     // Auto-create credit fournisseur si paiement impaye ou partiel
-    if (poDetail.statutPaiement !== "solde") {
+    if (detail.statutPaiement !== "solde") {
       const credits: Array<Record<string, unknown>> = (() => {
         try { return JSON.parse(localStorage.getItem("fl_credits_fournisseurs") ?? "[]") } catch { return [] }
       })()
-      const montantPaye = Number(poDetail.montantPaye) || 0
+      const montantPaye = Number(detail.montantPaye) || 0
       const echeance = new Date()
       echeance.setDate(echeance.getDate() + 30)
       credits.push({
         id: store.genId(),
-        fournisseurId: poDetail.fournisseurId,
+        fournisseurId: detail.fournisseurId,
         fournisseurNom: fourNom,
         articleNom: po?.articleNom ?? "",
         acheteurNom: user.name,
@@ -552,17 +555,66 @@ export default function MobileAchat({ user }: Props) {
         dateEcheance: echeance.toISOString().split("T")[0],
         montant: total,
         montantPaye,
-        statut: poDetail.statutPaiement,
-        referenceFacture: poModalId,
-        notes: poDetail.notePaiement,
-        photoAchat: poDetail.photoAchat,
+        statut: detail.statutPaiement,
+        referenceFacture: poId,
+        notes: detail.notePaiement,
+        photoAchat: detail.photoAchat,
       })
       localStorage.setItem("fl_credits_fournisseurs", JSON.stringify(credits))
     }
 
-    refreshPOs()
-    setPoModalId(null)
+    return true
+  }
+
+  const confirmPO = () => {
+    if (!poModalId) return
+    setPoSaving(true)
+    const ok = confirmPOItem(poModalId, poDetail)
+    if (ok) {
+      refreshPOs()
+      setPoModalId(null)
+    }
     setPoSaving(false)
+  }
+
+  // ── Selection multiple des PO en attente — valider en un coup avec les
+  // valeurs par defaut du PO (quantite/prix/fournisseur deja suggeres), sans
+  // ouvrir la modale par article. Indisponible si la photo est obligatoire
+  // (config process), car impossible a fournir en masse.
+  const [selectedPOs, setSelectedPOs] = useState<Set<string>>(new Set())
+  const [bulkPOValidating, setBulkPOValidating] = useState(false)
+  const photoAchatObligatoire = store.getProcessConfig().photoAchatObligatoire !== false
+  const toggleSelectPO = (id: string) => setSelectedPOs(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const toggleSelectAllPOs = () => setSelectedPOs(prev =>
+    prev.size === filteredPOs.length ? new Set() : new Set(filteredPOs.map(po => po.id))
+  )
+  const defaultDetailForPO = (po: typeof pendingPOs[0]): typeof poDetail => {
+    const art = store.getArticles().find(a => a.id === po.articleId)
+    return {
+      quantite: String(po.quantite), nbUnites: "", prixUnitaire: String(po.prixUnitaire),
+      fournisseurId: po.fournisseurId, montantPaye: "", statutPaiement: "impaye", notePaiement: "",
+      photoAchat: "",
+      chargeIds: (po.chargeArticleId ?? art?.chargeArticleId) ? [po.chargeArticleId ?? art?.chargeArticleId ?? ""] : [],
+      chargeMontants: {}, typeFlux: "marche_gros", agriculteurNom: "", agriculteurCIN: "", caissesFournisseur: [],
+    }
+  }
+  const validateAllPOs = () => {
+    if (photoAchatObligatoire || selectedPOs.size === 0) return
+    setBulkPOValidating(true)
+    let count = 0
+    selectedPOs.forEach(id => {
+      const po = pendingPOs.find(p => p.id === id)
+      if (!po) return
+      if (confirmPOItem(id, defaultDetailForPO(po))) count++
+    })
+    refreshPOs()
+    setSelectedPOs(new Set())
+    setBulkPOValidating(false)
+    if (count > 0) alert(`${count} bon(s) d'achat validé(s) avec succès.`)
   }
 
   const refreshPOs = () => setPendingPOs(store.getPendingPOsForAcheteur())
@@ -1078,12 +1130,39 @@ export default function MobileAchat({ user }: Props) {
                 </div>
               ) : (
             <div className="flex flex-col gap-2">
+              {/* Selection multiple — valider plusieurs PO d'un coup avec leurs valeurs par defaut.
+                  Indisponible si la photo d'achat est obligatoire (regle non contournable en masse). */}
+              {photoAchatObligatoire ? (
+                <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "oklch(0.16 0.012 145)", color: "oklch(0.55 0.010 145)" }}>
+                  Photo obligatoire par achat (config) — validation groupée indisponible.
+                </p>
+              ) : (
+                <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl" style={{ background: "oklch(0.12 0.010 145)", border: "1px solid oklch(0.20 0.012 145)" }}>
+                  <label className="flex items-center gap-2 text-xs font-semibold" style={{ color: "oklch(0.75 0.008 145)" }}>
+                    <input type="checkbox" checked={selectedPOs.size === filteredPOs.length && filteredPOs.length > 0}
+                      onChange={toggleSelectAllPOs} className="w-4 h-4 rounded accent-emerald-500" />
+                    Tout sélectionner ({filteredPOs.length})
+                  </label>
+                  <button onClick={validateAllPOs} disabled={selectedPOs.size === 0 || bulkPOValidating}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-green-600 text-white disabled:opacity-40">
+                    {bulkPOValidating
+                      ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                    }
+                    Valider tout ({selectedPOs.size})
+                  </button>
+                </div>
+              )}
               {filteredPOs.map(po => (
                 <div key={po.id} className="rounded-2xl p-4 flex flex-col gap-3"
                   style={{ background: "oklch(0.12 0.010 145)", border: "1px solid oklch(0.28 0.10 72)" }}>
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
+                        {!photoAchatObligatoire && (
+                          <input type="checkbox" checked={selectedPOs.has(po.id)} onChange={() => toggleSelectPO(po.id)}
+                            className="w-4 h-4 rounded accent-emerald-500 shrink-0" />
+                        )}
                         <span className="text-[10px] font-black px-2 py-0.5 rounded-full"
                           style={{ background: "oklch(0.18 0.06 72)", color: "oklch(0.80 0.18 72)" }}>
                           PO AUTO
