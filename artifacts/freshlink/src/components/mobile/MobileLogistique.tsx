@@ -1235,7 +1235,9 @@ function MagasinierReceptionTab({ user }: { user: User }) {
       notes: notes || undefined,
     }
 
-    // Update article stock + DLC in shelf-life store
+    // Update article stock + DLC in shelf-life store — pas de credit stock en
+    // mode crossdocking (marchandise triee/expediee direct, jamais stockee)
+    const crossdock = store.isCrossdockMode()
     const allArticles = store.getArticles()
     filled.forEach(l => {
       const idx = allArticles.findIndex(a => a.id === l.articleId)
@@ -1243,7 +1245,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
       if (idx >= 0) {
         allArticles[idx] = {
           ...allArticles[idx],
-          stockDisponible: allArticles[idx].stockDisponible + qteBase,
+          stockDisponible: crossdock ? allArticles[idx].stockDisponible : allArticles[idx].stockDisponible + qteBase,
           prixAchat: Number(l.prixFacture) || allArticles[idx].prixAchat,
         }
       }
@@ -1307,7 +1309,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
-          Reception validee — stock mis a jour
+          {store.isCrossdockMode() ? "Reception validee — pret pour tri/expedition" : "Reception validee — stock mis a jour"}
         </div>
       )}
 

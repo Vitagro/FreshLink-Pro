@@ -3571,6 +3571,99 @@ export const store = {
     if (idx >= 0) { bls[idx] = { ...bls[idx], ...updates }; store.saveBonsLivraison(bls) }
   },
 
+  // --- Action BO : marquer en masse les commandes comme livrees ---
+  // Regularisation d'un backlog de commandes bloquees avant livraison : au lieu
+  // de changer uniquement Commande.statut, on reconstitue la trace normale du
+  // processus (Bon de Livraison "livre/encaisse" + encaissement caisse) comme
+  // le ferait une livraison reelle — les ecrans caisse/facturation/BL
+  // s'appuient sur ces enregistrements, pas seulement sur le statut brut.
+  // Cible : toutes les commandes pas encore livrees ni refusees.
+  bulkMarkCommandesLivrees: (operateurId: string, operateurNom: string): number => {
+    const commandes = store.getCommandes().filter(c => c.statut !== "livre" && c.statut !== "refuse")
+    const clients = store.getClients()
+    const yearCounters: Record<number, number> = {}
+    const numeroFor = (dateStr: string): string => {
+      const y = new Date(dateStr).getFullYear()
+      if (yearCounters[y] === undefined) {
+        yearCounters[y] = store.getBonsLivraison().filter(b => ((b as unknown as { numero?: string }).numero ?? b.id).includes(`BL-${y}`)).length
+      }
+      yearCounters[y]++
+      return `BL-${y}-${String(yearCounters[y]).padStart(4, "0")}`
+    }
+    let count = 0
+    commandes.forEach(commande => {
+      const tva = 19
+      const montantTotal = commande.lignes.reduce((s, l) => s + l.quantite * (l.prixVente ?? l.prixUnitaire ?? 0), 0)
+      const montantTTC = Math.round(montantTotal * (1 + tva / 100))
+      const clientRecord = clients.find(cl => cl.id === commande.clientId)
+      const heure = new Date().toTimeString().slice(0, 5)
+      const existingBL = store.getBonsLivraison().find(b => b.commandeId === commande.id)
+      let blId: string
+      if (existingBL) {
+        blId = existingBL.id
+        store.updateBonLivraison(existingBL.id, {
+          statutLivraison: "livre",
+          statut: "encaissé",
+          heureLivraisonReelle: existingBL.heureLivraisonReelle ?? heure,
+        })
+      } else {
+        blId = store.genBL()
+        store.addBonLivraison({
+          id: blId,
+          date: commande.date,
+          tripId: "",
+          commandeId: commande.id,
+          clientNom: commande.clientNom,
+          secteur: commande.secteur,
+          zone: commande.zone,
+          livreurNom: operateurNom,
+          prevendeurNom: commande.commercialNom,
+          lignes: commande.lignes.map(l => ({
+            articleNom: l.articleNom, unite: l.unite, quantite: l.quantite,
+            quantiteUM: l.quantiteUM, um: l.um, prixUnitaire: l.prixVente,
+            total: l.quantite * l.prixVente,
+          })),
+          montantTotal, tva, montantTTC,
+          statut: "encaissé",
+          statutLivraison: "livre",
+          heureLivraisonReelle: heure,
+          ...(clientRecord ? {
+            clientAdresse: clientRecord.adresse,
+            clientIce: clientRecord.ice,
+            clientModalitePaiement: clientRecord.modalitePaiement,
+            clientCreditSolde: clientRecord.creditSolde,
+            clientCreditAutorise: clientRecord.creditAutorise,
+            clientDelaiRecouvrement: clientRecord.delaiRecouvrement,
+          } : {}),
+          numero: numeroFor(commande.date),
+          clientId: commande.clientId,
+          transporteur: "non_affecte",
+          qcObligatoire: false,
+          createdBy: operateurId,
+          updatedAt: new Date().toISOString(),
+        } as BonLivraison)
+      }
+
+      store.updateCommande(commande.id, { statut: "livre" })
+
+      const dejaEncaisse = store.getCaisseEntries().some(e => e.reference === blId && e.categorie === "vente")
+      if (!dejaEncaisse) {
+        store.addCaisseEntry({
+          id: store.genId(),
+          date: commande.date,
+          libelle: `Livraison (régularisation) — ${commande.clientNom}`,
+          type: "entree",
+          categorie: "vente",
+          montant: montantTotal,
+          reference: blId,
+          createdBy: operateurId,
+        })
+      }
+      count++
+    })
+    return count
+  },
+
   // --- Bons de Préparation ---
   getBonsPreparation: (): BonPreparation[] => getLS("fl_bons_preparation", []),
   // Bons de préparation touchant au moins un client visible par l'utilisateur
@@ -3723,14 +3816,16 @@ export const store = {
     const dateDebut = range?.dateDebut ?? today
     const dateFin = range?.dateFin ?? today
     const articles = store.getArticles()
+    const crossdock = store.isCrossdockMode()
     const commandes = store.getCommandes().filter(c => c.date >= dateDebut && c.date <= dateFin && (c.statut === "en_attente" || c.statut === "valide"))
     const retours = store.getRetours().filter(r => r.date >= dateDebut && r.date <= dateFin && r.statut === "validé")
     return articles.map(art => {
       const commandeQty = commandes.reduce((s, c) => s + (c.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)
       const retourQty = retours.reduce((s, r) => s + (r.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)
       // NOT clamped — negative = surplus, positive = deficit → DA required
-      const besoinNet = commandeQty - art.stockDisponible - retourQty
-      return { articleId: art.id, articleNom: `${art.nom} / ${art.nomAr}`, unite: art.unite, commandeQty, stockQty: art.stockDisponible, retourQty, besoinNet }
+      // En crossdocking il n'y a pas de stock entrepot : le besoin = ce qui est commande (pas de deduction stock)
+      const besoinNet = crossdock ? commandeQty - retourQty : commandeQty - art.stockDisponible - retourQty
+      return { articleId: art.id, articleNom: `${art.nom} / ${art.nomAr}`, unite: art.unite, commandeQty, stockQty: crossdock ? 0 : art.stockDisponible, retourQty, besoinNet }
     }).filter(l => l.commandeQty > 0)
   },
 
@@ -3889,6 +3984,9 @@ export const store = {
   // --- Process config ---
   getProcessConfig: (): ProcessConfig => ({ ...DEFAULT_PROCESS_CONFIG, ...getLS<Partial<ProcessConfig>>("fl_process_config", {}) }),
   saveProcessConfig: (c: ProcessConfig) => setLS("fl_process_config", c),
+  // Mode crossdocking actif : pas de stock entrepot, donc pas d'alerte stock
+  // ni de deduction de stock dans le calcul du besoin d'achat.
+  isCrossdockMode: (): boolean => store.getProcessConfig().modeCrossdocking === true,
   getFiscalConfig: (): FiscalConfig => ({ ...DEFAULT_FISCAL_CONFIG, ...getLS<Partial<FiscalConfig>>("fl_fiscal_config", {}) }),
   saveFiscalConfig: (c: FiscalConfig) => setLS("fl_fiscal_config", c),
 

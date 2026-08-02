@@ -215,8 +215,9 @@ export default function BODashboard({ user }: Props) {
   const totalLivreKg   = bls.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
   const tauxRetour     = totalLivreKg > 0 ? Math.round((totalRetourKg / totalLivreKg) * 100) : 0
 
-  // --- Stock ---
-  const stockFaible   = articles.filter(a => a.stockDisponible < 50).length
+  // --- Stock --- (non pertinent en mode crossdocking : pas de stock entrepot)
+  const crossdock     = store.isCrossdockMode()
+  const stockFaible   = crossdock ? 0 : articles.filter(a => a.stockDisponible < 50).length
   // "En attente" = pas encore livrée (couvre tout le pipeline : en_attente,
   // en_attente_approbation, valide, en_preparation, charge, en_transit).
   // Compter uniquement le statut brut "en_attente" affichait 0 dès qu'une
@@ -595,7 +596,7 @@ export default function BODashboard({ user }: Props) {
               { label: "Retours (kg/j)",  v: KG(totalRetourKgToday), clr: "text-red-600", sub: null, sub2: null },
               { label: "Taux retour",     v: `${tauxRetour}%`, clr: tauxRetour > 10 ? "text-red-600" : tauxRetour > 5 ? "text-amber-600" : "text-emerald-600", sub: null, sub2: null },
               { label: "Cmds en attente", v: String(cmdsEnAttente), clr: "text-yellow-600", sub: null, sub2: null },
-              { label: "Stock faible",    v: String(stockFaible), clr: stockFaible > 0 ? "text-red-600" : "text-emerald-600", sub: null, sub2: null },
+              ...(crossdock ? [] : [{ label: "Stock faible", v: String(stockFaible), clr: stockFaible > 0 ? "text-red-600" : "text-emerald-600", sub: null, sub2: null }]),
             ].map(k => (
               <div key={k.label} className="bg-card border border-border rounded-xl p-3">
                 <p className="text-[11px] mb-1 truncate text-muted-foreground">{k.label}</p>
