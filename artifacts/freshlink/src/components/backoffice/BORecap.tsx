@@ -190,6 +190,7 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
       }
     })
     .filter(r => r.commandeTotal > 0)
+    .sort((a, b) => a.articleNom.localeCompare(b.articleNom, "fr"))
 }
 
 interface EcartRow {
