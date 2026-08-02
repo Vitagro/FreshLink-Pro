@@ -1390,6 +1390,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
   const displayed  = mainTab === "en_cours" ? enCours : historique
 
   const totalTTC  = blsVisibles.reduce((s, b) => s + b.totalTTC, 0)
+  const totalTonnage = blsVisibles.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.qteLivree, 0), 0)
   const nbLivre   = bls.filter(b => b.statut === "livre").length
   const nbEnCours = bls.filter(b => b.statut === "en_livraison").length
 
@@ -1807,6 +1808,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
             { label: "Total BL", val: bls.length, col: "bg-slate-50 border-slate-200 text-slate-700" },
             { label: "En livraison", val: nbEnCours, col: "bg-amber-50 border-amber-200 text-amber-700" },
             { label: "Livres", val: nbLivre, col: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+            { label: "Tonnage", val: `${totalTonnage.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} kg`, col: "bg-orange-50 border-orange-200 text-orange-700" },
             { label: "CA TTC", val: `${totalTTC.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} DH`, col: "bg-blue-50 border-blue-200 text-blue-700" },
           ].map(k => (
             <div key={k.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${k.col}`}>

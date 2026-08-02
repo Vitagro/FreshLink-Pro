@@ -305,6 +305,7 @@ export default function BoPurchaseOrders() {
     : String(b.date ?? "").localeCompare(String(a.date ?? "")))
 
   const totalValeur = filtered.reduce((s, o) => s + o.total, 0)
+  const totalTonnage = filtered.reduce((s, o) => s + o.quantite, 0)
   const countOuvert = orders.filter(o => o.statut === "ouvert").length
 
   return (
@@ -331,10 +332,11 @@ export default function BoPurchaseOrders() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "Total PO", value: orders.length, sub: "bons de commande", color: "text-primary" },
           { label: "Ouverts", value: countOuvert, sub: "en attente", color: "text-amber-600" },
+          { label: "Tonnage filtré", value: `${totalTonnage.toLocaleString("fr-MA")} kg`, sub: "quantité", color: "text-orange-600" },
           { label: "Valeur filtrée", value: `${totalValeur.toLocaleString("fr-MA")} DH`, sub: "HT", color: "text-primary" },
           { label: "Articles", value: articles.length, sub: "références", color: "text-cyan-600" },
         ].map(k => (

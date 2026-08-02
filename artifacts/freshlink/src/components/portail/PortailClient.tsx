@@ -127,6 +127,9 @@ const money = (n: number) => `${(n ?? 0).toLocaleString("fr-MA", { minimumFracti
 export default function PortailClient({ user, onLogout }: Props) {
   const portalRole = roleFromUser(user)
   const TABS = ALL_TABS.filter(t => t.allow.includes(portalRole))
+  // Pas de stock entrepot en mode crossdocking : ne jamais afficher/bloquer sur la
+  // rupture de stock (le catalogue reste commandable, l'achat se fait derriere).
+  const crossdock = store.isCrossdockMode()
 
   const [tab, setTab] = useState<Tab>("dashboard")
   const [loading, setLoading] = useState(true)
@@ -667,7 +670,7 @@ export default function PortailClient({ user, onLogout }: Props) {
                       <select value={l.articleId} onChange={e => setLigne(i, { articleId: e.target.value })}
                         className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                         <option value="">-- Choisir un produit / اختر منتجا --</option>
-                        {articles.filter(a => a.stockDisponible > 0).map(a => (
+                        {articles.filter(a => crossdock || a.stockDisponible > 0).map(a => (
                           <option key={a.id} value={a.id}>{FAMILLE_ICON[a.famille ?? ""] ?? ""} {a.nom} ({a.nomAr}) — {a.unite}</option>
                         ))}
                       </select>
@@ -690,9 +693,11 @@ export default function PortailClient({ user, onLogout }: Props) {
                       {art && (
                         <div className="flex gap-2 flex-wrap">
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{art.famille}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${art.stockDisponible > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-700"}`}>
-                            {art.stockDisponible > 0 ? `Stock: ${art.stockDisponible} ${art.unite}` : "Rupture"}
-                          </span>
+                          {!crossdock && (
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${art.stockDisponible > 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-700"}`}>
+                              {art.stockDisponible > 0 ? `Stock: ${art.stockDisponible} ${art.unite}` : "Rupture"}
+                            </span>
+                          )}
                         </div>
                       )}
                     </div>
@@ -799,9 +804,11 @@ export default function PortailClient({ user, onLogout }: Props) {
                     </div>
                     <div className="flex flex-col gap-1 text-xs">
                       <span className="text-muted-foreground">{art.unite}</span>
-                      <span className={`font-semibold ${art.stockDisponible > 0 ? "text-green-700" : "text-destructive"}`}>
-                        {art.stockDisponible > 0 ? "Disponible" : "Rupture"}
-                      </span>
+                      {!crossdock && (
+                        <span className={`font-semibold ${art.stockDisponible > 0 ? "text-green-700" : "text-destructive"}`}>
+                          {art.stockDisponible > 0 ? "Disponible" : "Rupture"}
+                        </span>
+                      )}
                       <div className="flex items-center gap-1 mt-0.5">
                         <span className="font-black text-primary text-sm">{money(artPrix(art))}</span>
                         <span className="text-[10px] text-muted-foreground">/{art.unite}</span>
@@ -810,9 +817,9 @@ export default function PortailClient({ user, onLogout }: Props) {
                         )}
                       </div>
                     </div>
-                    <button onClick={() => quickAdd(art.id)} disabled={art.stockDisponible === 0}
-                      className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${inOrder ? "bg-primary/10 text-primary border border-primary" : art.stockDisponible > 0 ? "bg-primary text-primary-foreground hover:opacity-90" : "bg-muted text-muted-foreground cursor-not-allowed"}`}>
-                      {inOrder ? "Dans la commande" : art.stockDisponible > 0 ? "+ Ajouter" : "Indisponible"}
+                    <button onClick={() => quickAdd(art.id)} disabled={!crossdock && art.stockDisponible === 0}
+                      className={`w-full py-2 rounded-xl text-xs font-bold transition-all ${inOrder ? "bg-primary/10 text-primary border border-primary" : (crossdock || art.stockDisponible > 0) ? "bg-primary text-primary-foreground hover:opacity-90" : "bg-muted text-muted-foreground cursor-not-allowed"}`}>
+                      {inOrder ? "Dans la commande" : (crossdock || art.stockDisponible > 0) ? "+ Ajouter" : "Indisponible"}
                     </button>
                   </div>
                 )

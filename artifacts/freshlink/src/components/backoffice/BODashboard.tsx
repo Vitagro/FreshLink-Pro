@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo } from "react"
 import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts"
@@ -127,7 +129,9 @@ export default function BODashboard({ user }: Props) {
   // Remise a 0 du credit de TOUS les clients (regularisation en masse) —
   // meme action que BOFinance > Credit Client, accessible aussi depuis le tableau de bord.
   const handleResetAllCreditDash = () => {
+    if (!hasPermission(user.role, "gerer_recouvrement")) { logAction(user, "gerer_recouvrement", "denied", { type: "credit_reset_masse" }); return }
     const allClients = store.getClients()
+    logAction(user, "gerer_recouvrement", "success", { type: "credit_reset_masse", label: `${allClients.filter(c => (c.creditSolde ?? 0) !== 0).length} client(s)` })
     const updated = allClients.map(c => (c.creditSolde ?? 0) !== 0 ? { ...c, creditSolde: 0 } : c)
     store.saveClients(updated)
     refreshData()
