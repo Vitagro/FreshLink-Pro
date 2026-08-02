@@ -29,6 +29,7 @@ function sortClientsInfo(clients: ClientSequenceInfo[], mode: ClientSortMode): C
 // REGROUPÉES sur un seul et même BL (commandeIds liste tous les numéros
 // d'origine — jamais un seul commandeId qui en oublierait deux sur trois).
 export function autoGenerateBLs(bon: BonPreparation, operateurId: string, operateurNom: string): BonLivraison[] {
+  const tauxTVA = store.getFiscalConfig().tauxTVA
   const trips = store.getTrips()
   const trip = bon.tripId ? trips.find(t => t.id === bon.tripId) : null
   const commandes = store.getCommandes()
@@ -125,8 +126,8 @@ export function autoGenerateBLs(bon: BonPreparation, operateurId: string, operat
       prevendeurNom,
       lignes: lignesBL,
       montantTotal,
-      tva: 0,
-      montantTTC: montantTotal,
+      tva: tauxTVA,
+      montantTTC: Math.round(montantTotal * (1 + tauxTVA / 100) * 100) / 100,
       statut: "émis" as const,
       statutLivraison: "premier_passage" as const,
       numero: `BL-${y}-${String(seqThisYear).padStart(4, "0")}`,

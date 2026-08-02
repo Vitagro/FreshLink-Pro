@@ -2,6 +2,8 @@
 
 import { useState, useRef } from "react"
 import { store, type User, type HRCustomTemplate, type HRTemplateType } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 function Icon({ d, className = "w-5 h-5" }: { d: string; className?: string }) {
   return (
@@ -170,6 +172,8 @@ export default function BOTemplateEditor({ user }: Props) {
 
   const save = () => {
     if (!form.nom.trim()) { flash("Nom requis."); return }
+    if (!hasPermission(user.role, "gerer_contrats")) { logAction(user, "gerer_contrats", "denied", { type: "hr_template", id: editing?.id, label: form.nom }); return }
+    logAction(user, "gerer_contrats", "success", { type: "hr_template", id: editing?.id, label: form.nom })
     // Extract variables from content
     const vars = [...new Set((form.contenu.match(/\{\{[a-zA-Z]+\}\}/g) ?? []))]
     if (editing) {
@@ -187,7 +191,9 @@ export default function BOTemplateEditor({ user }: Props) {
   }
 
   const del = (id: string) => {
+    if (!hasPermission(user.role, "gerer_contrats")) { logAction(user, "gerer_contrats", "denied", { type: "hr_template_suppression", id }); return }
     if (!confirm("Supprimer ce modele ?")) return
+    logAction(user, "gerer_contrats", "success", { type: "hr_template_suppression", id })
     store.deleteHRTemplate(id)
     setTemplates(store.getHRTemplates())
   }

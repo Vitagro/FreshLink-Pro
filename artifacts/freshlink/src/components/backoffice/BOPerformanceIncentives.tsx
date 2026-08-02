@@ -10,6 +10,8 @@ import {
   type Actionnaire,
   type BonusCriteria,
 } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 function Icon({ d, className = "w-5 h-5" }: { d: string; className?: string }) {
   return (
@@ -31,7 +33,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
   const [saveMsg, setSaveMsg] = useState("")
 
   // New bonus record form
-  const users_ = useMemo(() => store.getUsers().filter(u => u.role === "livreur" || u.role === "resp_logistique"), [])
+  const users_ = useMemo(() => store.getUsers().filter(u => u.role === "livreur" || u.role === "conducteur" || u.role === "resp_logistique"), [])
   const [bForm, setBForm] = useState({
     livreurId: "", driverType: "interne" as "interne" | "externe",
     tripId: "", date: new Date().toISOString().split("T")[0],
@@ -73,6 +75,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
 
   const addBonusRecord = () => {
     if (!bForm.livreurId || !bForm.date) { flash("Livreur et date requis."); return }
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "driver_bonus_creation", id: bForm.livreurId }); return }
+    logAction(user, "valider_cash", "success", { type: "driver_bonus_creation", id: bForm.livreurId })
     const livreur = users_.find(u => u.id === bForm.livreurId)
     const { criteria, montant } = computeBonus()
     const record: DriverBonusRecord = {
@@ -97,6 +101,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
   }
 
   const validateBonus = (id: string) => {
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "driver_bonus", id }); return }
+    logAction(user, "valider_cash", "success", { type: "driver_bonus", id })
     store.saveDriverBonusRecords(store.getDriverBonusRecords().map(r =>
       r.id === id ? { ...r, statut: "valide", validePar: user.id } : r
     ))
@@ -108,8 +114,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
     if (dForm.beneficeNet <= 0) { flash("Benefice net doit etre > 0."); return }
     if (actionnaires.length === 0) { flash("Aucun actionnaire enregistre."); return }
     const lignes = actionnaires.filter(a => a.actif).map(a => {
-      const part = totalCotisation > 0 ? (a.cotisation / totalCotisation) * 100 : 0
-      const montant = (dForm.beneficeNet * part) / 100
+      const part = totalCotisation > 0 ? Math.round((a.cotisation / totalCotisation) * 100 * 100) / 100 : 0
+      const montant = Math.round((dForm.beneficeNet * part) / 100 * 100) / 100
       return {
         actionnaireId: a.id,
         actionnaireNom: `${a.nom} ${a.prenom}`,
@@ -138,6 +144,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
   }
 
   const validateDistribution = (id: string) => {
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "shareholder_distribution", id }); return }
+    logAction(user, "valider_cash", "success", { type: "shareholder_distribution", id })
     store.saveShareholderDistributions(store.getShareholderDistributions().map(d =>
       d.id === id ? { ...d, statut: "valide", validePar: user.id } : d
     ))
@@ -146,6 +154,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
   }
 
   const markDistribue = (id: string) => {
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "shareholder_distribution_paiement", id }); return }
+    logAction(user, "valider_cash", "success", { type: "shareholder_distribution_paiement", id })
     store.saveShareholderDistributions(store.getShareholderDistributions().map(d =>
       d.id === id ? { ...d, statut: "distribue", lignes: d.lignes.map(l => ({ ...l, statut: "paye" as const, datePaiement: new Date().toISOString().split("T")[0] })) } : d
     ))

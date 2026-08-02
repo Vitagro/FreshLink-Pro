@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { store, type User, type Client, ROLE_LABELS, getAllSecteurs } from "@/lib/store"
+import { store, type User, type Client, ROLE_LABELS, getAllSecteurs, userHasRole } from "@/lib/store"
 import { loadZonesConfig, zoneOfSecteur, type ZonesConfig } from "@/lib/commercial/zones"
 
 interface Props { user: User }
@@ -28,11 +28,11 @@ export default function BOAffectationCommerciale({ user }: Props) {
 
   // derived lists
   const prevendeurs = useMemo(
-    () => users.filter(u => u.role === "prevendeur" && u.actif),
+    () => users.filter(u => userHasRole(u, "prevendeur") && u.actif),
     [users]
   )
   const teamLeads = useMemo(
-    () => users.filter(u => (u.role === "team_leader" || u.role === "resp_commercial") && u.actif),
+    () => users.filter(u => (userHasRole(u, "team_leader") || userHasRole(u, "resp_commercial")) && u.actif),
     [users]
   )
   const secteurs = useMemo(
@@ -69,7 +69,7 @@ export default function BOAffectationCommerciale({ user }: Props) {
   const resolveTeamLead = (prev: User | undefined): string | undefined => {
     if (!prev?.secteur) return undefined
     return users.find(u =>
-      (u.role === "team_leader" || u.role === "resp_commercial") && u.secteur === prev.secteur
+      (userHasRole(u, "team_leader") || userHasRole(u, "resp_commercial")) && u.secteur === prev.secteur
     )?.id
   }
 
@@ -90,7 +90,7 @@ export default function BOAffectationCommerciale({ user }: Props) {
       store.saveUsers(all)
       // Cascade: update all clients already assigned to this prevendeur
       const myClients = clients.filter(c => c.prevendeurId === userId)
-      const tl = users.find(u => (u.role === "team_leader" || u.role === "resp_commercial") && u.secteur === secteur)
+      const tl = users.find(u => (userHasRole(u, "team_leader") || userHasRole(u, "resp_commercial")) && u.secteur === secteur)
       myClients.forEach(c => store.updateClient(c.id, { teamLeadId: tl?.id }))
     }
     reload(); flash()

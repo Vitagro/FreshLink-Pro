@@ -16,6 +16,9 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useRef } from "react"
+import type { User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ─── Storage ────────────────────────────────────────────────────────────────
 const LS_PRIX   = "fl_intel_prix"     // CompetitorEntry[] (PA concurrent) — partagé
@@ -91,7 +94,7 @@ async function sbPush(table: string, rows: { id: string; payload: Record<string,
 }
 
 // ─── Composant ──────────────────────────────────────────────────────────────
-export default function BOImportConcurrence() {
+export default function BOImportConcurrence({ user }: { user: User }) {
   const [pv, setPv]         = useState<ConcPV[]>(() => getJSON<ConcPV>(LS_PV))
   const [ventes, setVentes] = useState<ConcVente[]>(() => getJSON<ConcVente>(LS_VENTES))
   const [achats, setAchats] = useState<CompetitorEntry[]>(() => getJSON<CompetitorEntry>(LS_PRIX).filter(e => e.source === "synthese_achats"))
@@ -217,10 +220,22 @@ export default function BOImportConcurrence() {
     finally { setBusy(false); if (refSA.current) refSA.current.value = "" }
   }
 
-  const clearVentes = () => { if (confirm("Effacer toutes les facturations concurrent importées ?")) { setJSON(LS_VENTES, []); setVentes([]) } }
-  const clearPV     = () => { if (confirm("Effacer le catalogue prix de vente concurrent ?")) { setJSON(LS_PV, []); setPv([]) } }
+  const clearVentes = () => {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "conc_ventes" }); return }
+    if (!confirm("Effacer toutes les facturations concurrent importées ?")) return
+    logAction(user, "backup_restore", "success", { type: "conc_ventes" })
+    setJSON(LS_VENTES, []); setVentes([])
+  }
+  const clearPV = () => {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "conc_pv" }); return }
+    if (!confirm("Effacer le catalogue prix de vente concurrent ?")) return
+    logAction(user, "backup_restore", "success", { type: "conc_pv" })
+    setJSON(LS_PV, []); setPv([])
+  }
   const clearAchats = () => {
+    if (!hasPermission(user.role, "backup_restore")) { logAction(user, "backup_restore", "denied", { type: "conc_achats" }); return }
     if (!confirm("Effacer toutes les synthèses achats concurrent ?")) return
+    logAction(user, "backup_restore", "success", { type: "conc_achats" })
     const others = getJSON<CompetitorEntry>(LS_PRIX).filter(e => e.source !== "synthese_achats")
     setJSON(LS_PRIX, others); setAchats([])
   }

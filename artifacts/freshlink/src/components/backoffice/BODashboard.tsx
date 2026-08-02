@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite } from "@/lib/store"
+import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts"
@@ -76,6 +78,7 @@ export default function BODashboard({ user }: Props) {
   const [bls, setBls] = useState(store.getVisibleBonsLivraison())
   const [visites, setVisites] = useState(store.getVisites ? store.getVisites() : [])
   const [dashTab, setDashTab] = useState<DashTab>("global")
+  const [confirmResetCreditDash, setConfirmResetCreditDash] = useState(false)
   // Intervalle de dates du "Tableau de bord" — par defaut aujourd'hui seul
   // (comportement historique inchange). Le KPI "CA aujourd'hui" et les
   // listes associees (commandes/visites/retours) agregent sur cet
@@ -122,6 +125,18 @@ export default function BODashboard({ user }: Props) {
   }
 
   useEffect(() => { refreshData() }, [])
+
+  // Remise a 0 du credit de TOUS les clients (regularisation en masse) —
+  // meme action que BOFinance > Credit Client, accessible aussi depuis le tableau de bord.
+  const handleResetAllCreditDash = () => {
+    if (!hasPermission(user.role, "gerer_recouvrement")) { logAction(user, "gerer_recouvrement", "denied", { type: "credit_reset_masse" }); return }
+    const allClients = store.getClients()
+    logAction(user, "gerer_recouvrement", "success", { type: "credit_reset_masse", label: `${allClients.filter(c => (c.creditSolde ?? 0) !== 0).length} client(s)` })
+    const updated = allClients.map(c => (c.creditSolde ?? 0) !== 0 ? { ...c, creditSolde: 0 } : c)
+    store.saveClients(updated)
+    refreshData()
+    setConfirmResetCreditDash(false)
+  }
 
   // Auto-refresh every 30 seconds
   useEffect(() => {
@@ -310,7 +325,7 @@ export default function BODashboard({ user }: Props) {
   const topLivRetour = Object.entries(livRetour).sort(([, a], [, b]) => b.kg - a.kg).slice(0, 6)
 
   // --- Prevendeurs stats ---
-  const prevendeurs = users.filter(u => u.role === "prevendeur" && u.actif)
+  const prevendeurs = users.filter(u => userHasRole(u, "prevendeur") && u.actif)
   const getPrevendeurStats = (pv: User) => {
     const cdJ = commandesActives.filter(c => c.commercialId === pv.id && c.date >= dateDebut && c.date <= dateFin)
     const cdW = commandesActives.filter(c => c.commercialId === pv.id && c.date >= weekRange.start && c.date <= weekRange.end)
@@ -1328,7 +1343,22 @@ export default function BODashboard({ user }: Props) {
 
           {/* Full credit table */}
           <div className="flex flex-col gap-2">
-            <h3 className="text-sm font-bold text-foreground">Situation credit par client / وضعية الائتمان</h3>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <h3 className="text-sm font-bold text-foreground">Situation credit par client / وضعية الائتمان</h3>
+              {!confirmResetCreditDash ? (
+                <button onClick={() => setConfirmResetCreditDash(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  Remise a 0 — Credit clients
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-red-700">Remettre le credit de TOUS les clients a 0 ?</span>
+                  <button onClick={handleResetAllCreditDash} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700">Oui, remettre</button>
+                  <button onClick={() => setConfirmResetCreditDash(false)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">Annuler</button>
+                </div>
+              )}
+            </div>
             <div className="rounded-2xl border border-border overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

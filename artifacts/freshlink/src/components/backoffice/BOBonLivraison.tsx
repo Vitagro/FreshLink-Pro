@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import type { User } from "@/lib/store"
-import { store, MODALITE_LABELS } from "@/lib/store"
+import { store, MODALITE_LABELS, userHasRole } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import {
@@ -210,7 +210,7 @@ function BLEditor({
     // Livraison prévue = date du BL par défaut — l'utilisateur peut la changer.
     dateLivraisonPrevue: todayStr,
     lignes: [],
-    totalHT: 0, totalTTC: 0, tva: 20,
+    totalHT: 0, totalTTC: 0, tva: store.getFiscalConfig().tauxTVA,
     qcObligatoire,
     notesBL: "",
     ...bl,
@@ -229,7 +229,7 @@ function BLEditor({
     return match ? { ...l, articleId: match.id, articleNomAr: l.articleNomAr ?? match.nomAr } : l
   }))
   const [users] = useState(() => store.getUsers())
-  const livreurs = users.filter(u => u.role === "livreur")
+  const livreurs = users.filter(u => userHasRole(u, "livreur"))
   // Champs secondaires (statut, TVA, QC, ICE, compte, tel, modalité, adresse,
   // notes) masqués par défaut — auto-remplis depuis la fiche client, à
   // afficher seulement si l'utilisateur veut les vérifier/adapter.
@@ -356,7 +356,7 @@ function BLEditor({
   useEffect(() => {
     const totalHT = lignes.reduce((s, l) => s + l.totalLigne, 0)
     const tva = form.tva ?? 20
-    const totalTTC = totalHT * (1 + tva / 100)
+    const totalTTC = Math.round(totalHT * (1 + tva / 100) * 100) / 100
     setForm(f => ({ ...f, lignes, totalHT, totalTTC }))
   }, [lignes, form.tva])
 
@@ -1124,6 +1124,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
 
     if (matchBons.length === 0) return
 
+    const tauxTVA = store.getFiscalConfig().tauxTVA
     const allBLs = getBLs()
     const newBLs: BonLivraison[] = []
 
@@ -1148,7 +1149,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
         const totalHT = lignes.reduce((s, l) => s + l.totalLigne, 0)
         const bl: BonLivraison = {
           id: genId(), numero: genNumero(), transporteur: "non_affecte",
-          statut: "valide", date: today, lignes, totalHT, totalTTC: totalHT * 1.2, tva: 20,
+          statut: "valide", date: today, lignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100) * 100) / 100, tva: tauxTVA,
           qcObligatoire, clientId: "", clientNom: bon.nom ?? "—",
           createdBy: user.id, updatedAt: new Date().toISOString(),
           notesBL: `Importe depuis Bon Prep: ${bon.nom}`,
@@ -1187,7 +1188,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
           const totalHT = blLignes.reduce((s, l) => s + l.totalLigne, 0)
           const bl: BonLivraison = {
             id: genId(), numero: genNumero(), transporteur: "non_affecte",
-            statut: "valide", date: today, lignes: blLignes, totalHT, totalTTC: totalHT * 1.2, tva: 20,
+            statut: "valide", date: today, lignes: blLignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100) * 100) / 100, tva: tauxTVA,
             qcObligatoire, clientId: cid, clientNom: client?.nom ?? cid,
             clientAdresse: client?.adresse, clientIce: client?.ice,
             clientModalitePaiement: client?.modalitePaiement,
@@ -1390,6 +1391,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
   const displayed  = mainTab === "en_cours" ? enCours : historique
 
   const totalTTC  = blsVisibles.reduce((s, b) => s + b.totalTTC, 0)
+  const totalTonnage = blsVisibles.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.qteLivree, 0), 0)
   const nbLivre   = bls.filter(b => b.statut === "livre").length
   const nbEnCours = bls.filter(b => b.statut === "en_livraison").length
 
@@ -1807,6 +1809,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
             { label: "Total BL", val: bls.length, col: "bg-slate-50 border-slate-200 text-slate-700" },
             { label: "En livraison", val: nbEnCours, col: "bg-amber-50 border-amber-200 text-amber-700" },
             { label: "Livres", val: nbLivre, col: "bg-emerald-50 border-emerald-200 text-emerald-700" },
+            { label: "Tonnage", val: `${totalTonnage.toLocaleString("fr-FR", { maximumFractionDigits: 0 })} kg`, col: "bg-orange-50 border-orange-200 text-orange-700" },
             { label: "CA TTC", val: `${totalTTC.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} DH`, col: "bg-blue-50 border-blue-200 text-blue-700" },
           ].map(k => (
             <div key={k.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border ${k.col}`}>
@@ -2026,7 +2029,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
                           </button>
                           {/* WhatsApp livreur */}
                           {bl.livreurNom && (() => {
-                            const lu = store.getUsers().find(u => u.role === "livreur" && (u.name === bl.livreurNom || u.id === bl.livreurId))
+                            const lu = store.getUsers().find(u => userHasRole(u, "livreur") && (u.name === bl.livreurNom || u.id === bl.livreurId))
                             const ph = lu?.telephone ?? lu?.phone ?? ""
                             if (!ph) return null
                             return (

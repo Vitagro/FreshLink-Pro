@@ -1,6 +1,9 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import type { User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ══════════════════════════════════════════════════════════════════
 //  BOGifts — Centre Cadeaux Incentives (Section 1.1)
@@ -55,7 +58,7 @@ const SEUIL_TYPE_LABEL: Record<string, string> = {
   contrat:     "Contrat signé",
 }
 
-export default function BOGifts() {
+export default function BOGifts({ user }: { user: User }) {
   const [tab, setTab] = useState<"attributions" | "catalogue">("attributions")
   const [materials, setMaterials] = useState<Material[]>([])
   const [attributions, setAttributions] = useState<Attribution[]>([])
@@ -161,7 +164,9 @@ export default function BOGifts() {
 
   // 📦 Crée la liste de cadeaux par défaut (7 matériels)
   const seedDefaults = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "seed catalogue par defaut" }); return }
     if (!window.confirm("Créer la liste de cadeaux par défaut (Balance, Pack couteaux, Caisses, Vitrine, Tabliers, Étal, Bon fidélité) ?")) return
+    logAction(user, "catalogue_toggle", "success", { type: "gifts", label: "seed catalogue par defaut" })
     setBusy(true)
     try {
       const res = await fetch("/api/ext/gifts", {
@@ -179,7 +184,9 @@ export default function BOGifts() {
 
   // 🤖 Lance l'algorithme d'attribution automatique
   const runAutoScan = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "attribution auto" }); return }
     if (!window.confirm("Lancer l'attribution automatique des cadeaux selon les seuils atteints par les clients (volume / CA / contrat) ?")) return
+    logAction(user, "catalogue_toggle", "success", { type: "gifts", label: "attribution auto" })
     setBusy(true)
     try {
       const res = await fetch("/api/ext/gifts", {

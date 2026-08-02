@@ -778,7 +778,7 @@ export default function BOConcurrence({ user }: { user: User }) {
       )}
 
       {/* ── IMPORT EXCEL ───────────────────────────────────────────────────── */}
-      {tab === "import" && <BOImportConcurrence />}
+      {tab === "import" && <BOImportConcurrence user={user} />}
 
       {tab === "comparatif_ext" && <BOComparatifExterne user={user} />}
     </div>

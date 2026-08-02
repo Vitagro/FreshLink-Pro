@@ -10,6 +10,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { store, type User, type HistoriquePrixAchat } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface GfReception {
@@ -215,7 +217,7 @@ function saveMapping(m: MappingStore) {
 type SubTab = "achats" | "commandes" | "livraisons" | "factures" | "articles" | "mapping"
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function BOComparatifExterne({ user: _user }: { user: User }) {
+export default function BOComparatifExterne({ user }: { user: User }) {
   const [subTab, setSubTab] = useState<SubTab>("achats")
   const [status, setStatus] = useState<SyncStatus>("idle")
   const [lastSync, setLastSync] = useState<string>(localStorage.getItem(CACHE.lastSync) ?? "")
@@ -950,6 +952,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
       {/* ── Mapping Articles ─────────────────────────────────────────────── */}
       {subTab === "mapping" && (
         <MappingTab
+          user={user}
           gfProducts={gfProducts}
           izArticles={izArticles}
           flByNorm={flByNorm}
@@ -965,6 +968,7 @@ export default function BOComparatifExterne({ user: _user }: { user: User }) {
 
 // ── MappingTab component ───────────────────────────────────────────────────────
 interface MappingTabProps {
+  user: User
   gfProducts: GfProduct[]
   izArticles: IzArticle[]
   flByNorm: Record<string, { pa: number; nom: string; unite: string }>
@@ -976,7 +980,7 @@ interface MappingTabProps {
 
 type MappingFilter = "all" | "unmatched" | "approved" | "rejected"
 
-function MappingTab({ gfProducts, izArticles, flByNorm, mappings, setMapping, approvedCount, rejectedCount }: MappingTabProps) {
+function MappingTab({ user, gfProducts, izArticles, flByNorm, mappings, setMapping, approvedCount, rejectedCount }: MappingTabProps) {
   const [filter, setFilter] = useState<MappingFilter>("unmatched")
   const [mapSearch, setMapSearch] = useState("")
   const [source, setSource] = useState<"both" | "gf" | "iz">("both")
@@ -1040,7 +1044,12 @@ function MappingTab({ gfProducts, izArticles, flByNorm, mappings, setMapping, ap
             <span className="text-slate-300">·</span>
             <span className="text-amber-600 font-bold">{unmatchedCount} en attente</span>
             {approvedCount + rejectedCount > 0 && (
-              <button onClick={() => { if (confirm("Réinitialiser tous les mappings ?")) { Object.keys(mappings).forEach(k => setMapping(k, null)) } }}
+              <button onClick={() => {
+                  if (!hasPermission(user.role, "modifier_article")) { logAction(user, "modifier_article", "denied", { type: "comparatif_mappings", label: "reset tout" }); return }
+                  if (!confirm("Réinitialiser tous les mappings ?")) return
+                  logAction(user, "modifier_article", "success", { type: "comparatif_mappings", label: `reset ${Object.keys(mappings).length} mapping(s)` })
+                  Object.keys(mappings).forEach(k => setMapping(k, null))
+                }}
                 className="ml-2 px-2 py-1 rounded bg-red-50 text-red-500 text-[10px] font-bold hover:bg-red-100">
                 🗑 Reset tout
               </button>

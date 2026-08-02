@@ -111,6 +111,8 @@ export default function BOAchat() {
   // complète, déjà calculée par getArticles) et supprime définitivement les
   // enregistrements écartés de localStorage ET de Supabase.
   const handleMergeDuplicates = async () => {
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "supprimer_article")) { logAction(session, "supprimer_article", "denied", { type: "merge_doublons_articles" }); return }
     let raw: unknown = []
     try { raw = JSON.parse(localStorage.getItem("fl_articles") || "[]") } catch {}
     const canonical = store.getArticles()
@@ -125,6 +127,7 @@ export default function BOAchat() {
       `${dropIds.length} doublon(s) seront fusionnés dans l'article le plus complet ` +
       `puis supprimés définitivement (localStorage + Supabase).\n\nContinuer ?`
     )) return
+    logAction(session, "supprimer_article", "success", { type: "merge_doublons_articles", label: `${dropIds.length} article(s)` })
     // 1. localStorage = version canonique fusionnée
     store.saveArticles(canonical)
     setArticles(canonical)
@@ -652,6 +655,30 @@ export default function BOAchat() {
               </div>
             )
           })()}
+
+          {/* Stats sur les bons d'achat */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-2xl font-bold text-foreground font-sans">{bons.length}</p>
+              <p className="text-sm text-muted-foreground font-sans">Bons d&apos;achat</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-xl font-bold text-yellow-600 font-sans">{bons.filter(b => b.statut === "brouillon").length}</p>
+              <p className="text-sm text-muted-foreground font-sans">Brouillons</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-xl font-bold text-orange-600 font-sans">
+                {bons.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite, 0), 0).toLocaleString("fr-MA")} kg
+              </p>
+              <p className="text-sm text-muted-foreground font-sans">Tonnage</p>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-4 text-center">
+              <p className="text-xl font-bold text-primary font-sans">
+                {bons.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0).toLocaleString("fr-MA")} DH
+              </p>
+              <p className="text-sm text-muted-foreground font-sans">Montant cumulé</p>
+            </div>
+          </div>
 
           <div className="overflow-x-auto rounded-xl border border-border">
             <table className="w-full text-sm font-sans">

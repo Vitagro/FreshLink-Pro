@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useMemo } from "react"
-import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, FOURNISSEUR_TYPE_LABELS, paDeviationConfirmMessage } from "@/lib/store"
+import { store, type Article, type LigneAchat, type User, type Fournisseur, type HistoriquePrixAchat, type Client, type TypeCaisse, type CaisseEtrangere, TYPES_CAISSE_LABELS, FOURNISSEUR_TYPE_LABELS, paDeviationConfirmMessage, isSuperAdminOrAuthorized } from "@/lib/store"
 import { sendEmail, buildAchatEmail } from "@/lib/email"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 import { CameraQualiteIA, ComparatifFournisseurs, NouveauFournisseurModal } from "@/components/mobile/AchatIAModules"
@@ -603,7 +603,7 @@ export default function MobileAchat({ user }: Props) {
     }
   }
   const validateAllPOs = () => {
-    if (photoAchatObligatoire || selectedPOs.size === 0) return
+    if (photoAchatObligatoire || selectedPOs.size === 0 || !isSuperAdminOrAuthorized(user)) return
     setBulkPOValidating(true)
     let count = 0
     selectedPOs.forEach(id => {
@@ -675,12 +675,21 @@ export default function MobileAchat({ user }: Props) {
     import("@/lib/supabase/db").then(async db => {
       try {
         const [freshArtsRaw, freshFourns, { clients: freshClients }] = await Promise.all([
-          db.fetchArticles(), db.fetchFournisseurs(), db.fetchClients(),
+          db.fetchArticles(), db.fetchFournisseurs(), db.fetchClients(), db.fetchCommandes(),
         ])
         const freshArts = onlyActiveArticles(freshArtsRaw ?? [])
         if (freshArts.length) { setArticles(freshArts); setBesoinSKU(calcBesoinSKU(freshArts)) }
         if (freshFourns?.length) setFournisseurs(freshFourns)
         if (freshClients?.length) setClients(freshClients)
+        // ⚡ Re-génère APRÈS l'hydratation Supabase : le premier appel plus haut
+        // tournait sur le cache local de cet appareil (potentiellement partiel —
+        // article/commande neufs pas encore synchronisés), ce qui ne créait des
+        // PO que pour les 2-3 articles déjà en cache et n'en générait plus jamais
+        // pour les autres ensuite (garde anti-doublon par article+jour). Sans ce
+        // second appel, l'acheteur ne voyait qu'une poignée d'articles au lieu de
+        // toute la liste du besoin net réel.
+        store.autoGeneratePOsFromBesoin()
+        setPendingPOs(store.getPendingPOsForAcheteur())
       } catch { /* offline */ }
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1131,8 +1140,14 @@ export default function MobileAchat({ user }: Props) {
               ) : (
             <div className="flex flex-col gap-2">
               {/* Selection multiple — valider plusieurs PO d'un coup avec leurs valeurs par defaut.
-                  Indisponible si la photo d'achat est obligatoire (regle non contournable en masse). */}
-              {photoAchatObligatoire ? (
+                  Indisponible si la photo d'achat est obligatoire (regle non contournable en masse),
+                  et reservee au super_super_admin ou a un compte qu'il a explicitement autorise
+                  (validation en masse = sans revue individuelle, risque d'erreur a l'echelle). */}
+              {!isSuperAdminOrAuthorized(user) ? (
+                <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "oklch(0.16 0.012 145)", color: "oklch(0.55 0.010 145)" }}>
+                  Validation groupée réservée au Super Admin ou à un compte autorisé. Validez les achats un par un.
+                </p>
+              ) : photoAchatObligatoire ? (
                 <p className="text-[11px] px-3 py-2 rounded-lg" style={{ background: "oklch(0.16 0.012 145)", color: "oklch(0.55 0.010 145)" }}>
                   Photo obligatoire par achat (config) — validation groupée indisponible.
                 </p>

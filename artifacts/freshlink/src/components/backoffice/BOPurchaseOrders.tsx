@@ -1,27 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type PurchaseOrder, type Article, type Fournisseur, type DemandeAchat } from "@/lib/store"
+import { store, type PurchaseOrder, type Article, type Fournisseur, type DemandeAchat, computeCaissesAuto } from "@/lib/store"
 import { sendEmail } from "@/lib/email"
 import { printPO } from "@/lib/print"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
 const fmtDH = (n: number) => n.toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " DH"
 const fmtDate = () => new Date().toLocaleDateString("fr-FR")
-
-// ── Calcul nb caisses pour un article ────────────────────────────────────────
-// Logique: qte / colisageCaisses = nb caisses entières + reste → demi-caisses
-// Ex: 52 kg, caisse=30kg, demi=15kg → 1 grosse caisse (30), 1 demi (15), reste 7 → arrondi a 1 demi
-// On cherche le mix optimal: max caisses grosses, puis demi-caisses pour le reste
-function calcCaisses(qteKg: number, colisageGros = 30, colisageDemi = 15): { gros: number; demi: number; reste: number; totalKg: number } {
-  if (qteKg <= 0 || colisageGros <= 0) return { gros: 0, demi: 0, reste: 0, totalKg: 0 }
-  const gros = Math.floor(qteKg / colisageGros)
-  const resteApresGros = qteKg - gros * colisageGros
-  const demi = colisageDemi > 0 ? Math.ceil(resteApresGros / colisageDemi) : 0
-  const totalKg = gros * colisageGros + demi * colisageDemi
-  const reste = totalKg - qteKg  // excedent (on commande un peu plus pour ne pas manquer)
-  return { gros, demi, reste: Math.max(0, reste), totalKg }
-}
 
 // legacy inline — kept for reference but replaced by lib/print
 function _printPOLegacy(po: PurchaseOrder) {
@@ -305,6 +291,7 @@ export default function BoPurchaseOrders() {
     : String(b.date ?? "").localeCompare(String(a.date ?? "")))
 
   const totalValeur = filtered.reduce((s, o) => s + o.total, 0)
+  const totalTonnage = filtered.reduce((s, o) => s + o.quantite, 0)
   const countOuvert = orders.filter(o => o.statut === "ouvert").length
 
   return (
@@ -331,10 +318,11 @@ export default function BoPurchaseOrders() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
           { label: "Total PO", value: orders.length, sub: "bons de commande", color: "text-primary" },
           { label: "Ouverts", value: countOuvert, sub: "en attente", color: "text-amber-600" },
+          { label: "Tonnage filtré", value: `${totalTonnage.toLocaleString("fr-MA")} kg`, sub: "quantité", color: "text-orange-600" },
           { label: "Valeur filtrée", value: `${totalValeur.toLocaleString("fr-MA")} DH`, sub: "HT", color: "text-primary" },
           { label: "Articles", value: articles.length, sub: "références", color: "text-cyan-600" },
         ].map(k => (
@@ -522,7 +510,7 @@ export default function BoPurchaseOrders() {
             const colGros = art?.colisageCaisses ?? (art?.colisageParUM ?? 30)
             const colDemi = art?.colisageDemiCaisses ?? Math.round(colGros / 2)
             const isKg = art?.unite === "kg"
-            const caisse = isKg ? calcCaisses(Number(fQuantite), colGros, colDemi) : null
+            const caisse = isKg ? computeCaissesAuto(Number(fQuantite), art?.unite, art?.colisageParUM, art?.colisageCaisses, art?.colisageDemiCaisses) : null
             return (
               <div className="flex flex-col gap-3">
                 {/* Montant */}
@@ -647,7 +635,7 @@ export default function BoPurchaseOrders() {
                       const colGros = art?.colisageCaisses ?? (art?.colisageParUM ?? 30)
                       const colDemi = art?.colisageDemiCaisses ?? Math.round(colGros / 2)
                       if (po.articleUnite !== "kg") return <span className="text-xs text-muted-foreground">N/A</span>
-                      const c = calcCaisses(po.quantite, colGros, colDemi)
+                      const c = computeCaissesAuto(po.quantite, po.articleUnite, art?.colisageParUM, art?.colisageCaisses, art?.colisageDemiCaisses)
                       return (
                         <div className="flex flex-col gap-0.5">
                           <div className="flex items-center gap-1 flex-wrap">

@@ -17,7 +17,7 @@ import type { UserRole } from "@/lib/store"
 export type PermKey =
   // Commercial & Commandes
   | "voir_commandes" | "creer_commande" | "modifier_commande" | "supprimer_commande"
-  | "valider_commande" | "appliquer_remise" | "voir_marge"
+  | "valider_commande" | "appliquer_remise" | "voir_marge" | "gerer_documents_commerciaux"
   // Clients
   | "voir_clients" | "creer_client" | "modifier_client" | "supprimer_client"
   | "voir_credit_client" | "modifier_plafond_credit"
@@ -67,6 +67,7 @@ export const PERMISSIONS: PermDef[] = [
   { key: "valider_commande",   category: "Commercial & Commandes", label: "Valider une commande",        desc: "Faire passer une commande au statut validé" },
   { key: "appliquer_remise",   category: "Commercial & Commandes", label: "Appliquer une remise",        desc: "Accorder une remise/promotion sur une commande" },
   { key: "voir_marge",         category: "Commercial & Commandes", label: "Voir la marge",               desc: "Voir le prix d'achat et la marge (réservé encadrement)" },
+  { key: "gerer_documents_commerciaux", category: "Commercial & Commandes", label: "Gérer devis/contrats/factures", desc: "Créer, modifier, transformer, importer, supprimer les documents commerciaux CHR" },
   // Clients
   { key: "voir_clients",           category: "Clients", label: "Voir les clients",             desc: "Consulter les fiches client" },
   { key: "creer_client",           category: "Clients", label: "Créer un client",              desc: "Ajouter une nouvelle fiche client" },
@@ -153,7 +154,7 @@ export const DEFAULT_MATRIX: PermMatrix = {
   super_super_admin: FULL,
   super_admin: FULL,
   admin: cat([
-    "voir_commandes", "creer_commande", "modifier_commande", "valider_commande", "appliquer_remise",
+    "voir_commandes", "creer_commande", "modifier_commande", "valider_commande", "appliquer_remise", "gerer_documents_commerciaux",
     "voir_clients", "creer_client", "modifier_client", "voir_credit_client", "modifier_plafond_credit",
     "voir_tarifs", "modifier_tarifs_segment", "modifier_tarifs_secteur", "modifier_tarifs_echelle", "modifier_tarifs_client_individuel",
     "creer_echelon", "modifier_echelon", "supprimer_echelon", "configurer_attribution_auto",
@@ -171,7 +172,7 @@ export const DEFAULT_MATRIX: PermMatrix = {
     "voir_base_donnees",
   ]),
   resp_commercial: cat([
-    "voir_commandes", "creer_commande", "modifier_commande", "valider_commande", "appliquer_remise",
+    "voir_commandes", "creer_commande", "modifier_commande", "valider_commande", "appliquer_remise", "gerer_documents_commerciaux",
     "voir_clients", "creer_client", "modifier_client", "voir_credit_client",
     "voir_tarifs", "modifier_tarifs_client_individuel",
     "approuver_compte_client", "rejeter_demande_compte", "creer_compte_manuellement",

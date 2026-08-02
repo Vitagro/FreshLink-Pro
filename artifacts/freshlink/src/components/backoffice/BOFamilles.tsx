@@ -12,6 +12,8 @@
 
 import { useState, useMemo } from "react"
 import { store, type Article, type User, getAllFamilles, addCustomFamille, removeCustomFamille, getCustomFamilles, desactiverFamille, FAMILLES_ARTICLES } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 interface Props { user: User }
 
@@ -19,7 +21,7 @@ function norm(s: string): string {
   return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim()
 }
 
-export default function BOFamilles({ user: _user }: Props) {
+export default function BOFamilles({ user }: Props) {
   const [articles, setArticles] = useState<Article[]>(() => store.getArticles())
   const [tick, setTick] = useState(0) // force re-render après create/rename/delete famille perso
   const [selected, setSelected] = useState<string | null>(null)
@@ -92,8 +94,10 @@ export default function BOFamilles({ user: _user }: Props) {
     const newNom = renameValue.trim()
     setRenaming(null)
     if (!newNom || newNom === oldNom) return
+    if (!hasPermission(user.role, "modifier_article")) { logAction(user, "modifier_article", "denied", { type: "famille", label: `${oldNom} -> ${newNom}` }); flash(false, "Action non autorisée."); return }
     const merging = familles.some(f => norm(f.nom) === norm(newNom) && f.nom !== oldNom)
     if (merging && !window.confirm(`« ${newNom} » existe déjà. Fusionner « ${oldNom} » dedans (tous ses articles seront déplacés) ?`)) return
+    logAction(user, "modifier_article", "success", { type: "famille", label: `${oldNom} -> ${newNom}` })
     setBusy(true)
     const touchedIds = store.reassignFamille(oldNom, newNom)
     // Met à jour la liste des familles perso : retire l'ancien nom, ajoute le nouveau si besoin
@@ -108,9 +112,11 @@ export default function BOFamilles({ user: _user }: Props) {
   }
 
   const deleteFamille = (nom: string, isPredefinie: boolean) => {
+    if (!hasPermission(user.role, "supprimer_article")) { logAction(user, "supprimer_article", "denied", { type: "famille", label: nom }); flash(false, "Action non autorisée."); return }
     const count = articles.filter(a => a.famille === nom).length
     if (count > 0) { flash(false, `Impossible : ${count} article(s) utilisent encore « ${nom} ». Réaffectez-les d'abord.`); return }
     if (!window.confirm(`Supprimer la famille « ${nom} » ?`)) return
+    logAction(user, "supprimer_article", "success", { type: "famille", label: nom })
     // Prédéfinie (constante en dur) -> masquée de la liste. Perso -> retirée.
     if (isPredefinie) desactiverFamille(nom)
     else removeCustomFamille(nom)

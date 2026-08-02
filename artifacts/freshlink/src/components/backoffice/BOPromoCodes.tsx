@@ -4,6 +4,9 @@
 // La boutique valide via /api/ext/promo?code=...
 import { useState, useEffect, useCallback } from "react"
 import { Ticket, Plus, Trash2, RefreshCw, Power } from "lucide-react"
+import type { User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 interface Coupon {
   code: string
@@ -19,7 +22,7 @@ interface Coupon {
 
 const EMPTY: Coupon = { code: "", type: "pourcentage", valeur: 10, label: "", actif: true, expiration: "", minCommande: 0, usageMax: 0, usageCount: 0 }
 
-export default function BOPromoCodes() {
+export default function BOPromoCodes({ user }: { user: User }) {
   const [coupons, setCoupons] = useState<Coupon[]>([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState<Coupon>(EMPTY)
@@ -44,6 +47,8 @@ export default function BOPromoCodes() {
     const code = form.code.trim().toUpperCase()
     if (!code) return flash("Code requis")
     if (!(form.valeur > 0)) return flash("Valeur invalide")
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "promo_code", id: code }); return flash("Action non autorisee") }
+    logAction(user, "catalogue_toggle", "success", { type: "promo_code", id: code })
     const payload: Coupon = { ...form, code, usageCount: form.usageCount ?? 0 }
     try {
       const res = await fetch("/api/sync-write", {
@@ -59,6 +64,8 @@ export default function BOPromoCodes() {
   }
 
   const toggle = async (c: Coupon) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "promo_code", id: c.code }); return }
+    logAction(user, "catalogue_toggle", "success", { type: "promo_code", id: c.code, label: !c.actif ? "activation" : "desactivation" })
     await fetch("/api/sync-write", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: "fl_coupons", upserts: [{ id: c.code, payload: { ...c, actif: !c.actif }, updated_at: new Date().toISOString() }] }),
@@ -67,7 +74,9 @@ export default function BOPromoCodes() {
   }
 
   const remove = async (code: string) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "promo_code_suppression", id: code }); return }
     if (!confirm(`Supprimer le code ${code} ?`)) return
+    logAction(user, "catalogue_toggle", "success", { type: "promo_code_suppression", id: code })
     await fetch("/api/sync-write", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: "fl_coupons", deletes: [code] }),

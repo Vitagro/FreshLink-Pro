@@ -707,7 +707,7 @@ export const SEED_ARTICLES: Article[] = [
   },
   {
     id: "seed-art-042", nom: "Céleri Branche", nomAr: "كرفس", famille: "Herbes",
-    unite: "pièce", um: "Botte", colisageParUM: 1,
+    unite: "botte", um: "Botte", colisageParUM: 1,
     stockDisponible: 70, stockDefect: 5, shelfLifeJours: 10, alerteShelfLifeJours: 2,
     prixAchat: 3.0, pvMethode: "pourcentage", pvValeur: 33,
     photo: "https://images.unsplash.com/photo-1615485736407-5bcb4ea3cf40?w=400&h=300&fit=crop&q=80",
@@ -720,7 +720,7 @@ export const SEED_ARTICLES: Article[] = [
   },
   {
     id: "seed-art-043", nom: "Fenouil", nomAr: "بسباس", famille: "Herbes",
-    unite: "pièce", um: "Pièce", colisageParUM: 1,
+    unite: "botte", um: "Botte", colisageParUM: 1,
     stockDisponible: 45, stockDefect: 3, shelfLifeJours: 10, alerteShelfLifeJours: 2,
     prixAchat: 5.0, pvMethode: "pourcentage", pvValeur: 40,
     photo: "https://images.unsplash.com/photo-1615485736407-5bcb4ea3cf40?w=400&h=300&fit=crop&q=80",

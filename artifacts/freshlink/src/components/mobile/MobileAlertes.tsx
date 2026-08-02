@@ -149,7 +149,8 @@ export default function MobileAlertes({ user }: Props) {
 
     // 4. Objectifs journaliers
     const todayStr  = today.toISOString().split("T")[0]
-    const todayCmds = allCommandes.filter(c => c.date === todayStr && c.commercialId === user.id)
+    // Exclut "refuse" (soft-delete) — meme regle que BODashboard/BORecap/MobileObjectifs.
+    const todayCmds = allCommandes.filter(c => c.date === todayStr && c.commercialId === user.id && c.statut !== "refuse")
     const todayCA   = todayCmds.reduce((s, c) => s + c.lignes.reduce((t, l) => t + l.total, 0), 0)
     const todayClients = new Set(todayCmds.map(c => c.clientId)).size
     const objCA     = user.objectifJournalierCA ?? 0

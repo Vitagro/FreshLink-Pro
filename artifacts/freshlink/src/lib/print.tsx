@@ -73,24 +73,27 @@ export interface HRDocData {
   dateEmbauche?: string
 }
 
-// ── Payroll calculations — Droit marocain 2024 (CNSS + AMO + IR) ──────────────
+// ── Payroll calculations — Droit marocain 2026 (CNSS + AMO + IR) ──────────────
+// Meme bareme que BOHRDocuments.tsx (seule source jusqu'ici, dupliquee ici avec
+// des taux 2024 perimes — CNSS 4.48%/AMO 2.26% au lieu de 6.74%/4.52% — un
+// meme salaire brut donnait un net different selon l'ecran d'origine).
 export function calcPayroll(brut: number, avances = 0) {
-  // CNSS salariale: 4.48% plafonnée à 268.80 DH/mois (plafond 6000 DH)
-  const cnss    = Math.min(brut * 0.0448, 268.80)
-  // AMO: 2.26% sans plafond
-  const amo     = brut * 0.0226
-  // Base IR = Brut - CNSS - AMO - Abattement forfaitaire 20% plafon 30 000/an
+  // CNSS salariale : 6.74% plafonnee a 6 000 DH/mois de brut
+  const cnss    = Math.min(brut, 6000) * 0.0674
+  // AMO (CNOPS) : 4.52% sans plafond
+  const amo     = brut * 0.0452
+  // Base IR = Brut - CNSS - AMO - Abattement forfaitaire 20% plafonne 2500 DH/mois
   const brutIR  = brut - cnss - amo
-  const abat    = Math.min(brutIR * 0.20, 2500)
+  const abat    = Math.min(brut * 0.20, 2500)
   const baseIR  = Math.max(0, brutIR - abat)
-  // Barème IR mensuel 2024
+  // Barème IR mensuel 2026
   let ir = 0
   if      (baseIR <= 2500)  ir = 0
-  else if (baseIR <= 4167)  ir = baseIR * 0.10 - 250
-  else if (baseIR <= 5000)  ir = baseIR * 0.20 - 667
-  else if (baseIR <= 6667)  ir = baseIR * 0.30 - 1167
-  else if (baseIR <= 15000) ir = baseIR * 0.34 - 1433
-  else                      ir = baseIR * 0.38 - 2033
+  else if (baseIR <= 4166)  ir = baseIR * 0.10 - 250.00
+  else if (baseIR <= 5000)  ir = baseIR * 0.20 - 666.60
+  else if (baseIR <= 6666)  ir = baseIR * 0.30 - 1166.60
+  else if (baseIR <= 15000) ir = baseIR * 0.34 - 1433.24
+  else                      ir = baseIR * 0.38 - 2033.24
   ir = Math.max(0, ir)
   const totalRetenues = cnss + amo + ir + avances
   const net = Math.max(0, brut - cnss - amo - ir - avances)

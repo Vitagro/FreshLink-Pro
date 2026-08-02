@@ -11,6 +11,24 @@ export default function BORetour() {
 
   const filtered = retours.filter(r => !filter.date || r.date === filter.date)
 
+  // Categorie client (CHR/Marchand/Particulier) par commandeId — necessaire pour
+  // valoriser un retour au prix reellement facture (store.computePV), pas au prix
+  // generique du catalogue qui ignore les prix CHR/Marchand/Particulier surchages.
+  const categorieParCommande = (() => {
+    const clients = store.getClients()
+    const map = new Map<string, "chr" | "marchand" | "particulier" | undefined>()
+    store.getCommandes().forEach(c => {
+      const cat = clients.find(cl => cl.id === c.clientId)?.categorie
+      map.set(c.id, cat)
+    })
+    return map
+  })()
+  const pvForLigne = (l: { articleId: string; commandeId: string }): number => {
+    const art = store.getArticles().find(a => a.id === l.articleId)
+    if (!art) return 0
+    return store.computePV(art, categorieParCommande.get(l.commandeId))
+  }
+
   const handleValider = (id: string) => {
     const retours_ = store.getRetours()
     const r = retours_.find(r => r.id === id)
@@ -19,26 +37,26 @@ export default function BORetour() {
     r.validePar = "magasinier"
     r.dateValidation = store.today()
     // Restore stock — SKIP lines with motifQualite = true (quality issue: product not put back)
-    r.lignes.forEach(l => {
-      if (!l.motifQualite) {
-        store.updateStock(l.articleId, l.quantite)
-      }
-    })
+    // et SKIP entierement en mode crossdocking (pas de stock entrepot a restaurer)
+    if (!store.isCrossdockMode()) {
+      r.lignes.forEach(l => {
+        if (!l.motifQualite) {
+          store.updateStock(l.articleId, l.quantite)
+        }
+      })
+    }
     store.saveRetours(retours_)
     setRetours(store.getRetours())
   }
 
   const totalRetour = filtered.reduce((s, r) =>
-    s + r.lignes.reduce((ls, l) => {
-      const art = store.getArticles().find(a => a.id === l.articleId)
-      const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
-      return ls + l.quantite * pv
-    }, 0), 0)
+    s + r.lignes.reduce((ls, l) => ls + l.quantite * pvForLigne(l), 0), 0)
+  const totalTonnage = filtered.reduce((s, r) => s + r.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
 
   return (
     <div className="flex flex-col gap-5">
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-card rounded-xl border border-border p-4 text-center">
           <p className="text-2xl font-bold text-red-600 font-sans">{filtered.length}</p>
           <p className="text-sm text-muted-foreground font-sans">Retours</p>
@@ -46,6 +64,10 @@ export default function BORetour() {
         <div className="bg-card rounded-xl border border-border p-4 text-center">
           <p className="text-xl font-bold text-orange-600 font-sans">{filtered.filter(r => r.statut === "en_attente").length}</p>
           <p className="text-sm text-muted-foreground font-sans">En attente</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4 text-center">
+          <p className="text-xl font-bold text-orange-700 font-sans">{totalTonnage.toLocaleString("fr-MA")} kg</p>
+          <p className="text-sm text-muted-foreground font-sans">Tonnage</p>
         </div>
         <div className="bg-card rounded-xl border border-border p-4 text-center">
           <p className="text-xl font-bold text-foreground font-sans">{totalRetour.toLocaleString("fr-MA", { minimumFractionDigits: 2 })} DH</p>
@@ -79,11 +101,7 @@ export default function BORetour() {
             {filtered.length === 0 ? (
               <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Aucun retour</td></tr>
             ) : filtered.map(r => {
-              const valeur = r.lignes.reduce((s, l) => {
-                const art = store.getArticles().find(a => a.id === l.articleId)
-                const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
-                return s + l.quantite * pv
-              }, 0)
+              const valeur = r.lignes.reduce((s, l) => s + l.quantite * pvForLigne(l), 0)
               return (
                 <tr key={r.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-3">{r.date}</td>

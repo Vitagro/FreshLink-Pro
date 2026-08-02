@@ -39,6 +39,8 @@ interface BesoinRow extends BesoinLigneEmail {
   selected: boolean
   um?: string             // libelle UM (ex: "Caisse") si l'article en a une
   colisageParUM?: number  // kg par UM — sert au calcul du nombre de caisses
+  colisageCaisses?: number      // kg par caisse gros dediee au caissage achat (prioritaire sur colisageParUM)
+  colisageDemiCaisses?: number  // kg par demi-caisse dediee (si different de colisageCaisses/2)
   articleNomAr?: string
   // Nombre de caisses tel que saisi directement par le commercial sur ses commandes
   // (quantiteUM des lignes de commande). En mode crossdocking le colisage achat differe
@@ -64,9 +66,15 @@ function computeStats(dateDebut: string, dateFin: string = dateDebut): DailyStat
   const totalAchats     = bonsAchat.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0)
   const totalCommandes  = commandes.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite * l.prixVente, 0), 0)
   const totalLivraisons = bls.reduce((s, b) => s + b.montantTotal, 0)
+  // Categorie client (CHR/Marchand/Particulier) par commandeId — pour valoriser un
+  // retour au prix reellement facture (store.computePV), pas au prix generique du
+  // catalogue qui ignore les prix CHR/Marchand/Particulier surchages.
+  const clientsForRetours = store.getClients()
+  const categorieParCommande = new Map<string, "chr" | "marchand" | "particulier" | undefined>()
+  store.getCommandes().forEach(c => categorieParCommande.set(c.id, clientsForRetours.find(cl => cl.id === c.clientId)?.categorie))
   const totalRetours    = retours.reduce((s, r) => s + r.lignes.reduce((ls, l) => {
     const art = articles.find(a => a.id === l.articleId)
-    const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
+    const pv = art ? store.computePV(art, categorieParCommande.get(l.commandeId)) : 0
     return ls + l.quantite * pv
   }, 0), 0)
   const totalCash = bls.filter(b => b.statut === "encaissé").reduce((s, b) => s + b.montantTotal, 0)
@@ -149,9 +157,12 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         const l = r.lignes.find(l => l.articleId === art.id)
         return s + (l?.quantite ?? 0)
       }, 0)
+      // Non clampe a 0 (comme store.computeBesoinNet) : negatif = surplus,
+      // utile pour le suivi/export excel meme si l'UI n'affiche que "Stock OK"
+      // en dessous de 0 (selected/badge restent bases sur > 0, inchanges).
       const besoinNet = crossdock
-        ? Math.max(0, commandeTotal - retourQty)
-        : Math.max(0, commandeTotal - art.stockDisponible - retourQty)
+        ? commandeTotal - retourQty
+        : commandeTotal - art.stockDisponible - retourQty
 
       // Trouver le fournisseur habituel
       const fHabituel = getFournisseurHabituel(art.id)
@@ -172,6 +183,8 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         selected:       besoinNet > 0,
         um:             art.um,
         colisageParUM:  art.colisageParUM,
+        colisageCaisses: art.colisageCaisses,
+        colisageDemiCaisses: art.colisageDemiCaisses,
         articleNomAr:   art.nomAr,
         caissesCommercial,
       }
@@ -487,7 +500,7 @@ export default function BORecap() {
           Selectionne: r.selected ? "oui" : "non",
         }
       }
-      const c = r.besoinNet > 0 ? computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM) : { gros: 0, demi: 0 }
+      const c = r.besoinNet > 0 ? computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM, r.colisageCaisses, r.colisageDemiCaisses) : { gros: 0, demi: 0 }
       return {
         Article: r.articleNom,
         ArticleAr: r.articleNomAr ?? "",
@@ -883,7 +896,7 @@ export default function BORecap() {
                             : <span className="text-muted-foreground">—</span>
                         ) : (
                           r.besoinNet > 0 ? (() => {
-                            const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM)
+                            const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM, r.colisageCaisses, r.colisageDemiCaisses)
                             if (c.gros === 0 && c.demi === 0) return <span className="text-muted-foreground">—</span>
                             return (
                               <span className="font-semibold text-blue-700">

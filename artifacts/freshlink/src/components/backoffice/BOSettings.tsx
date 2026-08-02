@@ -1,8 +1,9 @@
 ﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
-import { store, passwordMatches, type EmailConfig, type MotifRetour, type CompanyConfig, type CompanyContacts, type WorkflowConfig, type WorkflowStep, type ContenantTare, DEFAULT_WORKFLOW_STEPS, type ProcessConfig, DEFAULT_PROCESS_CONFIG, type TransportCompany, ROLE_LABELS, type UserRole, MOBILE_TABS_REGISTRY } from "@/lib/store"
+import { store, passwordMatches, type EmailConfig, type MotifRetour, type CompanyConfig, type CompanyContacts, type WorkflowConfig, type WorkflowStep, type ContenantTare, DEFAULT_WORKFLOW_STEPS, type ProcessConfig, DEFAULT_PROCESS_CONFIG, type TransportCompany, ROLE_LABELS, type UserRole, MOBILE_TABS_REGISTRY, isSuperAdminOrAuthorized } from "@/lib/store"
 import { useRealtimeSync } from "@/lib/supabase/useRealtimeSync"
+import { logAction } from "@/lib/auditLog"
 // EmailJS retiré — l'envoi d'email passe par Resend (serveur, /api/send-email)
 import { createClient } from "@/lib/supabase/client"
 import SupabaseStorageCard from "./SupabaseStorageCard"
@@ -302,7 +303,7 @@ function SiteWebTab({ saved, setSaved }: { saved: string; setSaved: (v: string) 
   )
 }
 
-export default function BOSettings({ user }: { user: { id: string; name: string; role: string; email?: string } }) {
+export default function BOSettings({ user }: { user: { id: string; name: string; role: UserRole; email?: string; authorizedBySuperAdmin?: boolean } }) {
   // --- ALL hooks MUST come before any conditional return (Rules of Hooks) ---
   const [config, setConfig] = useState<EmailConfig>(() => store.getEmailConfig())
   const [contacts, setContacts] = useState<CompanyContacts>(() => store.getCompanyContacts())
@@ -579,6 +580,8 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
 
   const handleClearAll = async () => {
     if (clearTables.size === 0) return
+    if (!isSuperAdminOrAuthorized(user)) { logAction(user, "backup_restore", "denied", { type: "clear_categories", label: `${clearTables.size} categorie(s)` }); return }
+    logAction(user, "backup_restore", "success", { type: "clear_categories", label: `${clearTables.size} categorie(s) (${clearMode})` })
     const isSuperAdmin = user.role === "super_super_admin"
     setShowClearConfirm(false)
 
@@ -648,6 +651,8 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
   ]
 
   const handleWipeAllExceptJawad = async () => {
+    if (!isSuperAdminOrAuthorized(user)) { logAction(user, "backup_restore", "denied", { type: "wipe_all_except_jawad" }); return }
+    logAction(user, "backup_restore", "success", { type: "wipe_all_except_jawad" })
     setWipingAll(true); setShowWipeConfirm(false)
     try {
       // 1. Vider localStorage (toutes les tables, y compris mobile/finance)
@@ -794,7 +799,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
     // Transporteurs : géré dans Dispatch & Logistique → onglet Transporteurs (doublon retiré d'ici)
     { id: "siteweb" as const,       label: "🌐 Site Web",               labelAr: "إعدادات الموقع" },
     { id: "mobile_tabs" as const,   label: "📱 Onglets Mobile",         labelAr: "علامات تبويب الجوال" },
-    ...(user.role === "super_super_admin" ? [{ id: "systeme" as const, label: "⚡ Système", labelAr: "النظام" }] : []),
+    ...(isSuperAdminOrAuthorized(user) ? [{ id: "systeme" as const, label: "⚡ Système", labelAr: "النظام" }] : []),
   ]
 
   return (
@@ -2804,7 +2809,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
       )}
 
       {/* ══ SYSTÈME — super_super_admin only ══════════════════════════════════ */}
-      {tab === "systeme" && user.role === "super_super_admin" && (
+      {tab === "systeme" && isSuperAdminOrAuthorized(user) && (
         <div className="flex flex-col gap-6">
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border border-yellow-300 rounded-2xl p-5 flex items-start gap-4">
             <div className="w-10 h-10 rounded-xl bg-yellow-500 flex items-center justify-center shrink-0">

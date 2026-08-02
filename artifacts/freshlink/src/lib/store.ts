@@ -24,6 +24,24 @@ export function isSuperSuperAdmin(user: { role: string }): boolean {
   return user.role === "super_super_admin"
 }
 
+// Un compte multi-role (roles?: UserRole[], jusqu'a 3 roles — voir BOUsers.tsx
+// "Rôles supplémentaires") doit matcher un filtre par role sur SON role
+// principal ET ses roles supplementaires, sinon il disparait silencieusement
+// des ecrans/notifications qui ne testent que `role`.
+export function userHasRole(user: { role: string; roles?: string[] }, role: string): boolean {
+  return user.role === role || (user.roles?.includes(role) ?? false)
+}
+
+// Verrou dedie aux actions les plus sensibles (reinitialisation des donnees,
+// suppression de client, validation groupee des achats...) : reserve au
+// super_super_admin, sauf si celui-ci a explicitement autorise ce compte
+// precis via le toggle "Autorise par le Super Admin" (BOUsers.tsx, visible
+// uniquement pour super_super_admin). Un role admin/super_admin classique ne
+// suffit plus a lui seul pour ces actions precises.
+export function isSuperAdminOrAuthorized(user: { role: string; authorizedBySuperAdmin?: boolean }): boolean {
+  return user.role === "super_super_admin" || user.authorizedBySuperAdmin === true
+}
+
 export function hasInvestorAccess(user: { role: string }): boolean {
   return user.role === "super_super_admin" || user.role === "super_admin" || user.role === "investisseur"
 }
@@ -48,6 +66,14 @@ export type Civilite = "M." | "Mme" | "Dr." | "Pr."
 export interface User {
   id: string
   name: string
+  // Nom/prenom structures — alimentent `name` (calcule automatiquement) pour
+  // affichage coherent sur les KPI et les donnees RH. Optionnels pour les
+  // comptes legacy qui n'ont que `name`.
+  nom?: string
+  prenom?: string
+  // Identifiant systeme genere automatiquement (prenom.nom) — permet la
+  // connexion sans email pour les comptes terrain/mobile.
+  username?: string
   email: string
   password: string
   civilite?: Civilite        // M. / Mme / Dr. / Pr.
@@ -120,6 +146,11 @@ export interface User {
   // Compte de démonstration — écriture bloquée, visible dans la liste déroulante
   // de connexion. Ne peut être coché qu'à la création par Jawad (super_super_admin).
   isDemo?: boolean
+  // Autorisation individuelle accordee par le super_super_admin pour les
+  // actions les plus sensibles (reinitialisation des donnees, suppression de
+  // client, validation groupee des achats) — voir isSuperAdminOrAuthorized().
+  // Modifiable uniquement par super_super_admin (BOUsers.tsx).
+  authorizedBySuperAdmin?: boolean
 }
 
 // Matrice RBAC + assignation automatique des droits : voir lib/rolePermissions.ts
@@ -1039,22 +1070,35 @@ export interface LignePreparation {
   qtesPreparedParClient?: Record<string, number>
 }
 
-// Capacité (kg) d'une caisse gros / demi-caisse — basée sur le colisage
-// PROPRE À L'ARTICLE (Article.colisageParUM, ex: 28 kg/Caisse), le même que
-// celui déjà utilisé pour l'affichage "X Caisse" (qté / UM) sur la ligne de
-// préparation. Une demi-caisse = la moitié de cette capacité. Si l'article
-// n'a pas de colisage défini, on retombe sur une capacité par défaut (30kg)
-// pour ne jamais renvoyer une division par zéro.
+// Capacité (kg) d'une caisse gros / demi-caisse — priorise Article.colisageCaisses/
+// colisageDemiCaisses (dedies au calcul de caissage PO, ex: 30kg gros / 15kg demi),
+// et retombe sur Article.colisageParUM (le colisage vente, ex: 28 kg/Caisse) si
+// absent, meme celui deja utilise pour l'affichage "X Caisse" (qté / UM) sur la
+// ligne de préparation. Une demi-caisse = la moitié de cette capacité si
+// colisageDemiCaisses n'est pas defini. Si l'article n'a aucun colisage défini,
+// on retombe sur une capacité par défaut (30kg) pour ne jamais renvoyer une
+// division par zéro. `reste`/`totalKg` : excedent commande en arrondissant au
+// caissage superieur (utile pour l'apercu "caissage automatique" du PO).
 export const CAISSE_GROS_CAPACITE_KG_DEFAUT = 30
-export function computeCaissesAuto(qteKg: number, unite?: string, colisageParUM?: number): { gros: number; demi: number } {
-  if (unite && unite !== "kg") return { gros: 0, demi: 0 }
-  if (!qteKg || qteKg <= 0) return { gros: 0, demi: 0 }
-  const grosKg = colisageParUM && colisageParUM > 0 ? colisageParUM : CAISSE_GROS_CAPACITE_KG_DEFAUT
-  const demiKg = grosKg / 2
+export function computeCaissesAuto(
+  qteKg: number,
+  unite?: string,
+  colisageParUM?: number,
+  colisageCaisses?: number,
+  colisageDemiCaisses?: number
+): { gros: number; demi: number; reste: number; totalKg: number } {
+  if (unite && unite !== "kg") return { gros: 0, demi: 0, reste: 0, totalKg: 0 }
+  if (!qteKg || qteKg <= 0) return { gros: 0, demi: 0, reste: 0, totalKg: 0 }
+  const grosKg = colisageCaisses && colisageCaisses > 0
+    ? colisageCaisses
+    : (colisageParUM && colisageParUM > 0 ? colisageParUM : CAISSE_GROS_CAPACITE_KG_DEFAUT)
+  const demiKg = colisageDemiCaisses && colisageDemiCaisses > 0 ? colisageDemiCaisses : grosKg / 2
   const gros = Math.floor(qteKg / grosKg)
-  const reste = qteKg - gros * grosKg
-  const demi = reste > 0 ? Math.ceil(reste / demiKg) : 0
-  return { gros, demi }
+  const resteApresGros = qteKg - gros * grosKg
+  const demi = resteApresGros > 0 ? Math.ceil(resteApresGros / demiKg) : 0
+  const totalKg = gros * grosKg + demi * demiKg
+  const reste = Math.max(0, totalKg - qteKg)
+  return { gros, demi, reste, totalKg }
 }
 
 export type SequenceModePrep = "horaire" | "itineraire"
@@ -2565,6 +2609,32 @@ export function isDemoUser(user: User | null): boolean {
   return DEMO_EMAILS.has((user.email ?? "").toLowerCase())
 }
 
+// Rôles pour lesquels l'email reste obligatoire (comptes admin/responsable —
+// notifications système, réinitialisation mot de passe). Les comptes terrain
+// (prévendeur, magasinier, livreur...) peuvent être créés sans email, avec un
+// simple identifiant système (username) pour se connecter.
+const EMAIL_REQUIRED_ROLES = new Set<UserRole>([
+  "super_super_admin", "super_admin", "admin",
+  "resp_commercial", "resp_logistique", "resp_achat", "rh_manager", "chef_depot", "team_leader",
+])
+export function roleRequiresEmail(role: UserRole): boolean {
+  return EMAIL_REQUIRED_ROLES.has(role)
+}
+
+// Génère un identifiant système unique (prenom.nom, sans accents/espaces) —
+// utilisé comme identifiant de connexion pour les comptes sans email.
+export function generateUsername(prenom: string, nom: string, existingUsernames: string[]): string {
+  const clean = (s: string) => s
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "")
+  const base = [clean(prenom), clean(nom)].filter(Boolean).join(".") || "user"
+  const used = new Set(existingUsernames.map(u => u.toLowerCase()))
+  if (!used.has(base)) return base
+  let i = 2
+  while (used.has(`${base}${i}`)) i++
+  return `${base}${i}`
+}
+
 // Wraps a write function — silently no-ops for demo users
 function guardWrite<T extends unknown[]>(
   fn: (...args: T) => void,
@@ -2777,6 +2847,7 @@ export const store = {
       const idMatch =
         (u.email ?? "").toLowerCase() === id ||
         (u.name ?? "").toLowerCase() === id ||
+        (u.username ?? "").toLowerCase() === id ||
         (!!u.telephone && idPhone.length >= 8 && normPhone((u.telephone ?? "").toLowerCase()) === idPhone)
       if (!idMatch || !u.actif) return false
       // Check all password variants
@@ -2795,7 +2866,8 @@ export const store = {
     const u = users.find(u => {
       const idMatch =
         (u.email ?? "").toLowerCase() === identifier.toLowerCase() ||
-        (u.name ?? "").toLowerCase() === identifier.toLowerCase()
+        (u.name ?? "").toLowerCase() === identifier.toLowerCase() ||
+        (u.username ?? "").toLowerCase() === identifier.toLowerCase()
       return idMatch && u.actif
     })
     if (!u) return null
@@ -3590,11 +3662,12 @@ export const store = {
       yearCounters[y]++
       return `BL-${y}-${String(yearCounters[y]).padStart(4, "0")}`
     }
+    const tauxTVA = store.getFiscalConfig().tauxTVA
     let count = 0
     commandes.forEach(commande => {
-      const tva = 19
+      const tva = tauxTVA
       const montantTotal = commande.lignes.reduce((s, l) => s + l.quantite * (l.prixVente ?? l.prixUnitaire ?? 0), 0)
-      const montantTTC = Math.round(montantTotal * (1 + tva / 100))
+      const montantTTC = Math.round(montantTotal * (1 + tva / 100) * 100) / 100
       const clientRecord = clients.find(cl => cl.id === commande.clientId)
       const heure = new Date().toTimeString().slice(0, 5)
       const existingBL = store.getBonsLivraison().find(b => b.commandeId === commande.id)
@@ -3834,6 +3907,9 @@ export const store = {
   saveTransferts: (t: TransfertStock[]) => setLS("fl_transferts", t),
   addTransfert: (t: TransfertStock) => {
     const ts = store.getTransferts(); ts.push(t); store.saveTransferts(ts)
+    // Pas de mouvement de stock entrepot en mode crossdocking (rien a transferer) —
+    // le transfert reste enregistre pour la tracabilite, sans impact sur stockDisponible/stockDefect.
+    if (store.isCrossdockMode()) return
     if (t.sens === "conforme_vers_defect") {
       store.updateStock(t.articleId, -t.quantite, false)
       store.updateStock(t.articleId, t.quantite, true)
@@ -4141,7 +4217,7 @@ export const store = {
     return `${prefix}-${seq}` // e.g. "FAC-2603-001"
   },
 
-  // Commande number: CMD-260323-001
+  // Commande number: CMD-260323-001-A1B2
   genCommande: (): string => {
     const now = new Date()
     const yy = String(now.getFullYear()).slice(-2)
@@ -4151,7 +4227,15 @@ export const store = {
     const cmds = getLS<Commande[]>("fl_commandes", [])
     const todayCmds = cmds.filter(c => c.id.startsWith(prefix))
     const seq = String(todayCmds.length + 1).padStart(3, "0")
-    return `${prefix}-${seq}` // e.g. "CMD-260323-001"
+    // Suffixe anti-collision : le "seq" est calcule depuis le cache local de
+    // CET appareil (mobile prevendeur ou BO), qui n'est jamais parfaitement
+    // synchronise avec les autres (sync asynchrone, pas de compteur atomique
+    // cote serveur). Deux appareils creant chacun une commande le meme jour
+    // pouvaient calculer le meme seq pour DEUX commandes differentes ; comme
+    // Supabase fait un upsert par id, la seconde ecrasait silencieusement la
+    // premiere (perte de commande, ex: "Driss" remplace par "Attar Hassan").
+    const rnd = Math.random().toString(36).slice(2, 6).toUpperCase()
+    return `${prefix}-${seq}-${rnd}` // e.g. "CMD-260323-001-A1B2"
   },
 
   // Date calendaire LOCALE (pas toISOString(), qui est en UTC — au Maroc
@@ -4582,9 +4666,9 @@ export const DEFAULT_CUTOFFS: CutoffNotification[] = [
   { id: "co8",  label: "Fin préparation (clôture)", time: "18:00", message: "🔒 Clôture préparation : contrôlez les caisses avant chargement.", active: true, roles: ["magasinier", "ctrl_prep"] },
   { id: "co21", label: "Fin chargement", time: "18:30", message: "🚚 Fin chargement : véhicules chargés, vérifiez le manifeste.", active: true, roles: ["magasinier", "ctrl_prep", "dispatcheur", "resp_logistique"] },
   // ── Dispatch / Livraison ──
-  { id: "co22", label: "Départ 1 (livraison)", time: "06:30", message: "🚐 Départ tournée 1 : partez selon votre feuille de route.", active: true, roles: ["livreur", "dispatcheur"] },
-  { id: "co9",  label: "Tournées prêtes", time: "07:00", message: "Tournées prêtes : récupérez votre feuille de route et partez.", active: true, roles: ["livreur", "dispatcheur"] },
-  { id: "co10", label: "Retour dépôt", time: "19:00", message: "Retour dépôt : déposez caisses, retours et encaissements du jour.", active: true, roles: ["livreur", "dispatcheur", "resp_logistique"] },
+  { id: "co22", label: "Départ 1 (livraison)", time: "06:30", message: "🚐 Départ tournée 1 : partez selon votre feuille de route.", active: true, roles: ["livreur", "conducteur", "dispatcheur"] },
+  { id: "co9",  label: "Tournées prêtes", time: "07:00", message: "Tournées prêtes : récupérez votre feuille de route et partez.", active: true, roles: ["livreur", "conducteur", "dispatcheur"] },
+  { id: "co10", label: "Retour dépôt", time: "19:00", message: "Retour dépôt : déposez caisses, retours et encaissements du jour.", active: true, roles: ["livreur", "conducteur", "dispatcheur", "resp_logistique"] },
   // ── Caisse / Finance ──
   { id: "co11", label: "Cut-off caisse", time: "18:30", message: "Cut-off caisse : transmettez les encaissements pour clôture.", active: true, roles: ["cash_man"] },
   { id: "co12", label: "Clôture financière", time: "19:30", message: "Clôture financière : rapprochez caisse, BL et crédits.", active: true, roles: ["financier", "comptable"] },

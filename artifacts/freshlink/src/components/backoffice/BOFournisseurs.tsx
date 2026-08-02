@@ -4,9 +4,11 @@ import { useState, useEffect } from "react"
 import {
   store, type Fournisseur, type ItinerairePoint,
   SPECIALITES_FRUITS_LEGUMES, MODALITE_LABELS, type ModalitePaiement,
-  FOURNISSEUR_TYPE_LABELS, type FournisseurType,
+  FOURNISSEUR_TYPE_LABELS, type FournisseurType, type UserRole,
 } from "@/lib/store"
 import BOFournisseurDetail from "./BOFournisseurDetail"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 const JOURS = ["Dimanche","Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"]
 
@@ -30,7 +32,7 @@ async function pushFournisseur(f: Fournisseur): Promise<boolean> {
 
 const emptyPoint = (): ItinerairePoint => ({ nom: "", lat: undefined, lng: undefined, jour: "", heureDepart: "", heureArrivee: "" })
 
-export default function BOFournisseurs({ user }: { user: { id: string; role: string } }) {
+export default function BOFournisseurs({ user }: { user: { id: string; name: string; role: UserRole } }) {
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Fournisseur | null>(null)
@@ -88,6 +90,8 @@ export default function BOFournisseurs({ user }: { user: { id: string; role: str
   }
 
   const handleDelete = (id: string) => {
+    if (!hasPermission(user.role, "approuver_compte_fournisseur")) { logAction(user, "approuver_compte_fournisseur", "denied", { type: "fournisseur_suppression", id }); return }
+    logAction(user, "approuver_compte_fournisseur", "success", { type: "fournisseur_suppression", id })
     store.deleteFournisseur(id)
     fetch("/api/sync-write", {
       method: "POST", headers: { "Content-Type": "application/json" },

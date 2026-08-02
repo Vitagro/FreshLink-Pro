@@ -67,18 +67,26 @@ export default function BOWebIntegration({ user }: Props) {
   }
 
   const handleGenerateKey = () => {
+    if (!hasPermission(user.role, "modifier_api_config")) { logAction(user, "modifier_api_config", "denied"); return }
     if (!window.confirm("Générer une nouvelle clé API ? L'ancienne clé sera invalidée immédiatement.")) return
+    logAction(user, "modifier_api_config", "success")
     patch({ apiKey: (store as any).generateApiKey() })
   }
 
   const addOrigin = () => {
     if (!newOrigin.trim()) return
+    if (!hasPermission(user.role, "modifier_api_config")) { logAction(user, "modifier_api_config", "denied"); return }
+    logAction(user, "modifier_api_config", "success")
     const url = newOrigin.trim().replace(/\/$/, "")
     if (!cfg.allowedOrigins.includes(url)) patch({ allowedOrigins: [...cfg.allowedOrigins, url] })
     setNewOrigin("")
   }
 
-  const removeOrigin = (o: string) => patch({ allowedOrigins: cfg.allowedOrigins.filter(x => x !== o) })
+  const removeOrigin = (o: string) => {
+    if (!hasPermission(user.role, "modifier_api_config")) { logAction(user, "modifier_api_config", "denied"); return }
+    logAction(user, "modifier_api_config", "success")
+    patch({ allowedOrigins: cfg.allowedOrigins.filter(x => x !== o) })
+  }
 
   const runLiveTest = async () => {
     setLiveTestRunning(true)

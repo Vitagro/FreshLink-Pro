@@ -111,8 +111,10 @@ export default function MobileMagasinier({ user }: Props) {
       const bons = store.getBonsAchat().filter(b => bonStatuts.has(b.statut))
       const bonItems = bons.map(b => bonToItem(b, arts))
 
-      // All POs that are envoyé or receptionné
-      const poStatuts = new Set(["envoyé", "receptionné"])
+      // All POs receptionnables — "ouvert" inclus (comme BOReception.tsx),
+      // sinon un PO encore "ouvert" est receptionnable depuis le BO mais
+      // invisible ici, alors que c'est cet ecran que le magasinier utilise.
+      const poStatuts = new Set(["envoyé", "ouvert", "receptionné"])
       const pos = store.getPurchaseOrders().filter(p => poStatuts.has(p.statut))
       const poItems = pos.map(p => poToItem(p, arts))
 

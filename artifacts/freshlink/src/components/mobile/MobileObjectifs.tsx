@@ -93,7 +93,10 @@ export default function MobileObjectifs({ user }: Props) {
     })
   }, [])
 
-  const myCommandes = commandes.filter(c => c.commercialId === user.id)
+  // Exclut "refuse" (commande soft-supprimee par le prevendeur) — meme regle
+  // que BODashboard.tsx/BORecap.tsx (commandesActives) : sinon une commande
+  // annulee gonfle encore l'objectif du jour sur le telephone du prevendeur.
+  const myCommandes = commandes.filter(c => c.commercialId === user.id && c.statut !== "refuse")
   const cdJ = myCommandes.filter(c => c.date === today)
   const cdW = myCommandes.filter(c => c.date >= week.start && c.date <= week.end)
   const cdM = myCommandes.filter(c => c.date >= month.start && c.date <= month.end)

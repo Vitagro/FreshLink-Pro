@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { store, type User, type Trip, type Commande, type ContenantTare, type BonPreparation } from "@/lib/store"
+import { store, type User, type Trip, type Commande, type ContenantTare, type BonPreparation, computeCaissesAuto } from "@/lib/store"
 
 interface Props { user: User }
 
@@ -39,15 +39,6 @@ interface TripControl {
   commandes: CommandeQR[]
   submitted: boolean
   sourcePrep: string | null
-}
-
-function calcCaissesSuggestion(qte: number, colGros: number, colDemi: number) {
-  if (qte <= 0 || colGros <= 0) return { gros: 0, demi: 0, reste: 0, totalKg: 0 }
-  const gros = Math.floor(qte / colGros)
-  const resteApresGros = qte - gros * colGros
-  const demi = colDemi > 0 ? Math.ceil(resteApresGros / colDemi) : 0
-  const totalKg = gros * colGros + demi * colDemi
-  return { gros, demi, reste: totalKg - qte, totalKg }
 }
 
 // ── Tiny QR-code generator (pure JS, no library needed) ──────────────────────
@@ -655,7 +646,7 @@ export default function MobileControlPrep({ user }: Props) {
 
                   {/* Caisse suggestion */}
                   {line.unite === "kg" && line.colisageCaisses && line.colisageCaisses > 0 && (() => {
-                    const sugg = calcCaissesSuggestion(line.qteAttendue, line.colisageCaisses!, line.colisageDemiCaisses ?? Math.round(line.colisageCaisses!/2))
+                    const sugg = computeCaissesAuto(line.qteAttendue, line.unite, line.colisageParUM, line.colisageCaisses, line.colisageDemiCaisses)
                     return (
                       <div className="bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-xs text-amber-800">

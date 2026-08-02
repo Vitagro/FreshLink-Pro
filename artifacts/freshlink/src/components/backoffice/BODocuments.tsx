@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { store, isClientVisible, type CompanyConfig, type Client } from "@/lib/store"
+import { store, isClientVisible, type CompanyConfig, type Client, type UserRole } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import ComboBox, { type ComboItem } from "@/components/ui/ComboBox"
 
 // ──────────────────────────────────────────────────────────────
@@ -631,7 +633,7 @@ function shareEmail(doc: Document, company: CompanyConfig) {
 // COMPOSANT PRINCIPAL
 // ──────────────────────────────────────────────────────────────
 
-export default function BODocuments({ user }: { user: { id: string; name: string; role: string } }) {
+export default function BODocuments({ user }: { user: { id: string; name: string; role: UserRole } }) {
   const [docs, setDocs]       = useState<Document[]>([])
   const [clients, setClients] = useState<ClientRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -745,6 +747,8 @@ export default function BODocuments({ user }: { user: { id: string; name: string
   }
 
   const handleSave = async (doc: Document) => {
+    if (!hasPermission(user.role, "gerer_documents_commerciaux")) { logAction(user, "gerer_documents_commerciaux", "denied"); return }
+    logAction(user, "gerer_documents_commerciaux", "success", { type: doc.type_doc, id: doc.id, label: doc.client_nom })
     setSaving(true)
     try {
       // 1. Générer numéro (RPC ou fallback local)
@@ -785,6 +789,8 @@ export default function BODocuments({ user }: { user: { id: string; name: string
 
   const handleTransform = async (doc: Document) => {
     if (doc.type_doc !== "devis") return
+    if (!hasPermission(user.role, "gerer_documents_commerciaux")) { logAction(user, "gerer_documents_commerciaux", "denied"); return }
+    logAction(user, "gerer_documents_commerciaux", "success", { type: "devis→contrat", id: doc.id, label: doc.client_nom })
     const newDoc: Document = {
       ...doc,
       id: genId(),
@@ -807,7 +813,9 @@ export default function BODocuments({ user }: { user: { id: string; name: string
   }
 
   const handleDelete = async (id: string) => {
+    if (!hasPermission(user.role, "gerer_documents_commerciaux")) { logAction(user, "gerer_documents_commerciaux", "denied"); return }
     if (!confirm("Supprimer ce document ?")) return
+    logAction(user, "gerer_documents_commerciaux", "success", { type: "document", id })
     // Supprime côté Supabase (service-role) + local
     await fetch("/api/sync-write", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -835,6 +843,8 @@ export default function BODocuments({ user }: { user: { id: string; name: string
   }
 
   const handleImportFile = async (file: File) => {
+    if (!hasPermission(user.role, "gerer_documents_commerciaux")) { logAction(user, "gerer_documents_commerciaux", "denied"); return }
+    logAction(user, "gerer_documents_commerciaux", "success", { type: "import", label: file.name })
     try {
       const text = await file.text()
       const parsed = JSON.parse(text)
@@ -856,11 +866,13 @@ export default function BODocuments({ user }: { user: { id: string; name: string
   }
 
   const handleUpload = async (docId: string, file: File) => {
+    if (!hasPermission(user.role, "gerer_documents_commerciaux")) { logAction(user, "gerer_documents_commerciaux", "denied"); return }
     if (file.size > 5 * 1024 * 1024) {
       setMsg({ ok: false, text: "Fichier trop volumineux (max 5 Mo)." })
       setTimeout(() => setMsg(null), 3000)
       return
     }
+    logAction(user, "gerer_documents_commerciaux", "success", { type: "piece_jointe", id: docId, label: file.name })
     setUploading(true)
     const reader = new FileReader()
     reader.onload = async () => {

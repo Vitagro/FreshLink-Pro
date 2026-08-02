@@ -151,7 +151,10 @@ export default function BOReception({ user }: { user: { id: string; name: string
     if (statut === "validée") {
       store.updateBonAchat(selectedBon.id, { statut: "receptionné" })
     }
-    lignes.forEach(l => { if (l.quantiteRecue > 0) store.updateStock(l.articleId, l.quantiteRecue) })
+    // Pas de credit stock en mode crossdocking (marchandise triee/expediee direct)
+    if (!store.isCrossdockMode()) {
+      lignes.forEach(l => { if (l.quantiteRecue > 0) store.updateStock(l.articleId, l.quantiteRecue) })
+    }
     // Record caisse mouvement (entree a la reception)
     if (totalGros > 0 || totalDemi > 0) {
       store.addCaisseMouvement({
@@ -236,7 +239,7 @@ export default function BOReception({ user }: { user: { id: string; name: string
     if (statut === "validée") {
       store.updatePurchaseOrder(selectedPO.id, { statut: "receptionné" })
     }
-    if (qteRecue > 0) store.updateStock(selectedPO.articleId, qteRecue)
+    if (qteRecue > 0 && !store.isCrossdockMode()) store.updateStock(selectedPO.articleId, qteRecue)
     if (art && prixAchat > 0) {
       store.addHistoriquePrixAchat(selectedPO.articleId, {
         date: new Date().toISOString(),
@@ -293,8 +296,9 @@ export default function BOReception({ user }: { user: { id: string; name: string
       lignes, statut: "validée", operateurId: user.id,
     }
     store.addReception(r)
+    const crossdock = store.isCrossdockMode()
     lignes.forEach(l => {
-      if (l.quantiteRecue > 0) store.updateStock(l.articleId, l.quantiteRecue)
+      if (l.quantiteRecue > 0 && !crossdock) store.updateStock(l.articleId, l.quantiteRecue)
       if (l.prixAchat > 0 && manuelFournisseur) {
         store.addHistoriquePrixAchat(l.articleId, {
           date: new Date().toISOString(),

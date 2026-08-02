@@ -20,6 +20,8 @@ import {
   buildHRWhatsAppText,
   type HRDocData,
 } from "@/lib/print"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -661,7 +663,9 @@ export default function BOHRDocuments({ user }: { user: User }) {
   }
 
   const deleteSal = (id: string) => {
+    if (!hasPermission(user.role, "gerer_salaires")) { logAction(user, "gerer_salaires", "denied", { type: "salarie_suppression", id }); return }
     if (!confirm("Supprimer ce salarie ?")) return
+    logAction(user, "gerer_salaires", "success", { type: "salarie_suppression", id })
     store.deleteSalarie(id)
     reloadSalaries()
   }
@@ -738,6 +742,9 @@ export default function BOHRDocuments({ user }: { user: User }) {
   }
 
   const deleteDoc = (id: string) => {
+    if (!hasPermission(user.role, "gerer_contrats")) { logAction(user, "gerer_contrats", "denied", { type: "hr_doc_suppression", id }); return }
+    if (!confirm("Supprimer ce document ?")) return
+    logAction(user, "gerer_contrats", "success", { type: "hr_doc_suppression", id })
     const updated = docs.filter(d => d.id !== id)
     saveDocs(updated); setDocs(updated)
   }

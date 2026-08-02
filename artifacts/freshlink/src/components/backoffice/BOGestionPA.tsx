@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react"
 import { store, type User, type Article, paDeviationConfirmMessage } from "@/lib/store"
+import { logAction } from "@/lib/auditLog"
 
 // ── Cycle "commande" (confirmé par le client, même règle que BOCommandesUnifiees) ──
 // La collecte des commandes pour un jour J court de [J-1 heureDebut] à [J
@@ -119,6 +120,10 @@ export default function BOGestionPA({ user }: { user: User }) {
       }
       if (changed.length) {
         store.saveArticles(all); setArticles(all)
+        // Import en masse du PA (potentiellement tout le catalogue) — trace
+        // dans le journal d'activite, meme si l'acces a l'ecran est deja
+        // restreint (canEdit) : c'est une mutation a fort impact.
+        logAction(user, "modifier_article", "success", { type: "import_pa_masse", label: `${changed.length} article(s)` })
         const db = await import("@/lib/supabase/db")
         for (const a of changed) { try { await db.upsertArticle(a) } catch { /* best-effort */ } }
       }
