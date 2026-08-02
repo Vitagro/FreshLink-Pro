@@ -514,7 +514,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   moteur_commercial: (_u) => <BOMoteurCommercialV3 />,
   pa_historique:     (_u) => <BOPaHistoriqueV3 />,
   gestion_pa:        (u)  => <BOGestionPA user={u} />,
-  gifts_v3:          (_u) => <BOGiftsV3 />,
+  gifts_v3:          (u) => <BOGiftsV3 user={u} />,
   loterie:           (u)  => <BOLoterie user={u} />,
   commandes_unifiees:  (u) => <BOCommandesUnifiees user={u} />,
   alertes_clients:     (u) => <BOAlertesClients user={u} />,

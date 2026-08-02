@@ -38,7 +38,10 @@ async function registerBiometric(user: User): Promise<boolean> {
         rp: { name: "FreshLink Pro", id: window.location.hostname },
         user: {
           id: new TextEncoder().encode(user.id),
-          name: user.email,
+          // name doit etre un DOMString non vide (spec WebAuthn) — les comptes
+          // terrain/mobile peuvent desormais exister sans email (username genere
+          // a la place), d'ou le repli.
+          name: user.email || user.username || user.name,
           displayName: user.name,
         },
         pubKeyCredParams: [

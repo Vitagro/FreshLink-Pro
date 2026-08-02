@@ -3639,11 +3639,12 @@ export const store = {
       yearCounters[y]++
       return `BL-${y}-${String(yearCounters[y]).padStart(4, "0")}`
     }
+    const tauxTVA = store.getFiscalConfig().tauxTVA
     let count = 0
     commandes.forEach(commande => {
-      const tva = 19
+      const tva = tauxTVA
       const montantTotal = commande.lignes.reduce((s, l) => s + l.quantite * (l.prixVente ?? l.prixUnitaire ?? 0), 0)
-      const montantTTC = Math.round(montantTotal * (1 + tva / 100))
+      const montantTTC = Math.round(montantTotal * (1 + tva / 100) * 100) / 100
       const clientRecord = clients.find(cl => cl.id === commande.clientId)
       const heure = new Date().toTimeString().slice(0, 5)
       const existingBL = store.getBonsLivraison().find(b => b.commandeId === commande.id)

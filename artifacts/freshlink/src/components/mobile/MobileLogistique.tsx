@@ -410,9 +410,9 @@ export default function MobileLogistique({ user }: Props) {
     const commande = store.getCommandes().find(c => c.id === commandeId)
     if (!commande) return
 
-    const tva = 19
+    const tva = store.getFiscalConfig().tauxTVA
     const montantTotal = commande.lignes.reduce((s, l) => s + l.quantite * (l.prixVente ?? l.prixUnitaire ?? 0), 0)
-    const montantTTC = Math.round(montantTotal * (1 + tva / 100))
+    const montantTTC = Math.round(montantTotal * (1 + tva / 100) * 100) / 100
 
     // ── Auto-fill livreur from active Trip, and client from store ─────────────
     const livreurNomFinal = activeTrip

@@ -601,6 +601,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
   }
   const bulkUpdateStatut = async (newStatut: string) => {
     if (bulkBusy || !newStatut || selectedCmds.length === 0) return // anti double-clic
+    if (!hasPermission(user.role, "valider_commande")) { logAction(user, "valider_commande", "denied", { type: "commande", label: `${selectedCmds.length} commande(s) → ${newStatut}` }); return }
+    logAction(user, "valider_commande", "success", { type: "commande", label: `${selectedCmds.length} commande(s) → ${newStatut}` })
     setBulkBusy(true)
     try {
       // Grouper par table — sync-write cible une seule table par appel
