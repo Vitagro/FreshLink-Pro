@@ -179,6 +179,68 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
     .filter(r => r.commandeTotal > 0)
 }
 
+interface EcartRow {
+  articleId: string
+  articleNom: string
+  articleNomAr?: string
+  unite: string
+  qteAchat: number       // quantite achetee via PO (statut envoye/receptionne)
+  valeurAchat: number    // total achete (PO.total)
+  qtePrepare: number     // quantite reellement preparee (BonPreparation valide)
+  valeurPrepare: number  // qtePrepare valorisee au prix d'achat catalogue (cout de revient)
+  ecartQte: number       // qtePrepare - qteAchat
+  ecartValeur: number    // valeurPrepare - valeurAchat
+}
+
+/**
+ * Rapport d'écart Achat vs Préparation (mode crossdocking) :
+ * compare ce qui a ete achete via PO (acheteur) a ce qui a ete reellement
+ * prepare/charge par la logistique sur le meme intervalle — permet de
+ * detecter les manques ou surplus entre l'achat et la preparation, sans
+ * jamais passer par un stock entrepot intermediaire.
+ */
+function computeEcartRows(dateDebut: string, dateFin: string): EcartRow[] {
+  const articles = store.getArticles()
+  const inRange = (d: string) => d >= dateDebut && d <= dateFin
+
+  const pos = store.getPurchaseOrders().filter(po => inRange(po.date) && (po.statut === "envoyé" || po.statut === "receptionné"))
+  const preps = store.getBonsPreparation().filter(bp => inRange(bp.date) && bp.statut === "valide")
+
+  const achatByArticle = new Map<string, { qte: number; valeur: number }>()
+  pos.forEach(po => {
+    const cur = achatByArticle.get(po.articleId) ?? { qte: 0, valeur: 0 }
+    cur.qte += po.quantite
+    cur.valeur += po.total
+    achatByArticle.set(po.articleId, cur)
+  })
+
+  const prepareByArticle = new Map<string, number>()
+  preps.forEach(bp => bp.lignes.forEach(l => {
+    prepareByArticle.set(l.articleId, (prepareByArticle.get(l.articleId) ?? 0) + l.qtePrepared)
+  }))
+
+  const articleIds = new Set<string>([...achatByArticle.keys(), ...prepareByArticle.keys()])
+
+  return [...articleIds].map((articleId): EcartRow => {
+    const art = articles.find(a => a.id === articleId)
+    const achat = achatByArticle.get(articleId) ?? { qte: 0, valeur: 0 }
+    const qtePrepare = prepareByArticle.get(articleId) ?? 0
+    const valeurPrepare = qtePrepare * (art?.prixAchat ?? 0)
+    return {
+      articleId,
+      articleNom: art?.nom ?? pos.find(p => p.articleId === articleId)?.articleNom ?? articleId,
+      articleNomAr: art?.nomAr,
+      unite: art?.unite ?? pos.find(p => p.articleId === articleId)?.articleUnite ?? "kg",
+      qteAchat: achat.qte,
+      valeurAchat: achat.valeur,
+      qtePrepare,
+      valeurPrepare,
+      ecartQte: qtePrepare - achat.qte,
+      ecartValeur: valeurPrepare - achat.valeur,
+    }
+  }).sort((a, b) => Math.abs(b.ecartQte) - Math.abs(a.ecartQte))
+}
+
 /** Regroupe les lignes besoin par fournisseur */
 function groupByFournisseur(
   rows: BesoinRow[],
@@ -221,7 +283,12 @@ export default function BORecap() {
   const [besoinHeureFin, setBesoinHeureFin]     = useState("")
 
   const [rows, setRows]                   = useState<BesoinRow[]>(() => computeBesoinRows(today, today, "", ""))
-  const [activeTab, setActiveTab]         = useState<"recap" | "besoin" | "config">("recap")
+  const [activeTab, setActiveTab]         = useState<"recap" | "besoin" | "ecart" | "config">("recap")
+
+  // ── Écart Achat / Préparation (mode crossdocking) ──────────────────────────
+  const [ecartDateDebut, setEcartDateDebut] = useState(today)
+  const [ecartDateFin, setEcartDateFin]     = useState(today)
+  const [ecartRows, setEcartRows]           = useState<EcartRow[]>(() => computeEcartRows(today, today))
 
   // --- Recap send state ---
   const [recapTo, setRecapTo]             = useState(emailCfg.recap)
@@ -262,7 +329,8 @@ export default function BORecap() {
   const refreshAll = useCallback(() => {
     setStats(computeStats(selectedDate, selectedDateFin))
     setRows(computeBesoinRows(besoinDateDebut, besoinDateFin, besoinHeureDebut, besoinHeureFin))
-  }, [selectedDate, selectedDateFin, besoinDateDebut, besoinDateFin, besoinHeureDebut, besoinHeureFin])
+    setEcartRows(computeEcartRows(ecartDateDebut, ecartDateFin))
+  }, [selectedDate, selectedDateFin, besoinDateDebut, besoinDateFin, besoinHeureDebut, besoinHeureFin, ecartDateDebut, ecartDateFin])
 
   useEffect(() => { refreshAll() }, [refreshAll])
 
@@ -491,6 +559,9 @@ export default function BORecap() {
   const TABS = [
     { id: "recap" as const,  label: "Récap journalier", icon: "📊" },
     { id: "besoin" as const, label: "Besoin d'achat", icon: "🛒" },
+    // Rapport specifique au flux crossdocking (achat PO -> preparation directe,
+    // sans stock entrepot) — inutile en mode normal, donc masque.
+    ...(crossdock ? [{ id: "ecart" as const, label: "Écart Achat/Prép", icon: "⚖️" }] : []),
     { id: "config" as const, label: "Configuration", icon: "⚙️" },
   ]
 
@@ -964,6 +1035,81 @@ export default function BORecap() {
                 </pre>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════ ÉCART ACHAT / PRÉPARATION (crossdocking) ═══════════════ */}
+      {activeTab === "ecart" && crossdock && (
+        <div className="flex flex-col gap-5">
+          <div>
+            <h3 className="font-semibold text-foreground">
+              Écart Achat / Préparation — {ecartDateDebut === ecartDateFin ? ecartDateDebut : `${ecartDateDebut} → ${ecartDateFin}`}
+            </h3>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Compare ce qui a été acheté (PO acheteur) à ce qui a été réellement préparé/chargé par la logistique —
+              pas de stock entrepôt intermédiaire en crossdocking, donc tout écart signale un manque ou un surplus à traiter.
+            </p>
+          </div>
+
+          {/* Intervalle date */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-sm text-muted-foreground">Du :</label>
+            <input type="date" value={ecartDateDebut} max={ecartDateFin}
+              onChange={e => setEcartDateDebut(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label className="text-sm text-muted-foreground">Au :</label>
+            <input type="date" value={ecartDateFin} min={ecartDateDebut}
+              onChange={e => setEcartDateFin(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            <button onClick={refreshAll}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm hover:bg-muted">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+              Recalculer
+            </button>
+            {(ecartDateDebut !== today || ecartDateFin !== today) && (
+              <button onClick={() => { setEcartDateDebut(today); setEcartDateFin(today) }}
+                className="px-3 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100">
+                ↺ Aujourd&apos;hui
+              </button>
+            )}
+          </div>
+
+          {ecartRows.length === 0 ? (
+            <div className="bg-card rounded-xl border border-border p-10 text-center">
+              <svg className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              <p className="text-muted-foreground text-sm">Aucun achat ni préparation sur cet intervalle.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-sm font-sans">
+                <thead>
+                  <tr className="bg-muted">
+                    {["Article", "Acheté (PO)", "Préparé", "Écart qté", "Écart valeur"].map(h => (
+                      <th key={h} className="text-left px-3 py-3 text-muted-foreground font-medium text-xs uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {ecartRows.map(r => (
+                    <tr key={r.articleId} className={`border-t border-border transition-colors ${r.ecartQte !== 0 ? "bg-amber-50/50" : "hover:bg-muted/20"}`}>
+                      <td className="px-3 py-3 font-semibold text-foreground">
+                        {r.articleNom}
+                        {r.articleNomAr && <span className="block text-xs font-normal text-muted-foreground font-arabic" dir="rtl" lang="ar">{r.articleNomAr}</span>}
+                      </td>
+                      <td className="px-3 py-3 text-center">{r.qteAchat} {r.unite}</td>
+                      <td className="px-3 py-3 text-center">{r.qtePrepare} {r.unite}</td>
+                      <td className={`px-3 py-3 text-center font-bold ${r.ecartQte === 0 ? "text-green-600" : r.ecartQte < 0 ? "text-red-600" : "text-amber-600"}`}>
+                        {r.ecartQte === 0 ? "OK" : `${r.ecartQte > 0 ? "+" : ""}${r.ecartQte} ${r.unite}`}
+                      </td>
+                      <td className={`px-3 py-3 text-center font-semibold ${r.ecartValeur === 0 ? "text-muted-foreground" : r.ecartValeur < 0 ? "text-red-600" : "text-amber-600"}`}>
+                        {r.ecartValeur === 0 ? "—" : `${r.ecartValeur > 0 ? "+" : ""}${r.ecartValeur.toFixed(2)} DH`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}

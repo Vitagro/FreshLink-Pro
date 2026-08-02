@@ -707,7 +707,10 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   const [nom, setNom] = useState("")
   const [nomManual, setNomManual] = useState(false)  // true = user overrode auto-name
   const [mode, setMode] = useState<ModePreparation>("par_article")
-  const [type, setType] = useState<TypePreparation>("stockage")
+  // En mode crossdocking, la marchandise est triee/expediee direct (jamais
+  // stockee) — le type par defaut suit donc le mode global, tout en restant
+  // modifiable au cas par cas via le picker.
+  const [type, setType] = useState<TypePreparation>(store.isCrossdockMode() ? "cross_dock" : "stockage")
   const [format, setFormat] = useState<FormatPreparation>("papier")
   const [tripId, setTripId] = useState("")
   const [selectedClients, setSelectedClients] = useState<string[]>([])
@@ -911,7 +914,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
       if (bonsCreated.length === 0) { alert("Aucune commande à préparer."); return }
       refresh()
       setShowNew(false)
-      setNom(""); setNomManual(false); setMode("par_article"); setType("stockage"); setFormat("papier")
+      setNom(""); setNomManual(false); setMode("par_article"); setType(store.isCrossdockMode() ? "cross_dock" : "stockage"); setFormat("papier")
       setTripId(""); setSelectedClients([]); setPreparateurId("")
       if (format === "papier") {
         bonsCreated.forEach((bon, i) => setTimeout(() => openPrintPrep(bon, commandes), 350 * (i + 1)))
