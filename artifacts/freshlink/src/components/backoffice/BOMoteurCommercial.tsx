@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { store } from "@/lib/store"
+import { store, type User, userHasRole } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ══════════════════════════════════════════════════════════════════
 //  BOMoteurCommercial — Moteur commercial V3 (Section 1, 3, 5)
@@ -58,7 +60,7 @@ const SEGMENT_CONFIG: Record<string, { label: string; icon: string; color: strin
   tous:        { label: "Tous",        icon: "🌐", color: "from-slate-500 to-slate-700" },
 }
 
-export default function BOMoteurCommercial() {
+export default function BOMoteurCommercial({ user }: { user: User }) {
   const [tab, setTab] = useState<"rules" | "matrix" | "simulators">("rules")
   const [rules, setRules] = useState<PricingRule[]>([])
   const [matrix, setMatrix] = useState<BonusCell[]>([])
@@ -89,7 +91,7 @@ export default function BOMoteurCommercial() {
   useEffect(() => {
     try {
       const users = store.getUsers()
-        .filter(u => u.role === "prevendeur" && u.actif)
+        .filter(u => userHasRole(u, "prevendeur") && u.actif)
         .map(u => ({ id: u.id, name: u.name }))
       users.sort((a, b) => a.name.localeCompare(b.name, "fr"))
       setPrevendeursRef(users)
@@ -186,7 +188,9 @@ export default function BOMoteurCommercial() {
   }
 
   const deleteRule = async (id: string) => {
+    if (!hasPermission(user.role, "appliquer_remise")) { logAction(user, "appliquer_remise", "denied", { type: "pricing_rule", id }); return }
     if (!window.confirm("Supprimer cette règle ?")) return
+    logAction(user, "appliquer_remise", "success", { type: "pricing_rule", id })
     setRules(prev => prev.filter(x => x.id !== id))
     try { await fetch(`/api/ext/pricing-rules?id=${encodeURIComponent(id)}`, { method: "DELETE" }) }
     catch (e) { setError(String(e)); loadAll() }
@@ -225,7 +229,9 @@ export default function BOMoteurCommercial() {
   }
 
   const deleteCell = async (id: string) => {
+    if (!hasPermission(user.role, "appliquer_remise")) { logAction(user, "appliquer_remise", "denied", { type: "bonus_matrix_cell", id }); return }
     if (!window.confirm("Supprimer cette cellule de la matrice ?")) return
+    logAction(user, "appliquer_remise", "success", { type: "bonus_matrix_cell", id })
     setMatrix(prev => prev.filter(x => x.id !== id))
     try { await fetch(`/api/ext/bonus-matrix?id=${encodeURIComponent(id)}`, { method: "DELETE" }) }
     catch (e) { setError(String(e)); loadAll() }

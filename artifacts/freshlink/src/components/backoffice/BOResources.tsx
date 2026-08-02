@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { store, type User, type UserRole } from "@/lib/store"
+import { store, type User, type UserRole, userHasRole } from "@/lib/store"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -841,8 +841,8 @@ function RecrutementTab({ users }: { users: User[] }) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
   })
 
-  const prevendeurs = users.filter(u => u.role === "prevendeur" && u.actif)
-  const livreurs    = users.filter(u => u.role === "livreur" && u.actif)
+  const prevendeurs = users.filter(u => userHasRole(u, "prevendeur") && u.actif)
+  const livreurs    = users.filter(u => userHasRole(u, "livreur") && u.actif)
 
   const tonnageMensuel = periodes.map(p => ({
     periode: p,

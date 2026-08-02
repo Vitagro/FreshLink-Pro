@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react"
 import type { User } from "@/lib/store"
-import { store, MODALITE_LABELS } from "@/lib/store"
+import { store, MODALITE_LABELS, userHasRole } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import {
@@ -229,7 +229,7 @@ function BLEditor({
     return match ? { ...l, articleId: match.id, articleNomAr: l.articleNomAr ?? match.nomAr } : l
   }))
   const [users] = useState(() => store.getUsers())
-  const livreurs = users.filter(u => u.role === "livreur")
+  const livreurs = users.filter(u => userHasRole(u, "livreur"))
   // Champs secondaires (statut, TVA, QC, ICE, compte, tel, modalité, adresse,
   // notes) masqués par défaut — auto-remplis depuis la fiche client, à
   // afficher seulement si l'utilisateur veut les vérifier/adapter.
@@ -2029,7 +2029,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
                           </button>
                           {/* WhatsApp livreur */}
                           {bl.livreurNom && (() => {
-                            const lu = store.getUsers().find(u => u.role === "livreur" && (u.name === bl.livreurNom || u.id === bl.livreurId))
+                            const lu = store.getUsers().find(u => userHasRole(u, "livreur") && (u.name === bl.livreurNom || u.id === bl.livreurId))
                             const ph = lu?.telephone ?? lu?.phone ?? ""
                             if (!ph) return null
                             return (

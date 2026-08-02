@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { store, type User, type Client, ROLE_LABELS, getAllSecteurs } from "@/lib/store"
+import { store, type User, type Client, ROLE_LABELS, getAllSecteurs, userHasRole } from "@/lib/store"
 import { loadZonesConfig, zoneOfSecteur, type ZonesConfig } from "@/lib/commercial/zones"
 
 interface Props { user: User }
@@ -28,11 +28,11 @@ export default function BOAffectationCommerciale({ user }: Props) {
 
   // derived lists
   const prevendeurs = useMemo(
-    () => users.filter(u => u.role === "prevendeur" && u.actif),
+    () => users.filter(u => userHasRole(u, "prevendeur") && u.actif),
     [users]
   )
   const teamLeads = useMemo(
-    () => users.filter(u => (u.role === "team_leader" || u.role === "resp_commercial") && u.actif),
+    () => users.filter(u => (userHasRole(u, "team_leader") || userHasRole(u, "resp_commercial")) && u.actif),
     [users]
   )
   const secteurs = useMemo(

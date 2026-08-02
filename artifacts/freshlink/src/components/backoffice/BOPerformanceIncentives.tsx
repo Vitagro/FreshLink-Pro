@@ -112,8 +112,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
     if (dForm.beneficeNet <= 0) { flash("Benefice net doit etre > 0."); return }
     if (actionnaires.length === 0) { flash("Aucun actionnaire enregistre."); return }
     const lignes = actionnaires.filter(a => a.actif).map(a => {
-      const part = totalCotisation > 0 ? (a.cotisation / totalCotisation) * 100 : 0
-      const montant = (dForm.beneficeNet * part) / 100
+      const part = totalCotisation > 0 ? Math.round((a.cotisation / totalCotisation) * 100 * 100) / 100 : 0
+      const montant = Math.round((dForm.beneficeNet * part) / 100 * 100) / 100
       return {
         actionnaireId: a.id,
         actionnaireNom: `${a.nom} ${a.prenom}`,

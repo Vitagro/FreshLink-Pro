@@ -24,6 +24,14 @@ export function isSuperSuperAdmin(user: { role: string }): boolean {
   return user.role === "super_super_admin"
 }
 
+// Un compte multi-role (roles?: UserRole[], jusqu'a 3 roles — voir BOUsers.tsx
+// "Rôles supplémentaires") doit matcher un filtre par role sur SON role
+// principal ET ses roles supplementaires, sinon il disparait silencieusement
+// des ecrans/notifications qui ne testent que `role`.
+export function userHasRole(user: { role: string; roles?: string[] }, role: string): boolean {
+  return user.role === role || (user.roles?.includes(role) ?? false)
+}
+
 // Verrou dedie aux actions les plus sensibles (reinitialisation des donnees,
 // suppression de client, validation groupee des achats...) : reserve au
 // super_super_admin, sauf si celui-ci a explicitement autorise ce compte

@@ -12,7 +12,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef } from "react"
-import { store, type User } from "@/lib/store"
+import { store, type User, userHasRole } from "@/lib/store"
 
 const FIRE_WINDOW_MIN = 12   // déclenche si on est dans les 12 min après l'heure du cut-off
 
@@ -59,7 +59,7 @@ export default function CutoffNotifier({ user }: { user: User }) {
       for (const c of cutoffs) {
         // Ciblé si mon rôle est dans les rôles OU si je suis nommément assigné
         const assigned = Array.isArray(c.assignedUserIds) && c.assignedUserIds.includes(user.id)
-        const byRole = Array.isArray(c.roles) && c.roles.includes(user.role)
+        const byRole = Array.isArray(c.roles) && c.roles.some(r => userHasRole(user, r))
         if (!c.active || (!byRole && !assigned)) continue
         const cutMin = toMin(c.time)
         const delta = nowMin - cutMin
@@ -75,7 +75,7 @@ export default function CutoffNotifier({ user }: { user: User }) {
       // ── Alerte SURCHARGE : tonnage commandé du jour > seuil ──────────────────
       try {
         const seuil = store.getSeuilAlerte()
-        if (seuil.tonnageMaxJour > 0 && seuil.rolesAlerte?.includes(user.role) && !localStorage.getItem(firedKey("__tonnage"))) {
+        if (seuil.tonnageMaxJour > 0 && (seuil.rolesAlerte?.some(r => userHasRole(user, r)) ?? false) && !localStorage.getItem(firedKey("__tonnage"))) {
           const okStatuts = new Set(["valide", "en_preparation", "charge", "en_transit", "livre"])
           const today = dayKey()
           const tonnage = store.getCommandes()

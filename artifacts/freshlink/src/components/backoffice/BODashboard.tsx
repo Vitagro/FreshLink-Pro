@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite } from "@/lib/store"
+import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import {
@@ -325,7 +325,7 @@ export default function BODashboard({ user }: Props) {
   const topLivRetour = Object.entries(livRetour).sort(([, a], [, b]) => b.kg - a.kg).slice(0, 6)
 
   // --- Prevendeurs stats ---
-  const prevendeurs = users.filter(u => u.role === "prevendeur" && u.actif)
+  const prevendeurs = users.filter(u => userHasRole(u, "prevendeur") && u.actif)
   const getPrevendeurStats = (pv: User) => {
     const cdJ = commandesActives.filter(c => c.commercialId === pv.id && c.date >= dateDebut && c.date <= dateFin)
     const cdW = commandesActives.filter(c => c.commercialId === pv.id && c.date >= weekRange.start && c.date <= weekRange.end)
