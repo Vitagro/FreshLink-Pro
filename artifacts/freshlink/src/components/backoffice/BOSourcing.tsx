@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { store, type SourcingEntry, type SourcingGrade, type SourcingStatut, type Article, type Fournisseur } from "@/lib/store"
+import { store, type SourcingEntry, type SourcingGrade, type SourcingStatut, type Article, type Fournisseur, type UserRole } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
 const CATEGORIES = ["Légumes fruits","Légumes racines","Légumes feuilles","Herbes aromatiques","Agrumes","Fruits tropicaux","Fruits rouges","Fruits secs","Céréales","Autre"]
@@ -59,7 +61,7 @@ const EMPTY_FORM = (): Omit<SourcingEntry, "id" | "createdAt" | "updatedAt" | "u
   statut: "disponible",
 })
 
-export default function BOSourcing({ user }: { user?: { id: string; name: string } }) {
+export default function BOSourcing({ user }: { user?: { id: string; name: string; role?: UserRole } }) {
   const [entries, setEntries]     = useState<SourcingEntry[]>([])
   const [articles, setArticles]   = useState<Article[]>([])
   // Nom arabe — uniquement pour les entrees liees a un article du catalogue
@@ -198,6 +200,8 @@ export default function BOSourcing({ user }: { user?: { id: string; name: string
   }
 
   function handleDelete(id: string) {
+    if (!hasPermission(user?.role, "supprimer_article")) { logAction(user as { id: string; name: string; role: UserRole } | undefined, "supprimer_article", "denied", { type: "sourcing_entry", id }); return }
+    logAction(user as { id: string; name: string; role: UserRole } | undefined, "supprimer_article", "success", { type: "sourcing_entry", id })
     store.deleteSourcingEntry(id)
     load()
     setConfirmDelete(null)

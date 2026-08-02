@@ -97,6 +97,29 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
   // Credit filter
   const [creditFilter, setCreditFilter] = useState<"tous" | "alerte" | "retard" | "plafond">("tous")
   const [confirmResetCredit, setConfirmResetCredit] = useState(false)
+  // Factures impayées (fl_invoices) → intégrées au crédit, comme BODashboard.tsx
+  // (sinon un client à creditSolde=0 avec une facture "Impayée" n'apparaissait
+  // jamais hors plafond ici alors qu'il l'était déjà sur le Dashboard).
+  const [unpaidByClient, setUnpaidByClient] = useState<Record<string, number>>({})
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/sync-read?table=fl_invoices", { cache: "no-store" })
+        const j = await res.json()
+        const rows: { payload?: Record<string, unknown> }[] = j?.ok ? (j.data ?? []) : []
+        const map: Record<string, number> = {}
+        rows.forEach(r => {
+          const p = r.payload ?? {}
+          if (String(p.statut) !== "impayee") return
+          const key = String(p.clientId || p.clientNom || "")
+          if (!key) return
+          const reste = Number(p.montantTTC ?? 0) - Number(p.montantPaye ?? 0)
+          map[key] = (map[key] || 0) + (reste > 0 ? reste : 0)
+        })
+        setUnpaidByClient(map)
+      } catch { /* offline */ }
+    })()
+  }, [])
   // CashMan date range
   const [cashFilter, setCashFilter] = useState({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
@@ -1268,10 +1291,13 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
       {/* ============================== CREDIT CLIENT ============================== */}
       {tab === "credit" && (() => {
         const now = Date.now()
+        const unpaidOf = (c: Client) => Number(unpaidByClient[c.id] ?? unpaidByClient[c.nom] ?? 0) || 0
         const creditClients = clients
-          .filter(c => c.creditAutorise || (c.creditSolde ?? 0) > 0)
+          // inclut aussi les clients ayant une facture impayée (même sans crédit configuré) — cf. BODashboard.tsx
+          .filter(c => c.creditAutorise || (c.creditSolde ?? 0) > 0 || unpaidOf(c) > 0)
           .map(c => {
-            const solde = c.creditSolde ?? 0
+            // Solde = solde crédit enregistré + factures impayées non encore intégrées
+            const solde = (c.creditSolde ?? 0) + unpaidOf(c)
             const plafond = c.plafondCredit ?? 0
             const delai = c.delaiRecouvrement ?? "a_definir"
             const delaiMs = DELAI_MS[delai] ?? Infinity
