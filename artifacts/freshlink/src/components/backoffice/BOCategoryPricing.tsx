@@ -399,9 +399,11 @@ export default function BOCategoryPricing({ user }: { user: User }) {
   }
 
   const clearClientOverride = async (artId: string) => {
+    if (!canModifyByMode.client) { logAction(user, "modifier_tarifs_client_individuel", "denied", { type: "tarification", id: artId, label: selectedClient }); return }
     const all = store.getArticles()
     const idx = all.findIndex(a => a.id === artId)
     if (idx >= 0 && all[idx].clientPrices?.[selectedClient]) {
+      logAction(user, "modifier_tarifs_client_individuel", "success", { type: "tarification_suppression_override", id: artId, label: selectedClient })
       delete all[idx].clientPrices![selectedClient]
       store.saveArticles(all)
       setArticles(all)
@@ -920,7 +922,7 @@ export default function BOCategoryPricing({ user }: { user: User }) {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        {hasOverride && (
+                        {hasOverride && canModifyByMode.client && (
                           <button
                             onClick={() => clearClientOverride(art.id)}
                             title="Supprimer override"

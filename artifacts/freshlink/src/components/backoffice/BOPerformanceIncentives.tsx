@@ -33,7 +33,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
   const [saveMsg, setSaveMsg] = useState("")
 
   // New bonus record form
-  const users_ = useMemo(() => store.getUsers().filter(u => u.role === "livreur" || u.role === "resp_logistique"), [])
+  const users_ = useMemo(() => store.getUsers().filter(u => u.role === "livreur" || u.role === "conducteur" || u.role === "resp_logistique"), [])
   const [bForm, setBForm] = useState({
     livreurId: "", driverType: "interne" as "interne" | "externe",
     tripId: "", date: new Date().toISOString().split("T")[0],
@@ -75,6 +75,8 @@ export default function BOPerformanceIncentives({ user }: Props) {
 
   const addBonusRecord = () => {
     if (!bForm.livreurId || !bForm.date) { flash("Livreur et date requis."); return }
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "driver_bonus_creation", id: bForm.livreurId }); return }
+    logAction(user, "valider_cash", "success", { type: "driver_bonus_creation", id: bForm.livreurId })
     const livreur = users_.find(u => u.id === bForm.livreurId)
     const { criteria, montant } = computeBonus()
     const record: DriverBonusRecord = {

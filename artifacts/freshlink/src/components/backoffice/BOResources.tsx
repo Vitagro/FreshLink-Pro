@@ -198,14 +198,26 @@ function ProductiviteTab({ users }: { users: User[] }) {
     !["client", "fournisseur"].includes(u.role) && u.actif
   )
 
+  // BonLivraison/Retour n'ont pas de champ livreurId (juste livreurNom) —
+  // matcher par nom, comme BOBonLivraison.tsx le fait déjà pour le WhatsApp
+  // livreur (voir round 11). Un `livreurId` inexistant faisait échouer TOUS
+  // les filtres ci-dessous silencieusement (toujours undefined === u.id).
+  const nameMatch = (nom: string | undefined, u: User) => (nom ?? "").trim().toLowerCase() === u.name.trim().toLowerCase()
+  // Un retour est lié au prevendeur via la commande d'origine (LigneRetour.commandeId),
+  // pas via un livreurId sur le Retour lui-même.
+  const commandesById = new Map(commandes.map(c => [c.id, c]))
+  const retourDuPrevendeur = (r: { lignes: { commandeId: string }[] }, prevendeurId: string) =>
+    r.lignes.some(l => commandesById.get(l.commandeId)?.commercialId === prevendeurId)
+
   const stats = staffUsers.map(u => {
     const groupe = groupeForRole(u.role)
     if (groupe === "prevendeur") {
       const uvisitp = visites.filter(v => v.prevendeurId === u.id && v.date?.startsWith(periode))
-      const ucmds = commandes.filter(c => c.commercialId === u.id && c.date?.startsWith(periode))
+      // Exclut "refuse" (commande soft-supprimee) — meme regle que BODashboard/BORecap/MobileObjectifs.
+      const ucmds = commandes.filter(c => c.commercialId === u.id && c.date?.startsWith(periode) && c.statut !== "refuse")
       const tonnage = ucmds.reduce((s, c) => s + c.lignes.reduce((a, l) => a + (l.quantite ?? 0), 0), 0)
       const newClients = new Set(ucmds.map(c => c.clientId)).size
-      const retourCli = retours.filter((r: any) => r.livreurId === u.id && r.date?.startsWith(periode)).length
+      const retourCli = retours.filter((r: any) => retourDuPrevendeur(r, u.id) && r.date?.startsWith(periode)).length
       return { u, groupe, kpis: [
         { label: "Visites", value: uvisitp.length, icon: "👁" },
         { label: "Tonnage (kg)", value: tonnage.toFixed(0), icon: "⚖" },
@@ -214,7 +226,7 @@ function ProductiviteTab({ users }: { users: User[] }) {
       ]}
     }
     if (groupe === "logistique") {
-      const delivered = bls.filter((b: any) => b.livreurId === u.id && b.date?.startsWith(periode))
+      const delivered = bls.filter((b: any) => nameMatch(b.livreurNom, u) && b.date?.startsWith(periode))
       const onTime = delivered.filter((b: any) => b.livreATemps).length
       const late   = delivered.length - onTime
       const taux   = delivered.length > 0 ? Math.round(onTime / delivered.length * 100) : 0
@@ -610,6 +622,15 @@ function CalculSalaireTab({ users }: { users: User[] }) {
 
   const staff = users.filter(u => !["client", "fournisseur"].includes(u.role) && u.actif)
 
+  // Voir ProductiviteTab plus haut dans ce fichier : BonLivraison/Retour
+  // n'ont pas de livreurId (juste livreurNom), et un retour se rattache au
+  // prevendeur via la commande d'origine (LigneRetour.commandeId), pas via
+  // un livreurId sur le Retour — meme fix applique ici pour la paie reelle.
+  const nameMatchFiche = (nom: string | undefined, u: User) => (nom ?? "").trim().toLowerCase() === u.name.trim().toLowerCase()
+  const commandesByIdFiche = new Map(commandes.map(c => [c.id, c]))
+  const retourDuPrevendeurFiche = (r: { lignes: { commandeId: string }[] }, prevendeurId: string) =>
+    r.lignes.some(l => commandesByIdFiche.get(l.commandeId)?.commercialId === prevendeurId)
+
   const computeFiche = (u: User): FichePayroll => {
     const g = grilles.find(gr => gr.userId === u.id)
     const salaireFixe = g?.salaireFixe ?? 0
@@ -624,7 +645,9 @@ function CalculSalaireTab({ users }: { users: User[] }) {
 
       if (groupe === "prevendeur") {
         if (r.type === "tonnage") {
-          const ucmds = commandes.filter(c => c.commercialId === u.id && c.date?.startsWith(periode))
+          // Exclut "refuse" (commande soft-supprimee) — sinon une commande
+          // annulee gonfle une prime reelle en DH.
+          const ucmds = commandes.filter(c => c.commercialId === u.id && c.date?.startsWith(periode) && c.statut !== "refuse")
           const tonnage = ucmds.reduce((s, c) => s + c.lignes.reduce((a, l) => a + (l.quantite ?? 0), 0), 0)
           montant = r.valeur * tonnage
           detail = `${tonnage.toFixed(1)} tonnes × ${r.valeur} DH`
@@ -633,17 +656,17 @@ function CalculSalaireTab({ users }: { users: User[] }) {
           montant = r.valeur * nb
           detail = `${nb} visites × ${r.valeur} DH`
         } else if (r.type === "nouveau_client") {
-          const ucmds = commandes.filter(c => c.commercialId === u.id && c.date?.startsWith(periode))
+          const ucmds = commandes.filter(c => c.commercialId === u.id && c.date?.startsWith(periode) && c.statut !== "refuse")
           const nb = new Set(ucmds.map(c => c.clientId)).size
           montant = r.valeur * nb
           detail = `${nb} clients × ${r.valeur} DH`
         } else if (r.type === "retour_client") {
-          const nb = retours.filter((rt: any) => rt.livreurId === u.id && rt.date?.startsWith(periode)).length
+          const nb = retours.filter((rt: any) => retourDuPrevendeurFiche(rt, u.id) && rt.date?.startsWith(periode)).length
           montant = r.valeur * nb
           detail = `${nb} retours × ${r.valeur} DH`
         }
       } else if (groupe === "logistique") {
-        const delivered = bls.filter((b: any) => b.livreurId === u.id && b.date?.startsWith(periode))
+        const delivered = bls.filter((b: any) => nameMatchFiche(b.livreurNom, u) && b.date?.startsWith(periode))
         const onTime = delivered.filter((b: any) => b.livreATemps).length
         const late = delivered.length - onTime
         const taux = delivered.length > 0 ? onTime / delivered.length : 0

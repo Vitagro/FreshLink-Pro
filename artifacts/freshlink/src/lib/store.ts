@@ -4658,9 +4658,9 @@ export const DEFAULT_CUTOFFS: CutoffNotification[] = [
   { id: "co8",  label: "Fin préparation (clôture)", time: "18:00", message: "🔒 Clôture préparation : contrôlez les caisses avant chargement.", active: true, roles: ["magasinier", "ctrl_prep"] },
   { id: "co21", label: "Fin chargement", time: "18:30", message: "🚚 Fin chargement : véhicules chargés, vérifiez le manifeste.", active: true, roles: ["magasinier", "ctrl_prep", "dispatcheur", "resp_logistique"] },
   // ── Dispatch / Livraison ──
-  { id: "co22", label: "Départ 1 (livraison)", time: "06:30", message: "🚐 Départ tournée 1 : partez selon votre feuille de route.", active: true, roles: ["livreur", "dispatcheur"] },
-  { id: "co9",  label: "Tournées prêtes", time: "07:00", message: "Tournées prêtes : récupérez votre feuille de route et partez.", active: true, roles: ["livreur", "dispatcheur"] },
-  { id: "co10", label: "Retour dépôt", time: "19:00", message: "Retour dépôt : déposez caisses, retours et encaissements du jour.", active: true, roles: ["livreur", "dispatcheur", "resp_logistique"] },
+  { id: "co22", label: "Départ 1 (livraison)", time: "06:30", message: "🚐 Départ tournée 1 : partez selon votre feuille de route.", active: true, roles: ["livreur", "conducteur", "dispatcheur"] },
+  { id: "co9",  label: "Tournées prêtes", time: "07:00", message: "Tournées prêtes : récupérez votre feuille de route et partez.", active: true, roles: ["livreur", "conducteur", "dispatcheur"] },
+  { id: "co10", label: "Retour dépôt", time: "19:00", message: "Retour dépôt : déposez caisses, retours et encaissements du jour.", active: true, roles: ["livreur", "conducteur", "dispatcheur", "resp_logistique"] },
   // ── Caisse / Finance ──
   { id: "co11", label: "Cut-off caisse", time: "18:30", message: "Cut-off caisse : transmettez les encaissements pour clôture.", active: true, roles: ["cash_man"] },
   { id: "co12", label: "Clôture financière", time: "19:30", message: "Clôture financière : rapprochez caisse, BL et crédits.", active: true, roles: ["financier", "comptable"] },
