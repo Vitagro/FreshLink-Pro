@@ -1124,6 +1124,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
 
     if (matchBons.length === 0) return
 
+    const tauxTVA = store.getFiscalConfig().tauxTVA
     const allBLs = getBLs()
     const newBLs: BonLivraison[] = []
 
@@ -1148,7 +1149,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
         const totalHT = lignes.reduce((s, l) => s + l.totalLigne, 0)
         const bl: BonLivraison = {
           id: genId(), numero: genNumero(), transporteur: "non_affecte",
-          statut: "valide", date: today, lignes, totalHT, totalTTC: totalHT * 1.2, tva: 20,
+          statut: "valide", date: today, lignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100)), tva: tauxTVA,
           qcObligatoire, clientId: "", clientNom: bon.nom ?? "—",
           createdBy: user.id, updatedAt: new Date().toISOString(),
           notesBL: `Importe depuis Bon Prep: ${bon.nom}`,
@@ -1187,7 +1188,7 @@ export default function BOBonLivraison({ user }: { user: User }) {
           const totalHT = blLignes.reduce((s, l) => s + l.totalLigne, 0)
           const bl: BonLivraison = {
             id: genId(), numero: genNumero(), transporteur: "non_affecte",
-            statut: "valide", date: today, lignes: blLignes, totalHT, totalTTC: totalHT * 1.2, tva: 20,
+            statut: "valide", date: today, lignes: blLignes, totalHT, totalTTC: Math.round(totalHT * (1 + tauxTVA / 100)), tva: tauxTVA,
             qcObligatoire, clientId: cid, clientNom: client?.nom ?? cid,
             clientAdresse: client?.adresse, clientIce: client?.ice,
             clientModalitePaiement: client?.modalitePaiement,

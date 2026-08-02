@@ -430,10 +430,12 @@ export default function BOComptesExternes({ user }: Props) {
   }
 
   const handleResetPwd = (userId: string) => {
-    const pwd = genPassword()
     const all = store.getUsers()
     const idx = all.findIndex(u => u.id === userId)
     if (idx < 0) return
+    if (!hasPermission(user.role, "modifier_client")) { logAction(user, "modifier_client", "denied", { type: "reset_pwd", id: userId, label: all[idx].name }); return }
+    logAction(user, "modifier_client", "success", { type: "reset_pwd", id: userId, label: all[idx].name })
+    const pwd = genPassword()
     all[idx].password = pwd
     store.saveUsers(all)
     setUsers([...all])

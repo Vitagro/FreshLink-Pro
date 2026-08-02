@@ -11,6 +11,24 @@ export default function BORetour() {
 
   const filtered = retours.filter(r => !filter.date || r.date === filter.date)
 
+  // Categorie client (CHR/Marchand/Particulier) par commandeId — necessaire pour
+  // valoriser un retour au prix reellement facture (store.computePV), pas au prix
+  // generique du catalogue qui ignore les prix CHR/Marchand/Particulier surchages.
+  const categorieParCommande = (() => {
+    const clients = store.getClients()
+    const map = new Map<string, "chr" | "marchand" | "particulier" | undefined>()
+    store.getCommandes().forEach(c => {
+      const cat = clients.find(cl => cl.id === c.clientId)?.categorie
+      map.set(c.id, cat)
+    })
+    return map
+  })()
+  const pvForLigne = (l: { articleId: string; commandeId: string }): number => {
+    const art = store.getArticles().find(a => a.id === l.articleId)
+    if (!art) return 0
+    return store.computePV(art, categorieParCommande.get(l.commandeId))
+  }
+
   const handleValider = (id: string) => {
     const retours_ = store.getRetours()
     const r = retours_.find(r => r.id === id)
@@ -32,11 +50,7 @@ export default function BORetour() {
   }
 
   const totalRetour = filtered.reduce((s, r) =>
-    s + r.lignes.reduce((ls, l) => {
-      const art = store.getArticles().find(a => a.id === l.articleId)
-      const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
-      return ls + l.quantite * pv
-    }, 0), 0)
+    s + r.lignes.reduce((ls, l) => ls + l.quantite * pvForLigne(l), 0), 0)
   const totalTonnage = filtered.reduce((s, r) => s + r.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
 
   return (
@@ -87,11 +101,7 @@ export default function BORetour() {
             {filtered.length === 0 ? (
               <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Aucun retour</td></tr>
             ) : filtered.map(r => {
-              const valeur = r.lignes.reduce((s, l) => {
-                const art = store.getArticles().find(a => a.id === l.articleId)
-                const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
-                return s + l.quantite * pv
-              }, 0)
+              const valeur = r.lignes.reduce((s, l) => s + l.quantite * pvForLigne(l), 0)
               return (
                 <tr key={r.id} className="border-t border-border hover:bg-muted/30">
                   <td className="px-4 py-3">{r.date}</td>

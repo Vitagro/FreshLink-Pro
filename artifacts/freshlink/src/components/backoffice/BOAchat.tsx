@@ -111,6 +111,8 @@ export default function BOAchat() {
   // complète, déjà calculée par getArticles) et supprime définitivement les
   // enregistrements écartés de localStorage ET de Supabase.
   const handleMergeDuplicates = async () => {
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "supprimer_article")) { logAction(session, "supprimer_article", "denied", { type: "merge_doublons_articles" }); return }
     let raw: unknown = []
     try { raw = JSON.parse(localStorage.getItem("fl_articles") || "[]") } catch {}
     const canonical = store.getArticles()
@@ -125,6 +127,7 @@ export default function BOAchat() {
       `${dropIds.length} doublon(s) seront fusionnés dans l'article le plus complet ` +
       `puis supprimés définitivement (localStorage + Supabase).\n\nContinuer ?`
     )) return
+    logAction(session, "supprimer_article", "success", { type: "merge_doublons_articles", label: `${dropIds.length} article(s)` })
     // 1. localStorage = version canonique fusionnée
     store.saveArticles(canonical)
     setArticles(canonical)

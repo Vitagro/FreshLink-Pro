@@ -1452,8 +1452,9 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
   }
 
   const handleDelete = (u: User) => {
-    if (!canDeleteUser(u)) return
+    if (!canDeleteUser(u)) { logAction(currentUser, "desactiver_utilisateur", "denied", { type: "utilisateur_suppression", id: u.id, label: u.name }); return }
     if (!confirm(`Supprimer l'utilisateur "${u.name}" ?`)) return
+    logAction(currentUser, "desactiver_utilisateur", "success", { type: "utilisateur_suppression", id: u.id, label: u.name })
     const all = store.getUsers().filter(x => x.id !== u.id)
     store.saveUsers(all)
     deleteUserFromSupabase(u.id)

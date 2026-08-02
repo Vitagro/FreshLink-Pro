@@ -66,9 +66,15 @@ function computeStats(dateDebut: string, dateFin: string = dateDebut): DailyStat
   const totalAchats     = bonsAchat.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0)
   const totalCommandes  = commandes.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite * l.prixVente, 0), 0)
   const totalLivraisons = bls.reduce((s, b) => s + b.montantTotal, 0)
+  // Categorie client (CHR/Marchand/Particulier) par commandeId — pour valoriser un
+  // retour au prix reellement facture (store.computePV), pas au prix generique du
+  // catalogue qui ignore les prix CHR/Marchand/Particulier surchages.
+  const clientsForRetours = store.getClients()
+  const categorieParCommande = new Map<string, "chr" | "marchand" | "particulier" | undefined>()
+  store.getCommandes().forEach(c => categorieParCommande.set(c.id, clientsForRetours.find(cl => cl.id === c.clientId)?.categorie))
   const totalRetours    = retours.reduce((s, r) => s + r.lignes.reduce((ls, l) => {
     const art = articles.find(a => a.id === l.articleId)
-    const pv = art ? (art.pvMethode === "pourcentage" ? art.prixAchat * (1 + art.pvValeur / 100) : art.pvMethode === "montant" ? art.prixAchat + art.pvValeur : art.pvValeur) : 0
+    const pv = art ? store.computePV(art, categorieParCommande.get(l.commandeId)) : 0
     return ls + l.quantite * pv
   }, 0), 0)
   const totalCash = bls.filter(b => b.statut === "encaissé").reduce((s, b) => s + b.montantTotal, 0)

@@ -249,7 +249,10 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
   }
 
   const handleDeleteArt = (a: Article) => {
+    const session = store.getSession()
+    if (!hasPermission(session?.role, "supprimer_article")) { logAction(session, "supprimer_article", "denied", { type: "article", id: a.id, label: a.nom }); return }
     if (!confirm(`Supprimer l'article "${a.nom}" ?`)) return
+    logAction(session, "supprimer_article", "success", { type: "article", id: a.id, label: a.nom })
     deleteArticle(a.id).catch(e => console.error("[BOStock] delete sync error:", e))
     reload()
   }
