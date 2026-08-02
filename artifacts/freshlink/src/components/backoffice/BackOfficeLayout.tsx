@@ -512,7 +512,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   database:          (u) => <BODatabase user={u} />,
   marketplace:       (u) => <BOMarketplace user={u} />,
   moteur_commercial: (u) => <BOMoteurCommercialV3 user={u} />,
-  pa_historique:     (_u) => <BOPaHistoriqueV3 />,
+  pa_historique:     (u) => <BOPaHistoriqueV3 user={u} />,
   gestion_pa:        (u)  => <BOGestionPA user={u} />,
   gifts_v3:          (u) => <BOGiftsV3 user={u} />,
   loterie:           (u)  => <BOLoterie user={u} />,

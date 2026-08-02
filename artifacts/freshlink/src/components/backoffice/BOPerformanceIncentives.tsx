@@ -36,7 +36,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
   const users_ = useMemo(() => store.getUsers().filter(u => u.role === "livreur" || u.role === "conducteur" || u.role === "resp_logistique"), [])
   const [bForm, setBForm] = useState({
     livreurId: "", driverType: "interne" as "interne" | "externe",
-    tripId: "", date: new Date().toISOString().split("T")[0],
+    tripId: "", date: store.today(),
     zeroRetard: false, zeroRetour: false, zeroQualite: false,
   })
 
@@ -44,7 +44,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
   const actionnaires = useMemo<Actionnaire[]>(() => store.getActionnaires(), [])
   const totalCotisation = actionnaires.reduce((s, a) => s + a.cotisation, 0)
   const [dForm, setDForm] = useState({
-    periode: new Date().toISOString().split("T")[0].slice(0, 7),
+    periode: store.today().slice(0, 7),
     cycleType: "mensuel" as "journalier" | "hebdomadaire" | "mensuel",
     beneficeNet: 0,
     notes: "",
@@ -96,7 +96,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
     }
     store.addDriverBonusRecord(record)
     setBonusRecords(store.getDriverBonusRecords())
-    setBForm({ livreurId: "", driverType: "interne", tripId: "", date: new Date().toISOString().split("T")[0], zeroRetard: false, zeroRetour: false, zeroQualite: false })
+    setBForm({ livreurId: "", driverType: "interne", tripId: "", date: store.today(), zeroRetard: false, zeroRetour: false, zeroQualite: false })
     flash(`Prime calculee: ${montant} DH pour ${record.livreurNom}.`)
   }
 
@@ -139,7 +139,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
     }
     store.addShareholderDistribution(dist)
     setDistributions(store.getShareholderDistributions())
-    setDForm({ periode: new Date().toISOString().split("T")[0].slice(0, 7), cycleType: "mensuel", beneficeNet: 0, notes: "" })
+    setDForm({ periode: store.today().slice(0, 7), cycleType: "mensuel", beneficeNet: 0, notes: "" })
     flash("Distribution cree en brouillon.")
   }
 
@@ -157,7 +157,7 @@ export default function BOPerformanceIncentives({ user }: Props) {
     if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "shareholder_distribution_paiement", id }); return }
     logAction(user, "valider_cash", "success", { type: "shareholder_distribution_paiement", id })
     store.saveShareholderDistributions(store.getShareholderDistributions().map(d =>
-      d.id === id ? { ...d, statut: "distribue", lignes: d.lignes.map(l => ({ ...l, statut: "paye" as const, datePaiement: new Date().toISOString().split("T")[0] })) } : d
+      d.id === id ? { ...d, statut: "distribue", lignes: d.lignes.map(l => ({ ...l, statut: "paye" as const, datePaiement: store.today() })) } : d
     ))
     setDistributions(store.getShareholderDistributions())
     flash("Distribution marquee comme distribuee.")
