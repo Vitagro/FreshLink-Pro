@@ -76,7 +76,7 @@ function getTauxCaisse(): number { return Number(localStorage.getItem("fl_taux_c
 function saveTauxCaisse(t: number) { localStorage.setItem("fl_taux_caisse", String(t)) }
 
 // ─────────────────────────────────────────────────────────────────────────────
-export default function BOFinance({ user }: { user: { id: string; name: string; role: string } }) {
+export default function BOFinance({ user }: { user: { id: string; name: string; role: UserRole } }) {
   const [tab, setTab] = useState<FinanceTab>("synthese")
   const [actionnaires, setActionnaires] = useState<Actionnaire[]>([])
   const [charges, setCharges] = useState<Charge[]>([])

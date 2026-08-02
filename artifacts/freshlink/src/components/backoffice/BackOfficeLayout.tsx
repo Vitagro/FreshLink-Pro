@@ -538,7 +538,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   analyse_achat:       (_u) => <AnalyseAchatPanel />,
   temps_achat:         (_u) => <AnalyseTempsAchat />,
   shop_analytics:      (_u) => <BOShopAnalytics />,
-  promo_codes:         (_u) => <BOPromoCodes />,
+  promo_codes:         (u) => <BOPromoCodes user={u} />,
   caisse_acheteur:     (_u) => <AnalyseCaisseAcheteur />,
   analyse_credit:      (_u) => <BOAnalyseCredit />,
   roles_permissions:   (u) => <BORolesPermissionsHub user={u} />,

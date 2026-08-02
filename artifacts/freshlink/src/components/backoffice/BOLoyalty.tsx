@@ -13,6 +13,8 @@ import {
   type PrimeNouveauClient,
 } from "@/lib/store"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ─── Icon helper ─────────────────────────────────────────────────────────────
 function Icon({ d, className = "w-5 h-5" }: { d: string; className?: string }) {
@@ -114,7 +116,9 @@ export default function BOLoyalty({ user }: Props) {
   }
 
   const deleteRule = (id: string) => {
+    if (!hasPermission(user.role, "appliquer_remise")) { logAction(user, "appliquer_remise", "denied", { type: "regle_remise_suppression", id }); return }
     if (!confirm("Supprimer cette regle ?")) return
+    logAction(user, "appliquer_remise", "success", { type: "regle_remise_suppression", id })
     store.deleteDiscountRule(id)
     setRules(store.getDiscountRules())
   }
@@ -151,6 +155,8 @@ export default function BOLoyalty({ user }: Props) {
   const processRachat = () => {
     if (!rachatClientId || rachatPoints <= 0) return
     if (rachatPoints > clientPoints) { flash("Points insuffisants."); return }
+    if (!hasPermission(user.role, "appliquer_remise")) { logAction(user, "appliquer_remise", "denied", { type: "rachat_points", id: rachatClientId }); return }
+    logAction(user, "appliquer_remise", "success", { type: "rachat_points", id: rachatClientId, label: `${rachatPoints} pts` })
     const client = clients.find(c => c.id === rachatClientId)
     const tx: LoyaltyTransaction = {
       id: store.genId(),

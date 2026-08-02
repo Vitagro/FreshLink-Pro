@@ -11,11 +11,13 @@
 // ══════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect } from "react"
-import { store, type ReglementCV, type TypeReglementCV, type StatutReglementCV } from "@/lib/store"
+import { store, type ReglementCV, type TypeReglementCV, type StatutReglementCV, type UserRole } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // N'exige que ce dont ce composant a vraiment besoin (créateur du règlement)
 // — monté depuis BOCash et BOFinance, dont les types `user` de props diffèrent.
-interface Props { user: { id: string } }
+interface Props { user: { id: string; name: string; role: UserRole } }
 
 const TYPE_LABELS: Record<TypeReglementCV, string> = { cheque: "Chèque", virement: "Virement" }
 const STATUT_LABELS: Record<StatutReglementCV, string> = { en_attente: "En attente", encaisse: "Encaissé", rejete: "Rejeté" }
@@ -122,6 +124,8 @@ export default function BOChequesVirements({ user }: Props) {
   }
 
   const marquerEncaisse = (r: ReglementCV) => {
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "reglement_cv", id: r.id, label: `${r.type} ${r.montant}` }); return }
+    logAction(user, "valider_cash", "success", { type: "reglement_cv", id: r.id, label: `encaisse — ${r.type} ${r.montant}` })
     store.updateReglementCV(r.id, { statut: "encaisse", dateEncaissement: store.today() })
     const updated = store.getReglementsCV().find(x => x.id === r.id)
     if (updated) syncUpsert(updated)
@@ -130,6 +134,8 @@ export default function BOChequesVirements({ user }: Props) {
 
   const confirmerRejet = (r: ReglementCV) => {
     if (!motifRejet.trim()) return
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "reglement_cv", id: r.id, label: `rejet — ${r.type} ${r.montant}` }); return }
+    logAction(user, "valider_cash", "success", { type: "reglement_cv", id: r.id, label: `rejet — ${r.type} ${r.montant}` })
     store.updateReglementCV(r.id, { statut: "rejete", motifRejet: motifRejet.trim() })
     const updated = store.getReglementsCV().find(x => x.id === r.id)
     if (updated) syncUpsert(updated)
@@ -138,7 +144,9 @@ export default function BOChequesVirements({ user }: Props) {
   }
 
   const remove = (id: string) => {
+    if (!hasPermission(user.role, "valider_cash")) { logAction(user, "valider_cash", "denied", { type: "reglement_cv_suppression", id }); return }
     if (!confirm("Supprimer ce règlement du registre ?")) return
+    logAction(user, "valider_cash", "success", { type: "reglement_cv_suppression", id })
     store.deleteReglementCV(id)
     syncDelete(id)
     refresh()
