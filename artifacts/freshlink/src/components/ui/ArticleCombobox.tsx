@@ -15,6 +15,7 @@ export default function ArticleCombobox({ articles, value, onChange, placeholder
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
   const ref = useRef<HTMLDivElement>(null)
+  const crossdock = store.isCrossdockMode()
 
   const selected = articles.find(a => a.id === value)
 
@@ -46,7 +47,7 @@ export default function ArticleCombobox({ articles, value, onChange, placeholder
               <span className="text-xs text-muted-foreground truncate shrink-0" dir="rtl" lang="ar">{selected.nomAr}</span>
             )}
             <span className="text-xs text-muted-foreground shrink-0">{store.computePV(selected)} DH/{selected.unite}</span>
-            {selected.stockDisponible <= 0 && (
+            {!crossdock && selected.stockDisponible <= 0 && (
               <span className="text-[9px] font-bold px-1 rounded bg-orange-100 text-orange-600 shrink-0">Rupture</span>
             )}
           </span>
@@ -96,14 +97,14 @@ export default function ArticleCombobox({ articles, value, onChange, placeholder
                       {art.nomAr && (
                         <span className="text-xs text-muted-foreground truncate" dir="rtl" lang="ar">{art.nomAr}</span>
                       )}
-                      {art.stockDisponible <= 0 && (
+                      {!crossdock && art.stockDisponible <= 0 && (
                         <span className="text-[9px] font-bold px-1 rounded bg-orange-100 text-orange-600 shrink-0">Rupture</span>
                       )}
                       {art.id === value && (
                         <svg className="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">{store.computePV(art)} DH/{art.unite}{art.stockDisponible > 0 ? ` · Stock: ${art.stockDisponible} ${art.unite}` : ""}</p>
+                    <p className="text-[11px] text-muted-foreground">{store.computePV(art)} DH/{art.unite}{!crossdock && art.stockDisponible > 0 ? ` · Stock: ${art.stockDisponible} ${art.unite}` : ""}</p>
                   </div>
                 </button>
               ))

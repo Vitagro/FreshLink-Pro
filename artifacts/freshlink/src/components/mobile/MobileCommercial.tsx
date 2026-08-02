@@ -1828,11 +1828,13 @@ export default function MobileCommercial({ user }: Props) {
               </button>
             )}
           </div>
-          <button onClick={() => setShowStockBadges(v => !v)}
-            className={`mt-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${showStockBadges ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground"}`}>
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showStockBadges ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg>
-            {showStockBadges ? "Masquer le stock" : "Afficher le stock"}
-          </button>
+          {!store.isCrossdockMode() && (
+            <button onClick={() => setShowStockBadges(v => !v)}
+              className={`mt-2 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${showStockBadges ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground"}`}>
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showStockBadges ? "M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" : "M15 12a3 3 0 11-6 0 3 3 0 016 0z M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"} /></svg>
+              {showStockBadges ? "Masquer le stock" : "Afficher le stock"}
+            </button>
+          )}
           {/* Filtre par famille — réduit vraiment la liste (≠ tri "Par famille" qui ne fait que regrouper) */}
           <select value={filterFamille} onChange={e => setFilterFamille(e.target.value)}
             className="mt-2 ml-2 px-2.5 py-1 rounded-full text-[11px] font-semibold border border-border bg-background text-foreground focus:outline-none">

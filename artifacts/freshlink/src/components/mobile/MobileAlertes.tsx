@@ -36,6 +36,7 @@ function saveTreated(s: Set<string>) {
 }
 
 export default function MobileAlertes({ user }: Props) {
+  const crossdock = store.isCrossdockMode()
   const [alerts, setAlerts]               = useState<AlertItem[]>([])
   const [filter, setFilter]               = useState<"all" | "high" | "medium" | "low">("all")
   const [showTreated, setShowTreated]     = useState(false)
@@ -462,9 +463,11 @@ export default function MobileAlertes({ user }: Props) {
                     <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                       <span className="text-[10px] text-slate-500">📊 {a.nbCommandesHistorique}× commandé</span>
                       {a.prixVente != null && <span className="text-[10px] text-slate-500">💰 {a.prixVente.toLocaleString("fr-MA")} DH</span>}
-                      <span className={`text-[10px] font-semibold ${stockOk ? "text-green-600" : "text-red-500"}`}>
-                        {stockOk ? `✓ Stock: ${a.stockDisponible} kg` : "⚠ Stock indispo"}
-                      </span>
+                      {!crossdock && (
+                        <span className={`text-[10px] font-semibold ${stockOk ? "text-green-600" : "text-red-500"}`}>
+                          {stockOk ? `✓ Stock: ${a.stockDisponible} kg` : "⚠ Stock indispo"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

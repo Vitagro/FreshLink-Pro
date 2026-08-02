@@ -38,6 +38,8 @@ export default function ArticleSelector({
   const [focused, setFocused] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  // Pas de stock entrepot en mode crossdocking → jamais d'affichage stock, meme si showStock demande
+  const effectiveShowStock = showStock && !store.isCrossdockMode()
 
   // Load articles on mount
   useEffect(() => {
@@ -216,7 +218,7 @@ export default function ArticleSelector({
                           <span className="font-arabic text-[11px] text-slate-500" dir="rtl" lang="ar">{art.nomAr}</span>
                           <span className="text-[10px] text-slate-300">·</span>
                           <span className="text-[10px] text-slate-400">{art.unite}</span>
-                          {showStock && (
+                          {effectiveShowStock && (
                             <>
                               <span className="text-[10px] text-slate-300">·</span>
                               <span className={`text-[10px] font-bold ${stockColor(art)}`}>

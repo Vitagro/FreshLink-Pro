@@ -201,6 +201,7 @@ function POCameraCapture({ value, onChange }: { value: string; onChange: (url: s
 }
 
 export default function MobileAchat({ user }: Props) {
+  const crossdock = store.isCrossdockMode()
   const [articles, setArticles] = useState<Article[]>([])
   // Nom arabe — les lignes PO/entry ne le stockent pas toujours, on le
   // retrouve via l'id dans le catalogue deja charge.
@@ -1571,9 +1572,11 @@ export default function MobileAchat({ user }: Props) {
                   <p className="text-xs font-bold text-foreground truncate">{a.nom}</p>
                   {a.nomAr && <p className="text-[10px] text-muted-foreground font-arabic" dir="rtl" lang="ar">{a.nomAr}</p>}
                   <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${a.stockDisponible > 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
-                      {a.stockDisponible > 0 ? `${a.stockDisponible} ${a.unite}` : "Rupture"}
-                    </span>
+                    {!crossdock && (
+                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${a.stockDisponible > 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}>
+                        {a.stockDisponible > 0 ? `${a.stockDisponible} ${a.unite}` : "Rupture"}
+                      </span>
+                    )}
                     {rotCount > 0 && <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md bg-blue-100 text-blue-700">{rotCount}×</span>}
                   </div>
                 </div>

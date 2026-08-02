@@ -3723,14 +3723,16 @@ export const store = {
     const dateDebut = range?.dateDebut ?? today
     const dateFin = range?.dateFin ?? today
     const articles = store.getArticles()
+    const crossdock = store.isCrossdockMode()
     const commandes = store.getCommandes().filter(c => c.date >= dateDebut && c.date <= dateFin && (c.statut === "en_attente" || c.statut === "valide"))
     const retours = store.getRetours().filter(r => r.date >= dateDebut && r.date <= dateFin && r.statut === "validé")
     return articles.map(art => {
       const commandeQty = commandes.reduce((s, c) => s + (c.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)
       const retourQty = retours.reduce((s, r) => s + (r.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)
       // NOT clamped — negative = surplus, positive = deficit → DA required
-      const besoinNet = commandeQty - art.stockDisponible - retourQty
-      return { articleId: art.id, articleNom: `${art.nom} / ${art.nomAr}`, unite: art.unite, commandeQty, stockQty: art.stockDisponible, retourQty, besoinNet }
+      // En crossdocking il n'y a pas de stock entrepot : le besoin = ce qui est commande (pas de deduction stock)
+      const besoinNet = crossdock ? commandeQty - retourQty : commandeQty - art.stockDisponible - retourQty
+      return { articleId: art.id, articleNom: `${art.nom} / ${art.nomAr}`, unite: art.unite, commandeQty, stockQty: crossdock ? 0 : art.stockDisponible, retourQty, besoinNet }
     }).filter(l => l.commandeQty > 0)
   },
 
@@ -3889,6 +3891,9 @@ export const store = {
   // --- Process config ---
   getProcessConfig: (): ProcessConfig => ({ ...DEFAULT_PROCESS_CONFIG, ...getLS<Partial<ProcessConfig>>("fl_process_config", {}) }),
   saveProcessConfig: (c: ProcessConfig) => setLS("fl_process_config", c),
+  // Mode crossdocking actif : pas de stock entrepot, donc pas d'alerte stock
+  // ni de deduction de stock dans le calcul du besoin d'achat.
+  isCrossdockMode: (): boolean => store.getProcessConfig().modeCrossdocking === true,
   getFiscalConfig: (): FiscalConfig => ({ ...DEFAULT_FISCAL_CONFIG, ...getLS<Partial<FiscalConfig>>("fl_fiscal_config", {}) }),
   saveFiscalConfig: (c: FiscalConfig) => setLS("fl_fiscal_config", c),
 

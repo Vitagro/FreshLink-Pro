@@ -40,6 +40,11 @@ interface BesoinRow extends BesoinLigneEmail {
   um?: string             // libelle UM (ex: "Caisse") si l'article en a une
   colisageParUM?: number  // kg par UM — sert au calcul du nombre de caisses
   articleNomAr?: string
+  // Nombre de caisses tel que saisi directement par le commercial sur ses commandes
+  // (quantiteUM des lignes de commande). En mode crossdocking le colisage achat differe
+  // du colisage vente : recalculer les caisses depuis les kg via colisageParUM donnerait
+  // un nombre faux, donc on prend directement ce qui a ete saisi par le commercial.
+  caissesCommercial: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -100,21 +105,34 @@ function getFournisseurHabituel(articleId: string): { id: string; nom: string; e
 }
 
 /**
- * Calcul besoin d'achat net :
- *  besoin = MAX(0, commandes prévendeurs du jour – stock disponible – retours validés)
+ * Calcul besoin d'achat net sur un intervalle date (+ heure optionnelle) :
+ *  - Mode normal      : besoin = MAX(0, commandes − stock disponible − retours validés)
+ *  - Mode crossdocking : pas de stock entrepot → besoin = MAX(0, commandes − retours validés)
  */
-function computeBesoinRows(): BesoinRow[] {
-  const articles    = store.getArticles()
+function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: string, heureFin: string): BesoinRow[] {
+  const articles     = store.getArticles()
   const fournisseurs = store.getFournisseurs()
-  const today       = store.today()
+  const crossdock    = store.isCrossdockMode()
 
-  // Commandes actives du jour (prévendeurs)
+  const inDateRange = (d: string) => d >= dateDebut && d <= dateFin
+  const heureCommande = (c: { createdAt?: string; heurelivraison: string }) =>
+    (c.createdAt ? c.createdAt.slice(11, 16) : c.heurelivraison) || ""
+  const inHeureRange = (c: { createdAt?: string; heurelivraison: string }) => {
+    if (!heureDebut && !heureFin) return true
+    const h = heureCommande(c)
+    if (!h) return true
+    if (heureDebut && h < heureDebut) return false
+    if (heureFin && h > heureFin) return false
+    return true
+  }
+
+  // Commandes actives dans l'intervalle (prévendeurs)
   const commandes = store.getCommandes().filter(c =>
-    c.date === today && (c.statut === "en_attente" || c.statut === "valide")
+    inDateRange(c.date) && inHeureRange(c) && (c.statut === "en_attente" || c.statut === "valide")
   )
-  // Retours validés du jour remis en stock
+  // Retours validés dans l'intervalle, remis en stock
   const retours = store.getRetours().filter(r =>
-    r.date === today && r.statut === "validé"
+    inDateRange(r.date) && r.statut === "validé"
   )
 
   return articles
@@ -123,11 +141,17 @@ function computeBesoinRows(): BesoinRow[] {
         const l = c.lignes.find(l => l.articleId === art.id)
         return s + (l?.quantite ?? 0)
       }, 0)
+      const caissesCommercial = commandes.reduce((s, c) => {
+        const l = c.lignes.find(l => l.articleId === art.id)
+        return s + (l?.quantiteUM ?? 0)
+      }, 0)
       const retourQty = retours.reduce((s, r) => {
         const l = r.lignes.find(l => l.articleId === art.id)
         return s + (l?.quantite ?? 0)
       }, 0)
-      const besoinNet = Math.max(0, commandeTotal - art.stockDisponible - retourQty)
+      const besoinNet = crossdock
+        ? Math.max(0, commandeTotal - retourQty)
+        : Math.max(0, commandeTotal - art.stockDisponible - retourQty)
 
       // Trouver le fournisseur habituel
       const fHabituel = getFournisseurHabituel(art.id)
@@ -141,7 +165,7 @@ function computeBesoinRows(): BesoinRow[] {
         fournisseurId:  fournisseur?.id   ?? "inconnu",
         fournisseurNom: fournisseur?.nom  ?? "Fournisseur inconnu",
         commandeTotal,
-        stockActuel:    art.stockDisponible,
+        stockActuel:    crossdock ? 0 : art.stockDisponible,
         retours:        retourQty,
         besoinNet,
         unite:          art.unite,
@@ -149,6 +173,7 @@ function computeBesoinRows(): BesoinRow[] {
         um:             art.um,
         colisageParUM:  art.colisageParUM,
         articleNomAr:   art.nomAr,
+        caissesCommercial,
       }
     })
     .filter(r => r.commandeTotal > 0)
@@ -187,7 +212,15 @@ export default function BORecap() {
   // avant). Elargir "Au" agrege la synthese sur plusieurs jours.
   const [selectedDateFin, setSelectedDateFin] = useState(today)
   const [stats, setStats]                 = useState<DailyStats>(() => computeStats(today))
-  const [rows, setRows]                   = useState<BesoinRow[]>(() => computeBesoinRows())
+  const crossdock = store.isCrossdockMode()
+
+  // Intervalle date + heure dedie au Besoin d'achat net (independant de recap)
+  const [besoinDateDebut, setBesoinDateDebut] = useState(today)
+  const [besoinDateFin, setBesoinDateFin]     = useState(today)
+  const [besoinHeureDebut, setBesoinHeureDebut] = useState("")
+  const [besoinHeureFin, setBesoinHeureFin]     = useState("")
+
+  const [rows, setRows]                   = useState<BesoinRow[]>(() => computeBesoinRows(today, today, "", ""))
   const [activeTab, setActiveTab]         = useState<"recap" | "besoin" | "config">("recap")
 
   // --- Recap send state ---
@@ -228,8 +261,8 @@ export default function BORecap() {
 
   const refreshAll = useCallback(() => {
     setStats(computeStats(selectedDate, selectedDateFin))
-    setRows(computeBesoinRows())
-  }, [selectedDate, selectedDateFin])
+    setRows(computeBesoinRows(besoinDateDebut, besoinDateFin, besoinHeureDebut, besoinHeureFin))
+  }, [selectedDate, selectedDateFin, besoinDateDebut, besoinDateFin, besoinHeureDebut, besoinHeureFin])
 
   useEffect(() => { refreshAll() }, [refreshAll])
 
@@ -372,6 +405,20 @@ export default function BORecap() {
   const handleExportBesoin = async () => {
     const XLSX = await import("xlsx")
     const exportRows = rows.map(r => {
+      if (crossdock) {
+        return {
+          Article: r.articleNom,
+          ArticleAr: r.articleNomAr ?? "",
+          Fournisseur: r.fournisseurNom ?? "",
+          Commandes: r.commandeTotal,
+          Retours: r.retours,
+          "Besoin net": r.besoinNet,
+          Unite: r.unite ?? "",
+          UM: r.um ?? "",
+          "Caisses (saisies commercial)": r.caissesCommercial,
+          Selectionne: r.selected ? "oui" : "non",
+        }
+      }
       const c = r.besoinNet > 0 ? computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM) : { gros: 0, demi: 0 }
       return {
         Article: r.articleNom,
@@ -391,7 +438,7 @@ export default function BORecap() {
     const ws = XLSX.utils.json_to_sheet(exportRows)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, "Besoin d'achat")
-    XLSX.writeFile(wb, `besoin_achat_${selectedDate === selectedDateFin ? selectedDate : `${selectedDate}_${selectedDateFin}`}.xlsx`)
+    XLSX.writeFile(wb, `besoin_achat_${besoinDateDebut === besoinDateFin ? besoinDateDebut : `${besoinDateDebut}_${besoinDateFin}`}.xlsx`)
   }
 
   const handleImportBesoinFile = async (file: File) => {
@@ -637,9 +684,15 @@ export default function BORecap() {
           {/* Header */}
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h3 className="font-semibold text-foreground">Besoin d'achat net — {today}</h3>
+              <h3 className="font-semibold text-foreground">
+                Besoin d'achat net — {besoinDateDebut === besoinDateFin ? besoinDateDebut : `${besoinDateDebut} → ${besoinDateFin}`}
+                {(besoinHeureDebut || besoinHeureFin) && ` (${besoinHeureDebut || "00:00"}–${besoinHeureFin || "23:59"})`}
+                {crossdock && <span className="ml-2 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 align-middle">Crossdocking</span>}
+              </h3>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Formule : Commandes prévendeurs du jour − Stock disponible − Retours validés
+                {crossdock
+                  ? "Formule : Commandes prévendeurs − Retours validés (pas de stock entrepot en crossdocking)"
+                  : "Formule : Commandes prévendeurs − Stock disponible − Retours validés"}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -671,11 +724,37 @@ export default function BORecap() {
             <p className="text-xs text-red-600 -mt-2">{importBesoinError}</p>
           )}
 
+          {/* Intervalle date + heure */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-sm text-muted-foreground">Du :</label>
+            <input type="date" value={besoinDateDebut} max={besoinDateFin}
+              onChange={e => setBesoinDateDebut(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label className="text-sm text-muted-foreground">Au :</label>
+            <input type="date" value={besoinDateFin} min={besoinDateDebut}
+              onChange={e => setBesoinDateFin(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label className="text-sm text-muted-foreground">De :</label>
+            <input type="time" value={besoinHeureDebut}
+              onChange={e => setBesoinHeureDebut(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label className="text-sm text-muted-foreground">à :</label>
+            <input type="time" value={besoinHeureFin}
+              onChange={e => setBesoinHeureFin(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-border bg-background text-sm font-sans focus:outline-none focus:ring-2 focus:ring-primary" />
+            {(besoinDateDebut !== today || besoinDateFin !== today || besoinHeureDebut || besoinHeureFin) && (
+              <button onClick={() => { setBesoinDateDebut(today); setBesoinDateFin(today); setBesoinHeureDebut(""); setBesoinHeureFin("") }}
+                className="px-3 py-2 rounded-lg text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100">
+                ↺ Aujourd&apos;hui
+              </button>
+            )}
+          </div>
+
           {/* Tableau besoin */}
           {rows.length === 0 ? (
             <div className="bg-card rounded-xl border border-border p-10 text-center">
               <svg className="w-12 h-12 mx-auto mb-3 text-muted-foreground opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
-              <p className="text-muted-foreground text-sm">Aucune commande active aujourd&apos;hui</p>
+              <p className="text-muted-foreground text-sm">Aucune commande active sur cet intervalle</p>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-border">
@@ -688,7 +767,10 @@ export default function BORecap() {
                         onChange={e => setRows(prev => prev.map(r => ({ ...r, selected: e.target.checked })))}
                         className="w-4 h-4 rounded" />
                     </th>
-                    {["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net", "Caisses"].map(h => (
+                    {(crossdock
+                      ? ["Article", "Fournisseur", "Commandes", "Retours", "Besoin net", "Caisses (saisies commercial)"]
+                      : ["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net", "Caisses"]
+                    ).map(h => (
                       <th key={h} className="text-left px-3 py-3 text-muted-foreground font-medium text-xs uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
@@ -708,9 +790,11 @@ export default function BORecap() {
                       </td>
                       <td className="px-3 py-3 text-muted-foreground text-xs">{r.fournisseurNom}</td>
                       <td className="px-3 py-3 text-center font-medium">{r.commandeTotal} {r.unite}</td>
-                      <td className={`px-3 py-3 text-center font-semibold ${r.stockActuel === 0 ? "text-red-600" : r.stockActuel < r.commandeTotal ? "text-amber-600" : "text-green-600"}`}>
-                        {r.stockActuel}
-                      </td>
+                      {!crossdock && (
+                        <td className={`px-3 py-3 text-center font-semibold ${r.stockActuel === 0 ? "text-red-600" : r.stockActuel < r.commandeTotal ? "text-amber-600" : "text-green-600"}`}>
+                          {r.stockActuel}
+                        </td>
+                      )}
                       <td className="px-3 py-3 text-center text-emerald-600 font-medium">{r.retours > 0 ? `+${r.retours}` : "—"}</td>
                       <td className="px-3 py-3 text-center">
                         {r.besoinNet > 0
@@ -718,19 +802,25 @@ export default function BORecap() {
                               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                               {r.besoinNet} {r.unite}
                             </span>
-                          : <span className="text-green-600 text-xs font-semibold">Stock OK</span>
+                          : <span className="text-green-600 text-xs font-semibold">{crossdock ? "Aucun besoin" : "Stock OK"}</span>
                         }
                       </td>
                       <td className="px-3 py-3 text-center text-xs">
-                        {r.besoinNet > 0 ? (() => {
-                          const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM)
-                          if (c.gros === 0 && c.demi === 0) return <span className="text-muted-foreground">—</span>
-                          return (
-                            <span className="font-semibold text-blue-700">
-                              {c.gros > 0 ? `${c.gros} gros` : ""}{c.gros > 0 && c.demi > 0 ? " + " : ""}{c.demi > 0 ? `${c.demi} demi` : ""}
-                            </span>
-                          )
-                        })() : <span className="text-muted-foreground">—</span>}
+                        {crossdock ? (
+                          r.caissesCommercial > 0
+                            ? <span className="font-semibold text-blue-700">{r.caissesCommercial} caisse{r.caissesCommercial > 1 ? "s" : ""}</span>
+                            : <span className="text-muted-foreground">—</span>
+                        ) : (
+                          r.besoinNet > 0 ? (() => {
+                            const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM)
+                            if (c.gros === 0 && c.demi === 0) return <span className="text-muted-foreground">—</span>
+                            return (
+                              <span className="font-semibold text-blue-700">
+                                {c.gros > 0 ? `${c.gros} gros` : ""}{c.gros > 0 && c.demi > 0 ? " + " : ""}{c.demi > 0 ? `${c.demi} demi` : ""}
+                              </span>
+                            )
+                          })() : <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     </tr>
                   ))}

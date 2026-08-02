@@ -84,6 +84,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   const [editArt, setEditArt] = useState<Article | null>(null)
   const [showHisto, setShowHisto] = useState<Article | null>(null)
   const [caisses, setCaisses] = useState(store.getCaissesVides())
+  const crossdock = store.isCrossdockMode()
   const [caissesEtr, setCaissesEtr] = useState(store.getCaissesEtrangeres())
   const [caissesEtrFilterStatut, setCaissesEtrFilterStatut] = useState<"" | StatutCaisseEtrangere>("")
   const [caissesEtrFilterFournisseur, setCaissesEtrFilterFournisseur] = useState("")
@@ -1377,10 +1378,12 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                   <div className={`absolute top-1.5 right-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${FAMILLE_COLORS[a.famille] || "bg-slate-50 text-slate-700 border-slate-200"}`}>
                     {a.famille.split(" ").slice(-1)[0]}
                   </div>
-                  {/* Stock badge */}
-                  <div className={`absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${a.stockDisponible > 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
-                    {a.stockDisponible > 0 ? `${a.stockDisponible} ${a.unite}` : "Rupture"}
-                  </div>
+                  {/* Stock badge — masqué en mode crossdocking (pas de stock entrepot) */}
+                  {!crossdock && (
+                    <div className={`absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border ${a.stockDisponible > 0 ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"}`}>
+                      {a.stockDisponible > 0 ? `${a.stockDisponible} ${a.unite}` : "Rupture"}
+                    </div>
+                  )}
                   {/* Inactive overlay */}
                   {!(a.actif ?? true) && (
                     <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">

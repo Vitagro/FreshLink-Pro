@@ -50,7 +50,13 @@ ${clientsCreditBloque.length ? `\n⚠️ ${clientsCreditBloque.length} client(s)
 function contextAchat(_user: User): string {
   const demandes = store.getDemandesAchat().filter(d => d.statut === "ouverte" || d.statut === "en_cours")
   const articles = store.getArticles()
+  const crossdock = store.isCrossdockMode()
   const lignesDemandes = demandes.slice(0, 15).map(d => `  • ${d.articleNom} : besoin ${d.besoinNet} ${d.articleUnite} (${d.statut})${d.fournisseurNom ? ` — fournisseur habituel: ${d.fournisseurNom}` : ""}`).join("\n")
+  if (crossdock) {
+    return `DONNÉES ACTUELLES (réelles) — Mode crossdocking : pas de stock entrepot, l'achat se fait directement sur les commandes.
+Besoins d'achat ouverts (${demandes.length}) :
+${lignesDemandes || "  Aucun besoin ouvert actuellement."}`
+  }
   const ruptures = articles.filter(a => a.stockDisponible <= 0).slice(0, 10).map(a => `  • ${a.nom} (${a.famille})`).join("\n")
   return `DONNÉES ACTUELLES (réelles) :
 Besoins d'achat ouverts (${demandes.length}) :

@@ -370,6 +370,8 @@ function POAchatTab({ pos, articles, onRefresh }: { pos: PurchaseOrder[]; articl
 // Besoin SKU Tab — besoins nets calcules depuis les commandes
 // ─────────────────────────────────────────────────────────────
 function BesoinSKUTab({ besoin }: { besoin: ReturnType<typeof store.computeBesoinNet> }) {
+  const crossdock = store.isCrossdockMode()
+
   if (besoin.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
@@ -377,7 +379,9 @@ function BesoinSKUTab({ besoin }: { besoin: ReturnType<typeof store.computeBesoi
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
         </svg>
         <p className="text-muted-foreground text-sm font-medium">Aucun besoin SKU aujourd&apos;hui</p>
-        <p className="text-muted-foreground/60 text-xs">Apparait quand le stock ne couvre pas les commandes du jour</p>
+        <p className="text-muted-foreground/60 text-xs">
+          {crossdock ? "Apparait selon les commandes du jour" : "Apparait quand le stock ne couvre pas les commandes du jour"}
+        </p>
       </div>
     )
   }
@@ -390,29 +394,31 @@ function BesoinSKUTab({ besoin }: { besoin: ReturnType<typeof store.computeBesoi
       <div className="grid grid-cols-2 gap-2">
         <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-center">
           <p className="text-xl font-black text-red-700">{urgents.length}</p>
-          <p className="text-[10px] text-red-600 font-semibold">SKU en rupture</p>
+          <p className="text-[10px] text-red-600 font-semibold">{crossdock ? "SKU à acheter" : "SKU en rupture"}</p>
         </div>
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-center">
           <p className="text-xl font-black text-emerald-700">{couverts.length}</p>
-          <p className="text-[10px] text-emerald-600 font-semibold">SKU couverts</p>
+          <p className="text-[10px] text-emerald-600 font-semibold">{crossdock ? "SKU sans besoin" : "SKU couverts"}</p>
         </div>
       </div>
 
       {urgents.length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-bold text-red-700 uppercase tracking-wider">Ruptures — achat urgent</p>
+          <p className="text-xs font-bold text-red-700 uppercase tracking-wider">{crossdock ? "À acheter" : "Ruptures — achat urgent"}</p>
           {urgents.map(b => (
             <div key={b.articleId} className="bg-red-50 border border-red-200 rounded-2xl p-3 space-y-1.5">
               <p className="font-bold text-sm text-red-900">{b.articleNom}</p>
-              <div className="grid grid-cols-3 gap-1 text-center text-[10px]">
+              <div className={`grid ${crossdock ? "grid-cols-2" : "grid-cols-3"} gap-1 text-center text-[10px]`}>
                 <div className="bg-white rounded-lg p-1.5">
                   <p className="text-muted-foreground">Commande</p>
                   <p className="font-bold text-foreground">{b.commandeQty} {b.unite}</p>
                 </div>
-                <div className="bg-white rounded-lg p-1.5">
-                  <p className="text-muted-foreground">Stock</p>
-                  <p className="font-bold text-emerald-700">{b.stockQty} {b.unite}</p>
-                </div>
+                {!crossdock && (
+                  <div className="bg-white rounded-lg p-1.5">
+                    <p className="text-muted-foreground">Stock</p>
+                    <p className="font-bold text-emerald-700">{b.stockQty} {b.unite}</p>
+                  </div>
+                )}
                 <div className="bg-red-100 rounded-lg p-1.5">
                   <p className="text-red-600">Besoin</p>
                   <p className="font-bold text-red-700">{b.besoinNet} {b.unite}</p>
@@ -423,7 +429,7 @@ function BesoinSKUTab({ besoin }: { besoin: ReturnType<typeof store.computeBesoi
         </div>
       )}
 
-      {couverts.length > 0 && (
+      {!crossdock && couverts.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Couverts par stock</p>
           {couverts.map(b => (

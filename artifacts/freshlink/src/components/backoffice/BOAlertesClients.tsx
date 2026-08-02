@@ -51,6 +51,7 @@ const GLOBAL_ROLES = ["super_super_admin", "super_admin", "admin", "resp_commerc
 
 export default function BOAlertesClients({ user }: Props) {
   const isGlobalScope = GLOBAL_ROLES.includes(user.role)
+  const crossdock = store.isCrossdockMode()
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [clientFilter, setClientFilter] = useState("")
@@ -272,7 +273,7 @@ export default function BOAlertesClients({ user }: Props) {
                   <th className="px-3 py-2.5 font-semibold text-center">Cmd.</th>
                   <th className="px-3 py-2.5 font-semibold text-right">Dernière</th>
                   <th className="px-3 py-2.5 font-semibold text-right">Val. estimée</th>
-                  <th className="px-3 py-2.5 font-semibold text-center">Stock</th>
+                  {!crossdock && <th className="px-3 py-2.5 font-semibold text-center">Stock</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -298,11 +299,13 @@ export default function BOAlertesClients({ user }: Props) {
                         {new Date(a.lastDate).toLocaleDateString("fr-MA", { day: "2-digit", month: "2-digit", year: "2-digit" })}
                       </td>
                       <td className="px-3 py-2.5 text-right font-bold text-slate-900 whitespace-nowrap">{money(a.valeurEstimee)}</td>
-                      <td className="px-3 py-2.5 text-center">
-                        <span className={`text-[11px] font-semibold ${stockOk ? "text-green-600" : "text-red-500"}`}>
-                          {stockOk ? `✓ ${a.stockDisponible}` : "⚠ 0"}
-                        </span>
-                      </td>
+                      {!crossdock && (
+                        <td className="px-3 py-2.5 text-center">
+                          <span className={`text-[11px] font-semibold ${stockOk ? "text-green-600" : "text-red-500"}`}>
+                            {stockOk ? `✓ ${a.stockDisponible}` : "⚠ 0"}
+                          </span>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}
