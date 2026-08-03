@@ -784,6 +784,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
   const [showNew, setShowNew] = useState(false)
   const [search, setSearch] = useState("")
   const [sortMode, setSortMode] = useState<"recent" | "alpha">("recent")
+  const [listTab, setListTab] = useState<"actifs" | "archive">("actifs")
   const [viewing, setViewing] = useState<BonPreparation | null>(null)
   const [retiringId, setRetiringId] = useState<string | null>(null)
   const [validatingId, setValidatingId] = useState<string | null>(null)
@@ -1558,10 +1559,25 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
         </div>
       </div>
 
+      {/* Un bon "valide" (termine) sort de la liste active et va dans l'Archive
+          — meme logique que les trips finalises dans Dispatch. */}
+      <div className="flex gap-1 p-1 rounded-xl bg-muted w-fit">
+        {[
+          { id: "actifs" as const, label: "Actifs", count: bons.filter(b => b.statut !== "valide").length },
+          { id: "archive" as const, label: "Archive", count: bons.filter(b => b.statut === "valide").length },
+        ].map(t => (
+          <button key={t.id} onClick={() => setListTab(t.id)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${listTab === t.id ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            {t.label} ({t.count})
+          </button>
+        ))}
+      </div>
+
       {showNew && <NewBonForm />}
 
       {(() => {
-        const bonsFiltres = bons
+        const bonsScope = bons.filter(b => listTab === "archive" ? b.statut === "valide" : b.statut !== "valide")
+        const bonsFiltres = bonsScope
           .filter(b => !search.trim() || b.nom.toLowerCase().includes(search.trim().toLowerCase()))
           .sort((a, b) => sortMode === "alpha" ? a.nom.localeCompare(b.nom, "fr") : b.date.localeCompare(a.date))
         return bonsFiltres.length === 0 ? (
@@ -1569,8 +1585,16 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
           <svg className="w-14 h-14 mx-auto mb-4 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
           </svg>
-          <p className="font-medium">{bons.length === 0 ? "Aucun bon de préparation" : "Aucun résultat"}</p>
-          <p className="text-sm mt-1">{bons.length === 0 ? "Créez un bon pour organiser le picking du chargement" : "Essayez une autre recherche"}</p>
+          <p className="font-medium">
+            {bonsScope.length === 0
+              ? (listTab === "archive" ? "Aucun bon archivé" : "Aucun bon actif")
+              : "Aucun résultat"}
+          </p>
+          <p className="text-sm mt-1">
+            {bonsScope.length === 0
+              ? (listTab === "archive" ? "Les bons validés apparaîtront ici" : "Créez un bon pour organiser le picking du chargement")
+              : "Essayez une autre recherche"}
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
