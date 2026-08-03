@@ -39,8 +39,7 @@ const EMPTY_LIVREUR: Omit<Livreur, "id"> = {
 }
 
 export default function BODispatch({ user }: Props) {
-  const [activeTab, setActiveTab] = useState<"trips" | "livreurs" | "transporteurs" | "charge">("trips")
-  const [showFinishedTrips, setShowFinishedTrips] = useState(false)
+  const [activeTab, setActiveTab] = useState<"trips" | "historique" | "livreurs" | "transporteurs" | "charge">("trips")
 
   // ---- Charge logistique state ----
   const [chargeForm, setChargeForm] = useState({
@@ -608,12 +607,148 @@ export default function BODispatch({ user }: Props) {
     "terminé": "bg-green-100 text-green-800",
   }
 
+  const activeTrips = trips.filter(t => t.statut !== "terminé")
+  const finishedTrips = trips.filter(t => t.statut === "terminé")
+
+  const renderTrip = (trip: Trip) => (
+    <div key={trip.id} className="bg-card rounded-2xl border border-border overflow-hidden">
+      <div className="p-4 flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="font-bold text-foreground">👤 {trip.livreurNom}</span>
+            {trip.conducteurNom && (
+              <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold">🚚 {trip.conducteurNom}</span>
+            )}
+            {trip.vehicule && <span className="px-2 py-0.5 bg-muted rounded-lg text-xs text-muted-foreground">{trip.vehicule}</span>}
+            <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${tripStatusColor[trip.statut] || "bg-gray-100 text-gray-800"}`}>{trip.statut}</span>
+          </div>
+          <p className="text-xs text-muted-foreground">{trip.date} · {trip.commandeIds.length} commandes</p>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {trip.commandeIds.map(cid => {
+              const cmd = commandes.find(c => c.id === cid)
+              return cmd ? (
+                <span key={cid} className="flex items-center gap-1 px-2 py-0.5 bg-muted rounded-lg text-xs text-foreground">
+                  {cmd.clientNom}
+                  {trip.statut === "planifié" && (
+                    <button onClick={() => desassignerCommande(trip.id, cid)} title="Désassigner cette commande"
+                      className="text-muted-foreground hover:text-red-600 leading-none">×</button>
+                  )}
+                </span>
+              ) : null
+            })}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {trip.statut === "planifié" && (
+            <>
+              <button onClick={() => openEditTrip(trip)} title="Modifier ce trip"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-border text-muted-foreground hover:bg-muted">
+                Modifier
+              </button>
+              <button onClick={() => deleteTrip(trip)} disabled={deletingTripId === trip.id} title="Supprimer ce trip"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40">
+                Supprimer
+              </button>
+            </>
+          )}
+          {trip.statut === "planifié" && (
+            canRunTrip(trip) ? (
+              <button onClick={() => updateTripStatus(trip.id, "en_cours")}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-orange-500 hover:opacity-90">
+                Démarrer
+              </button>
+            ) : (
+              <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-muted-foreground bg-muted" title="Seul le livreur assigné démarre sa tournée">
+                En attente du livreur
+              </span>
+            )
+          )}
+          {trip.statut === "en_cours" && canRunTrip(trip) && (
+            <button onClick={() => updateTripStatus(trip.id, "terminé")}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-green-600 hover:opacity-90">
+              Terminer
+            </button>
+          )}
+          {trip.statut === "terminé" && (
+            <button onClick={() => setPrintOptionsTripId(printOptionsTripId === trip.id ? null : trip.id)}
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-slate-700 hover:opacity-90">
+              🖨️ Imprimer BL
+            </button>
+          )}
+        </div>
+      </div>
+
+      {printOptionsTripId === trip.id && (
+        <div className="border-t border-border px-4 py-3 bg-slate-50/60 flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-semibold text-slate-600">
+            {store.getBonsLivraison().filter(b => b.tripId === trip.id).length} BL individuel(s) — un par client
+          </span>
+          <button onClick={() => handlePrintTripBLs(trip, false)}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-300 hover:bg-slate-100">
+            Sans feuille de route
+          </button>
+          <button onClick={() => handlePrintTripBLs(trip, true)}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-slate-700 hover:opacity-90">
+            Avec feuille de route
+          </button>
+          <button onClick={() => setPrintOptionsTripId(null)}
+            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100">
+            Annuler
+          </button>
+        </div>
+      )}
+
+      {/* Estimation coût voyage + analyse carburant (prévu vs réel) */}
+      {(() => {
+        const c = tripCout(trip)
+        return (
+          <div className="border-t border-border px-4 py-3 bg-slate-50/60 flex flex-col gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-bold text-slate-700">
+                💰 Coût voyage {c.isEstime ? "estimé (à l'affectation)" : ""} : <span className="text-emerald-700">{c.coutEstime.toLocaleString("fr-MA")} DH</span>
+              </span>
+              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer">
+                <input type="checkbox" checked={c.avecCarb} onChange={e => toggleTripCarb(trip.id, e.target.checked)} className="w-3.5 h-3.5 rounded accent-primary" />
+                Avec carburant
+              </label>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+              <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5"><p className="text-slate-400">Km{c.isEstime ? " (estimé)" : ""}</p><p className="font-bold">{c.km || "—"}</p></div>
+              <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5"><p className="text-slate-400">Coût km</p><p className="font-bold">{c.coutKm} DH</p></div>
+              {c.avecCarb && <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5"><p className="text-slate-400">Carb. prévu</p><p className="font-bold">{c.litresPrevu} L · {c.coutCarbPrevu} DH</p></div>}
+              {c.avecCarb && (
+                <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5">
+                  <p className="text-slate-400">Carb. réel (L)</p>
+                  <input type="number" step="0.1" defaultValue={c.litresReel || ""} placeholder="saisir"
+                    onBlur={e => { const v = Number(e.target.value); if (v !== c.litresReel) setCarbReel(trip.id, v) }}
+                    className="w-full font-bold bg-transparent outline-none border-b border-slate-200 focus:border-primary" />
+                </div>
+              )}
+            </div>
+            {c.avecCarb && c.litresReel > 0 && (
+              <p className={`text-[11px] font-semibold ${c.ecartLitres > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                Écart conso : {c.ecartLitres > 0 ? "+" : ""}{c.ecartLitres} L vs prévu ({c.coutCarbReel} DH réel)
+                {c.ecartLitres > 0 ? " — surconsommation à vérifier" : " — conforme/économe"}
+              </p>
+            )}
+          </div>
+        )
+      })()}
+
+      {trip.itineraire && trip.itineraire.length > 0 && (
+        <div className="h-44 border-t border-border"
+          ref={el => { if (el && !mapRefs.current[trip.id]) { mapRefs.current[trip.id] = el; loadTripMap(trip, el) } }} />
+      )}
+    </div>
+  )
+
   return (
     <div className="flex flex-col gap-5">
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl bg-muted w-fit">
         {[
           { id: "trips" as const, label: "Trips & Dispatch", labelAr: "الرحلات" },
+          { id: "historique" as const, label: "Historique", labelAr: "الأرشيف" },
           { id: "livreurs" as const, label: "Livreurs", labelAr: "السائقون" },
           { id: "transporteurs" as const, label: "Transporteurs", labelAr: "شركات النقل" },
           { id: "charge" as const, label: "Charge Logistique", labelAr: "تكلفة النقل" },
@@ -828,164 +963,29 @@ export default function BODispatch({ user }: Props) {
             </div>
           )}
 
-          {/* Trips list */}
-          {(() => {
-            const activeTrips = trips.filter(t => t.statut !== "terminé")
-            const finishedTrips = trips.filter(t => t.statut === "terminé")
-            const renderTrip = (trip: Trip) => (
-            <div key={trip.id} className="bg-card rounded-2xl border border-border overflow-hidden">
-              <div className="p-4 flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-bold text-foreground">👤 {trip.livreurNom}</span>
-                    {trip.conducteurNom && (
-                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-xs font-semibold">🚚 {trip.conducteurNom}</span>
-                    )}
-                    {trip.vehicule && <span className="px-2 py-0.5 bg-muted rounded-lg text-xs text-muted-foreground">{trip.vehicule}</span>}
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${tripStatusColor[trip.statut] || "bg-gray-100 text-gray-800"}`}>{trip.statut}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{trip.date} · {trip.commandeIds.length} commandes</p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {trip.commandeIds.map(cid => {
-                      const cmd = commandes.find(c => c.id === cid)
-                      return cmd ? (
-                        <span key={cid} className="flex items-center gap-1 px-2 py-0.5 bg-muted rounded-lg text-xs text-foreground">
-                          {cmd.clientNom}
-                          {trip.statut === "planifié" && (
-                            <button onClick={() => desassignerCommande(trip.id, cid)} title="Désassigner cette commande"
-                              className="text-muted-foreground hover:text-red-600 leading-none">×</button>
-                          )}
-                        </span>
-                      ) : null
-                    })}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {trip.statut === "planifié" && (
-                    <>
-                      <button onClick={() => openEditTrip(trip)} title="Modifier ce trip"
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-border text-muted-foreground hover:bg-muted">
-                        Modifier
-                      </button>
-                      <button onClick={() => deleteTrip(trip)} disabled={deletingTripId === trip.id} title="Supprimer ce trip"
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40">
-                        Supprimer
-                      </button>
-                    </>
-                  )}
-                  {trip.statut === "planifié" && (
-                    canRunTrip(trip) ? (
-                      <button onClick={() => updateTripStatus(trip.id, "en_cours")}
-                        className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-orange-500 hover:opacity-90">
-                        Démarrer
-                      </button>
-                    ) : (
-                      <span className="px-3 py-1.5 rounded-xl text-xs font-medium text-muted-foreground bg-muted" title="Seul le livreur assigné démarre sa tournée">
-                        En attente du livreur
-                      </span>
-                    )
-                  )}
-                  {trip.statut === "en_cours" && canRunTrip(trip) && (
-                    <button onClick={() => updateTripStatus(trip.id, "terminé")}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-green-600 hover:opacity-90">
-                      Terminer
-                    </button>
-                  )}
-                  {trip.statut === "terminé" && (
-                    <button onClick={() => setPrintOptionsTripId(printOptionsTripId === trip.id ? null : trip.id)}
-                      className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-slate-700 hover:opacity-90">
-                      🖨️ Imprimer BL
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {printOptionsTripId === trip.id && (
-                <div className="border-t border-border px-4 py-3 bg-slate-50/60 flex items-center gap-3 flex-wrap">
-                  <span className="text-xs font-semibold text-slate-600">
-                    {store.getBonsLivraison().filter(b => b.tripId === trip.id).length} BL individuel(s) — un par client
-                  </span>
-                  <button onClick={() => handlePrintTripBLs(trip, false)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-slate-300 hover:bg-slate-100">
-                    Sans feuille de route
-                  </button>
-                  <button onClick={() => handlePrintTripBLs(trip, true)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-slate-700 hover:opacity-90">
-                    Avec feuille de route
-                  </button>
-                  <button onClick={() => setPrintOptionsTripId(null)}
-                    className="px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-100">
-                    Annuler
-                  </button>
-                </div>
-              )}
-
-              {/* Estimation coût voyage + analyse carburant (prévu vs réel) */}
-              {(() => {
-                const c = tripCout(trip)
-                return (
-                  <div className="border-t border-border px-4 py-3 bg-slate-50/60 flex flex-col gap-2">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-xs font-bold text-slate-700">
-                        💰 Coût voyage {c.isEstime ? "estimé (à l'affectation)" : ""} : <span className="text-emerald-700">{c.coutEstime.toLocaleString("fr-MA")} DH</span>
-                      </span>
-                      <label className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer">
-                        <input type="checkbox" checked={c.avecCarb} onChange={e => toggleTripCarb(trip.id, e.target.checked)} className="w-3.5 h-3.5 rounded accent-primary" />
-                        Avec carburant
-                      </label>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                      <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5"><p className="text-slate-400">Km{c.isEstime ? " (estimé)" : ""}</p><p className="font-bold">{c.km || "—"}</p></div>
-                      <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5"><p className="text-slate-400">Coût km</p><p className="font-bold">{c.coutKm} DH</p></div>
-                      {c.avecCarb && <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5"><p className="text-slate-400">Carb. prévu</p><p className="font-bold">{c.litresPrevu} L · {c.coutCarbPrevu} DH</p></div>}
-                      {c.avecCarb && (
-                        <div className="rounded-lg bg-white border border-slate-200 px-2 py-1.5">
-                          <p className="text-slate-400">Carb. réel (L)</p>
-                          <input type="number" step="0.1" defaultValue={c.litresReel || ""} placeholder="saisir"
-                            onBlur={e => { const v = Number(e.target.value); if (v !== c.litresReel) setCarbReel(trip.id, v) }}
-                            className="w-full font-bold bg-transparent outline-none border-b border-slate-200 focus:border-primary" />
-                        </div>
-                      )}
-                    </div>
-                    {c.avecCarb && c.litresReel > 0 && (
-                      <p className={`text-[11px] font-semibold ${c.ecartLitres > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                        Écart conso : {c.ecartLitres > 0 ? "+" : ""}{c.ecartLitres} L vs prévu ({c.coutCarbReel} DH réel)
-                        {c.ecartLitres > 0 ? " — surconsommation à vérifier" : " — conforme/économe"}
-                      </p>
-                    )}
-                  </div>
-                )
-              })()}
-
-              {trip.itineraire && trip.itineraire.length > 0 && (
-                <div className="h-44 border-t border-border"
-                  ref={el => { if (el && !mapRefs.current[trip.id]) { mapRefs.current[trip.id] = el; loadTripMap(trip, el) } }} />
-              )}
+          {/* Trips list (actifs uniquement — les trips termines sont dans l'onglet Historique) */}
+          {activeTrips.length === 0 ? (
+            <div className="bg-card rounded-2xl border border-border p-12 text-center text-muted-foreground">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+              </svg>
+              <p>Aucun trip actif / لا توجد رحلات نشطة</p>
             </div>
-            )
-            return (
-              <>
-                {activeTrips.length === 0 ? (
-                  <div className="bg-card rounded-2xl border border-border p-12 text-center text-muted-foreground">
-                    <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                    </svg>
-                    <p>Aucun trip actif / لا توجد رحلات نشطة</p>
-                  </div>
-                ) : activeTrips.map(renderTrip)}
+          ) : activeTrips.map(renderTrip)}
+        </div>
+      )}
 
-                {finishedTrips.length > 0 && (
-                  <div className="flex flex-col gap-4">
-                    <button onClick={() => setShowFinishedTrips(v => !v)}
-                      className="flex items-center justify-between px-4 py-3 rounded-2xl border border-border bg-muted/40 hover:bg-muted text-sm font-semibold text-foreground">
-                      <span>{showFinishedTrips ? "▾" : "▸"} Trips finalisés ({finishedTrips.length})</span>
-                    </button>
-                    {showFinishedTrips && finishedTrips.map(renderTrip)}
-                  </div>
-                )}
-              </>
-            )
-          })()}
+      {/* ====== HISTORIQUE (trips termines) ====== */}
+      {activeTab === "historique" && (
+        <div className="flex flex-col gap-4">
+          {finishedTrips.length === 0 ? (
+            <div className="bg-card rounded-2xl border border-border p-12 text-center text-muted-foreground">
+              <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p>Aucun trip finalisé / لا توجد رحلات منتهية</p>
+            </div>
+          ) : finishedTrips.map(renderTrip)}
         </div>
       )}
 
