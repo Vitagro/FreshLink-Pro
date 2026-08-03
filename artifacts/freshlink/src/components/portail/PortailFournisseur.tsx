@@ -757,7 +757,7 @@ export default function PortailFournisseur({ user, onLogout }: Props) {
                           if (p.id !== payModal.id) return p
                           const newPaye = Math.min(p.montantPaye + amount, p.montantTotal)
                           const statut: PaiementRecord["statut"] = newPaye >= p.montantTotal ? "solde" : newPaye > 0 ? "partiel" : "impaye"
-                          return { ...p, montantPaye: newPaye, statut, datePaiement: new Date().toISOString().slice(0, 10), notes: payNotes || p.notes }
+                          return { ...p, montantPaye: newPaye, statut, datePaiement: store.today(), notes: payNotes || p.notes }
                         })
                         savePaiements(fid, updated)
                         setPaiements(updated)

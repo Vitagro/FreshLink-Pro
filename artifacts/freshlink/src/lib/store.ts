@@ -2083,7 +2083,7 @@ export function canEditRecord(dateOrIso: string | undefined, user: User, windowM
   if (isSuperSuperAdmin(user)) return true
   if (!dateOrIso) return false
   const s = String(dateOrIso)
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s === new Date().toISOString().slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s === store.today()
   const t = new Date(s).getTime()
   if (isNaN(t)) return false
   return (Date.now() - t) <= windowMin * 60_000

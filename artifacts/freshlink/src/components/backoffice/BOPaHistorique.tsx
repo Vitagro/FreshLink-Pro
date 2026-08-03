@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { store } from "@/lib/store"
+import { store, type User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ══════════════════════════════════════════════════════════════════
 //  BOPaHistorique — Section 5
@@ -19,7 +21,7 @@ interface PaEntry {
   created_at: string
 }
 
-export default function BOPaHistorique() {
+export default function BOPaHistorique({ user }: { user: User }) {
   const [entries, setEntries] = useState<PaEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -146,7 +148,9 @@ export default function BOPaHistorique() {
   }
 
   const remove = async (id: string) => {
+    if (!hasPermission(user.role, "modifier_article")) { logAction(user, "modifier_article", "denied"); return }
     if (!window.confirm("Supprimer cette saisie PA ?")) return
+    logAction(user, "modifier_article", "success", { type: "pa_historique", id })
     setEntries(prev => prev.filter(x => x.id !== id))
     try { await fetch(`/api/ext/pa-historique?id=${encodeURIComponent(id)}`, { method: "DELETE" }) }
     catch (e) { setError(String(e)); load() }

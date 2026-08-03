@@ -33,7 +33,10 @@ export default function CutoffNotifier({ user }: { user: User }) {
       Notification.requestPermission().catch(() => {})
     }
 
-    const dayKey = () => new Date().toISOString().slice(0, 10)
+    // store.today() (calendaire locale), pas toISOString() (UTC) — sinon la
+    // cle de deduplication et le calcul de tonnage du jour se desynchronisent
+    // de la vraie date locale marocaine pendant la fenetre 00h00-00h59.
+    const dayKey = () => store.today()
     const firedKey = (id: string) => `fl_cutoff_fired_${dayKey()}_${id}`
 
     async function showNotif(title: string, body: string, tag: string) {

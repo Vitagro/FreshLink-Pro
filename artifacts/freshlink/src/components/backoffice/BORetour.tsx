@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type Retour } from "@/lib/store"
+import { store, type Retour, type User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
-export default function BORetour() {
+export default function BORetour({ user }: { user: User }) {
   const [retours, setRetours] = useState<Retour[]>([])
   const [filter, setFilter] = useState({ date: store.today() })
 
@@ -30,9 +32,11 @@ export default function BORetour() {
   }
 
   const handleValider = (id: string) => {
+    if (!hasPermission(user.role, "gerer_retour")) { logAction(user, "gerer_retour", "denied"); return }
     const retours_ = store.getRetours()
     const r = retours_.find(r => r.id === id)
     if (!r) return
+    logAction(user, "gerer_retour", "success", { type: "retour", id })
     r.statut = "validé"
     r.validePar = "magasinier"
     r.dateValidation = store.today()

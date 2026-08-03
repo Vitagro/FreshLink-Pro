@@ -36,8 +36,11 @@ type SaisieMap = Record<string, Saisie> // clé = acheteurNom|dateFrom|dateTo
 
 const LS_KEY = "vf_caisse_acheteur_v2"
 const money = (n: number) => `${(n ?? 0).toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`
-function todayISO() { return new Date().toISOString().slice(0, 10) }
-function monthAgoISO() { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10) }
+// Calendaire locale (store.today()), pas toISOString() (UTC) — sinon un bon
+// d'achat cree apres minuit heure locale (date locale correcte cote mobile)
+// disparaissait du rapport des sa creation, le filtre par defaut restant sur J.
+function todayISO() { return store.today() }
+function monthAgoISO() { const d = new Date(`${store.today()}T00:00:00`); d.setDate(d.getDate() - 30); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` }
 
 const STATUT_CFG: Record<Statut, { label: string; cls: string }> = {
   brouillon:          { label: "Brouillon",            cls: "bg-slate-100 text-slate-700 border-slate-200" },

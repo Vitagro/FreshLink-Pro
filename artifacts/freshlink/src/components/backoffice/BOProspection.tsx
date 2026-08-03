@@ -4,6 +4,8 @@ import { callLLM, triggerN3Alert } from "@/lib/ai"
 
 import { useState, useCallback, useRef } from "react"
 import { store, type User, type Client } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -433,6 +435,8 @@ export default function BOProspection({ user }: { user: User }) {
   }
 
   const handleDelete = (id: string) => {
+    if (!hasPermission(user.role, "supprimer_client")) { logAction(user, "supprimer_client", "denied"); return }
+    logAction(user, "supprimer_client", "success", { type: "prospect", id })
     updateList(prospects.filter(p => p.id !== id))
     setSelected(null)
   }

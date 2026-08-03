@@ -284,6 +284,12 @@ export function printBL(bl: BonLivraison, company?: CompanyConfig) {
   const subtotal = bl.lignes.reduce((s, l) => s + l.total, 0)
   const caisses  = bl.montantCaisses ?? 0
   const totalTTC = bl.montantTTC + caisses
+  // Montant TVA reel (bl.montantTTC - subtotal), pas fige a 0 — bl.tva est un
+  // taux configurable (BOBonLivraison propose 0/7/10/14/20%), imprimer "TVA 0%"
+  // en dur alors que le TOTAL TTC inclut une vraie TVA (ex. seed-bl-002 :
+  // tva=20%, ecart de 451,68 DH non justifie sur ce document fiscal officiel).
+  const tvaMontant = Math.round((bl.montantTTC - subtotal) * 100) / 100
+  const tvaLabel = bl.tva > 0 ? `TVA (${bl.tva}%)` : "TVA (0% — Exonéré)"
 
   const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
 <title>BL ${blId}</title>
@@ -341,7 +347,7 @@ ${watermarkHtml(cfg)}
 </table>
 <div class="totals"><div class="totals-inner">
   <div class="tot-row"><span class="lbl">Total HT</span><span class="val">${fmtDH(subtotal)}</span></div>
-  <div class="tot-row"><span class="lbl">TVA (0% — Exonéré)</span><span class="val">0.00 DH</span></div>
+  <div class="tot-row"><span class="lbl">${tvaLabel}</span><span class="val">${fmtDH(tvaMontant)}</span></div>
   <div class="tot-row tot-final"><span class="lbl">TOTAL TTC</span><span class="val">${fmtDH(totalTTC)}</span></div>
 </div></div>
 <div class="sig-grid">
@@ -366,6 +372,9 @@ export function printFacture(bl: BonLivraison, factureNum: string, company?: Com
   const subtotal = bl.lignes.reduce((s, l) => s + l.total, 0)
   const caisses  = bl.montantCaisses ?? 0
   const totalTTC = bl.montantTTC + caisses
+  // Montant TVA reel — voir commentaire equivalent dans printBL() plus haut.
+  const tvaMontant = Math.round((bl.montantTTC - subtotal) * 100) / 100
+  const tvaLabel = bl.tva > 0 ? `TVA (${bl.tva}%)` : "TVA (0% — Produits alimentaires exonérés)"
 
   const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/>
 <title>Facture ${factureNum}</title>
@@ -409,7 +418,7 @@ export function printFacture(bl: BonLivraison, factureNum: string, company?: Com
 </table>
 <div class="totals"><div class="totals-inner">
   <div class="tot-row"><span class="lbl">Sous-total HT</span><span class="val">${fmtDH(subtotal + caisses)}</span></div>
-  <div class="tot-row"><span class="lbl">TVA (0% — Produits alimentaires exonérés)</span><span class="val">0,00 DH</span></div>
+  <div class="tot-row"><span class="lbl">${tvaLabel}</span><span class="val">${fmtDH(tvaMontant)}</span></div>
   <div class="tot-row"><span class="lbl">Remise / Avoir</span><span class="val">0,00 DH</span></div>
   <div class="tot-row tot-final"><span class="lbl">TOTAL TTC</span><span class="val">${fmtDH(totalTTC)}</span></div>
 </div></div>

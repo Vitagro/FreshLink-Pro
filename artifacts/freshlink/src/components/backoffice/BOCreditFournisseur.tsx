@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { store, type User } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -144,8 +146,10 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
 
   const handlePayment = () => {
     if (!paymentModal) return
+    if (!hasPermission(user.role, "approuver_compte_fournisseur")) { logAction(user, "approuver_compte_fournisseur", "denied"); return }
     const amount = Number(payAmount)
     if (isNaN(amount) || amount <= 0) return
+    logAction(user, "approuver_compte_fournisseur", "success", { type: "credit_fournisseur", id: paymentModal.id, label: `paiement ${amount}` })
     const updated = credits.map(c => {
       if (c.id !== paymentModal.id) return c
       const paid = Math.min(c.montantPaye + amount, c.montant)
@@ -159,6 +163,8 @@ export default function BOCreditFournisseur({ user }: { user: User }) {
   }
 
   const handleDelete = (id: string) => {
+    if (!hasPermission(user.role, "approuver_compte_fournisseur")) { logAction(user, "approuver_compte_fournisseur", "denied"); return }
+    logAction(user, "approuver_compte_fournisseur", "success", { type: "credit_fournisseur", id })
     const updated = credits.filter(c => c.id !== id)
     setCredits(updated)
     saveCredits(updated)

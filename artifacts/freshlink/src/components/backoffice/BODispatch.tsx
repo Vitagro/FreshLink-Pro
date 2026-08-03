@@ -40,6 +40,7 @@ const EMPTY_LIVREUR: Omit<Livreur, "id"> = {
 
 export default function BODispatch({ user }: Props) {
   const [activeTab, setActiveTab] = useState<"trips" | "livreurs" | "transporteurs" | "charge">("trips")
+  const [showFinishedTrips, setShowFinishedTrips] = useState(false)
 
   // ---- Charge logistique state ----
   const [chargeForm, setChargeForm] = useState({
@@ -828,14 +829,10 @@ export default function BODispatch({ user }: Props) {
           )}
 
           {/* Trips list */}
-          {trips.length === 0 ? (
-            <div className="bg-card rounded-2xl border border-border p-12 text-center text-muted-foreground">
-              <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-              </svg>
-              <p>Aucun trip créé / لا توجد رحلات</p>
-            </div>
-          ) : trips.map(trip => (
+          {(() => {
+            const activeTrips = trips.filter(t => t.statut !== "terminé")
+            const finishedTrips = trips.filter(t => t.statut === "terminé")
+            const renderTrip = (trip: Trip) => (
             <div key={trip.id} className="bg-card rounded-2xl border border-border overflow-hidden">
               <div className="p-4 flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
@@ -965,7 +962,30 @@ export default function BODispatch({ user }: Props) {
                   ref={el => { if (el && !mapRefs.current[trip.id]) { mapRefs.current[trip.id] = el; loadTripMap(trip, el) } }} />
               )}
             </div>
-          ))}
+            )
+            return (
+              <>
+                {activeTrips.length === 0 ? (
+                  <div className="bg-card rounded-2xl border border-border p-12 text-center text-muted-foreground">
+                    <svg className="w-12 h-12 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    <p>Aucun trip actif / لا توجد رحلات نشطة</p>
+                  </div>
+                ) : activeTrips.map(renderTrip)}
+
+                {finishedTrips.length > 0 && (
+                  <div className="flex flex-col gap-4">
+                    <button onClick={() => setShowFinishedTrips(v => !v)}
+                      className="flex items-center justify-between px-4 py-3 rounded-2xl border border-border bg-muted/40 hover:bg-muted text-sm font-semibold text-foreground">
+                      <span>{showFinishedTrips ? "▾" : "▸"} Trips finalisés ({finishedTrips.length})</span>
+                    </button>
+                    {showFinishedTrips && finishedTrips.map(renderTrip)}
+                  </div>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
 
