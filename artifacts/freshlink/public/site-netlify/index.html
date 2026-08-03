@@ -5292,7 +5292,10 @@ document.addEventListener("DOMContentLoaded",function(){
 });
 
 // ── ADMIN PIN ──
-var ADMIN_PIN = "VitaFresh2026";
+// Verifie desormais cote serveur (/api/ext/shop-admin-auth, hash bcrypt
+// stocke dans Supabase) au lieu de comparer a une valeur en clair codee en
+// dur ici : n'importe qui pouvait lire le mot de passe via "voir le code
+// source" et le check etait entierement contournable cote navigateur.
 var cfgClickCount=0,cfgTimer;
 function footerSecretClick(){
   cfgClickCount++;
@@ -5304,10 +5307,19 @@ function footerSecretClick(){
     setTimeout(function(){document.getElementById('admin-pin-input').focus();},100);
   }
 }
-function checkAdminPin(){
+async function checkAdminPin(){
   var val=document.getElementById('admin-pin-input').value;
   var err=document.getElementById('admin-pwd-err');
-  if(val===ADMIN_PIN){
+  var ok=false;
+  try{
+    var r=await fetch(CONFIG.API_URL+"/api/ext/shop-admin-auth",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({password:val})
+    });
+    var d=await r.json().catch(function(){return {};});
+    ok=r.ok && d.ok===true;
+  }catch(e){ ok=false; }
+  if(ok){
     document.getElementById('admin-pwd-modal').style.display='none';
     document.getElementById('admin-pin-input').value='';
     if(err) err.style.display='none';
