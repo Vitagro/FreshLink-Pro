@@ -23,20 +23,20 @@ interface TripArticleLine {
   photos: string[]   // min 1 required per article
 }
 
-interface CommandeQR {
+interface TripClientControl {
   commandeId: string
+  clientId?: string
   clientNom: string
   secteur: string
   montant: number
-  nbArticles: number
   scanned: boolean
   qrData: string
+  lines: TripArticleLine[]
 }
 
 interface TripControl {
   trip: Trip
-  lines: TripArticleLine[]
-  commandes: CommandeQR[]
+  clients: TripClientControl[]
   submitted: boolean
   sourcePrep: string | null
 }
@@ -157,13 +157,14 @@ function QRScannerModal({ onScan, onClose }: { onScan: (data: string) => void; o
 export default function MobileControlPrep({ user }: Props) {
   const [tripControls, setTripControls] = useState<TripControl[]>([])
   const [activeTrip, setActiveTrip] = useState<string | null>(null)
+  const [activeClientCmd, setActiveClientCmd] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState<string | null>(null)
   const [contenants, setContenants] = useState<ContenantTare[]>([])
-  const [showQR, setShowQR] = useState<{ tripId: string; cmd: CommandeQR } | null>(null)
+  const [showQR, setShowQR] = useState<{ tripId: string; client: TripClientControl } | null>(null)
   const [showScanner, setShowScanner] = useState<string | null>(null) // tripId
   const cam = useCam()
-  const [camTarget, setCamTarget] = useState<{ tripId: string; artId: string } | null>(null)
+  const [camTarget, setCamTarget] = useState<{ tripId: string; commandeId: string; artId: string } | null>(null)
 
   useEffect(() => {
     const today = store.today()
@@ -177,60 +178,60 @@ export default function MobileControlPrep({ user }: Props) {
       bp => bp.date === today && bp.statut === "valide"
     )
 
+    const buildLine = (articleId: string, articleNom: string, unite: string | undefined, qteAttendue: number): TripArticleLine => {
+      const art = articles.find(a => a.id === articleId)
+      const colGros = (art as unknown as { colisageCaisses?: number })?.colisageCaisses ?? (art?.colisageParUM ?? 30)
+      const colDemi = (art as unknown as { colisageDemiCaisses?: number })?.colisageDemiCaisses ?? Math.round(colGros / 2)
+      return {
+        articleId, articleNom, articleNomAr: art?.nomAr, unite: unite ?? art?.unite ?? "kg",
+        um: art?.um, colisageParUM: art?.colisageParUM, colisageCaisses: colGros, colisageDemiCaisses: colDemi,
+        qteAttendue, qtePrepared: "", conforme: null, nbCaisseGros: "", nbCaisseDemi: "", typePoids: "brut", photos: [],
+      }
+    }
+
     const controls: TripControl[] = trips.map(trip => {
       const linkedPrep = bonsPrep.find(bp => bp.tripId === trip.id)
-      const artMap: Record<string, TripArticleLine> = {}
+      const tripCmdIds = trip.commandeIds ?? []
+      const tripCommandes = commandes.filter(c =>
+        tripCmdIds.includes(c.id) || (c as Commande & { tripId?: string }).tripId === trip.id
+      )
 
-      if (linkedPrep) {
-        linkedPrep.lignes.forEach(l => {
-          const art = articles.find(a => a.id === l.articleId)
-          const colGros = (art as unknown as { colisageCaisses?: number })?.colisageCaisses ?? (art?.colisageParUM ?? 30)
-          const colDemi = (art as unknown as { colisageDemiCaisses?: number })?.colisageDemiCaisses ?? Math.round(colGros / 2)
-          artMap[l.articleId] = {
-            articleId: l.articleId, articleNom: l.articleNom, articleNomAr: art?.nomAr, unite: art?.unite ?? "kg",
-            um: art?.um, colisageParUM: art?.colisageParUM, colisageCaisses: colGros, colisageDemiCaisses: colDemi,
-            qteAttendue: l.qtePrepared > 0 ? l.qtePrepared : l.qteCommandee,
-            qtePrepared: "", conforme: null, nbCaisseGros: "", nbCaisseDemi: "", typePoids: "brut", photos: [],
-          }
-        })
-      } else {
-        const tripCmds = commandes.filter(c =>
-          (c as Commande & { tripId?: string }).tripId === trip.id || trip.commandeIds?.includes(c.id)
-        )
-        tripCmds.forEach(cmd => {
+      // Une carte par CLIENT — chacune ne contient QUE les lignes de son propre
+      // besoin (qtesParClient / commande.lignes), jamais l'agrégat de tout le trip.
+      const clientControls: TripClientControl[] = tripCommandes.map(cmd => {
+        let lines: TripArticleLine[]
+        if (linkedPrep) {
+          lines = linkedPrep.lignes
+            .filter(l => (l.qtesParClient?.[cmd.clientId] ?? 0) > 0)
+            .map(l => {
+              const prepared = l.qtesPreparedParClient?.[cmd.clientId] ?? 0
+              const commande = l.qtesParClient[cmd.clientId] ?? 0
+              return buildLine(l.articleId, l.articleNom, l.unite, prepared > 0 ? prepared : commande)
+            })
+        } else {
+          const artMap: Record<string, TripArticleLine> = {}
           cmd.lignes.forEach(l => {
-            if (!artMap[l.articleId]) {
-              const art = articles.find(a => a.id === l.articleId)
-              const colGros = (art as unknown as { colisageCaisses?: number })?.colisageCaisses ?? (art?.colisageParUM ?? 30)
-              const colDemi = (art as unknown as { colisageDemiCaisses?: number })?.colisageDemiCaisses ?? Math.round(colGros / 2)
-              artMap[l.articleId] = {
-                articleId: l.articleId, articleNom: l.articleNom, articleNomAr: art?.nomAr, unite: l.unite ?? art?.unite ?? "kg",
-                um: art?.um, colisageParUM: art?.colisageParUM, colisageCaisses: colGros, colisageDemiCaisses: colDemi,
-                qteAttendue: 0, qtePrepared: "", conforme: null, nbCaisseGros: "", nbCaisseDemi: "", typePoids: "brut", photos: [],
-              }
-            }
+            if (!artMap[l.articleId]) artMap[l.articleId] = buildLine(l.articleId, l.articleNom, l.unite, 0)
             artMap[l.articleId].qteAttendue += l.quantite
           })
-        })
-      }
+          lines = Object.values(artMap)
+        }
+        return {
+          commandeId: cmd.id,
+          clientId: cmd.clientId,
+          clientNom: cmd.clientNom,
+          secteur: (cmd as Commande & { secteur?: string }).secteur ?? "",
+          montant: cmd.lignes.reduce((s, l) => s + l.total, 0),
+          scanned: false,
+          qrData: JSON.stringify({
+            type: "fl_commande", id: cmd.id, client: cmd.clientNom,
+            trip: trip.numero ?? trip.id.slice(-6), date: today,
+          }),
+          lines,
+        }
+      })
 
-      // Build CommandeQR list for this trip
-      const tripCmdIds = trip.commandeIds ?? []
-      const tripCommandes = commandes.filter(c => tripCmdIds.includes(c.id))
-      const cmdQRs: CommandeQR[] = tripCommandes.map(c => ({
-        commandeId: c.id,
-        clientNom: c.clientNom,
-        secteur: (c as Commande & { secteur?: string }).secteur ?? "",
-        montant: c.lignes.reduce((s, l) => s + l.total, 0),
-        nbArticles: c.lignes.length,
-        scanned: false,
-        qrData: JSON.stringify({
-          type: "fl_commande", id: c.id, client: c.clientNom,
-          trip: trip.numero ?? trip.id.slice(-6), date: today,
-        }),
-      }))
-
-      return { trip, lines: Object.values(artMap), commandes: cmdQRs, submitted: false, sourcePrep: linkedPrep?.id ?? null }
+      return { trip, clients: clientControls, submitted: false, sourcePrep: linkedPrep?.id ?? null }
     })
 
     setTripControls(controls)
@@ -247,56 +248,72 @@ export default function MobileControlPrep({ user }: Props) {
     return Math.max(0, brut - tare)
   }
 
-  const updateLine = (tripId: string, artId: string, field: keyof TripArticleLine, value: string) => {
+  const updateLine = (tripId: string, commandeId: string, artId: string, field: keyof TripArticleLine, value: string) => {
     setTripControls(prev => prev.map(tc => {
       if (tc.trip.id !== tripId) return tc
       return {
         ...tc,
-        lines: tc.lines.map(l => {
-          if (l.articleId !== artId) return l
-          const updated = { ...l, [field]: value }
-          if (["qtePrepared","nbCaisseGros","nbCaisseDemi","typePoids"].includes(field as string)) {
-            const net = updated.typePoids === "net" ? Number(updated.qtePrepared) : calcPoidsNet(updated as TripArticleLine)
-            const conforme = (updated as TripArticleLine).qtePrepared === "" ? null : Math.abs(net - l.qteAttendue) <= l.qteAttendue * 0.02
-            return { ...updated, conforme } as TripArticleLine
+        clients: tc.clients.map(cc => {
+          if (cc.commandeId !== commandeId) return cc
+          return {
+            ...cc,
+            lines: cc.lines.map(l => {
+              if (l.articleId !== artId) return l
+              const updated = { ...l, [field]: value }
+              if (["qtePrepared","nbCaisseGros","nbCaisseDemi","typePoids"].includes(field as string)) {
+                const net = updated.typePoids === "net" ? Number(updated.qtePrepared) : calcPoidsNet(updated as TripArticleLine)
+                const conforme = (updated as TripArticleLine).qtePrepared === "" ? null : Math.abs(net - l.qteAttendue) <= l.qteAttendue * 0.02
+                return { ...updated, conforme } as TripArticleLine
+              }
+              return updated as TripArticleLine
+            }),
           }
-          return updated as TripArticleLine
         }),
       }
     }))
   }
 
-  const applyCaisseSuggestion = (tripId: string, artId: string, gros: number, demi: number) => {
+  const applyCaisseSuggestion = (tripId: string, commandeId: string, artId: string, gros: number, demi: number) => {
     setTripControls(prev => prev.map(tc => {
       if (tc.trip.id !== tripId) return tc
-      return { ...tc, lines: tc.lines.map(l => l.articleId !== artId ? l : { ...l, nbCaisseGros: String(gros), nbCaisseDemi: String(demi) }) }
+      return {
+        ...tc,
+        clients: tc.clients.map(cc => cc.commandeId !== commandeId ? cc : {
+          ...cc, lines: cc.lines.map(l => l.articleId !== artId ? l : { ...l, nbCaisseGros: String(gros), nbCaisseDemi: String(demi) }),
+        }),
+      }
     }))
   }
 
   // Camera actions
-  const openCam = async (tripId: string, artId: string) => {
-    setCamTarget({ tripId, artId })
+  const openCam = async (tripId: string, commandeId: string, artId: string) => {
+    setCamTarget({ tripId, commandeId, artId })
     await cam.start()
   }
 
   const capturePhoto = () => {
     const dataUrl = cam.capture()
     if (!dataUrl || !camTarget) return
-    const { tripId, artId } = camTarget
+    const { tripId, commandeId, artId } = camTarget
     setTripControls(prev => prev.map(tc =>
       tc.trip.id !== tripId ? tc : {
         ...tc,
-        lines: tc.lines.map(l => l.articleId !== artId ? l : { ...l, photos: [...l.photos, dataUrl] })
+        clients: tc.clients.map(cc => cc.commandeId !== commandeId ? cc : {
+          ...cc, lines: cc.lines.map(l => l.articleId !== artId ? l : { ...l, photos: [...l.photos, dataUrl] }),
+        }),
       }
     ))
   }
 
   const closeCamera = () => { cam.stop(); setCamTarget(null) }
 
-  const removePhoto = (tripId: string, artId: string, idx: number) => {
+  const removePhoto = (tripId: string, commandeId: string, artId: string, idx: number) => {
     setTripControls(prev => prev.map(tc =>
       tc.trip.id !== tripId ? tc : {
-        ...tc, lines: tc.lines.map(l => l.articleId !== artId ? l : { ...l, photos: l.photos.filter((_,i)=>i!==idx) })
+        ...tc,
+        clients: tc.clients.map(cc => cc.commandeId !== commandeId ? cc : {
+          ...cc, lines: cc.lines.map(l => l.articleId !== artId ? l : { ...l, photos: l.photos.filter((_,i)=>i!==idx) }),
+        }),
       }
     ))
   }
@@ -311,7 +328,7 @@ export default function MobileControlPrep({ user }: Props) {
     } catch { /* raw id */ }
     setTripControls(prev => prev.map(tc =>
       tc.trip.id !== tripId ? tc : {
-        ...tc, commandes: tc.commandes.map(c => c.commandeId === cmdId || c.commandeId.includes(cmdId) ? { ...c, scanned: true } : c)
+        ...tc, clients: tc.clients.map(cc => cc.commandeId === cmdId || cc.commandeId.includes(cmdId) ? { ...cc, scanned: true } : cc)
       }
     ))
   }
@@ -324,6 +341,7 @@ export default function MobileControlPrep({ user }: Props) {
   const handleSubmitTrip = async (tripId: string) => {
     const tc = tripControls.find(t => t.trip.id === tripId)
     if (!tc) return
+    const allLines = tc.clients.flatMap(cc => cc.lines.map(l => ({ ...l, commandeId: cc.commandeId, clientNom: cc.clientNom })))
 
     // Guard 1: KM depart obligatoire
     const km = kmDepart[tripId]
@@ -333,48 +351,53 @@ export default function MobileControlPrep({ user }: Props) {
     }
     setKmError(null)
 
-    // Guard 2: Caisses obligatoires pour chaque article
-    const artsSansCaisses = tc.lines.filter(l =>
+    // Guard 2: Caisses obligatoires pour chaque article (par client)
+    const artsSansCaisses = allLines.filter(l =>
       (l.nbCaisseGros === "" || l.nbCaisseGros === "0") &&
       (l.nbCaisseDemi === "" || l.nbCaisseDemi === "0")
     )
     if (artsSansCaisses.length > 0) {
-      setCaissesError(`Nombre de caisses obligatoire pour: ${artsSansCaisses.map(l => l.articleNom).join(", ")}`)
+      setCaissesError(`Nombre de caisses obligatoire pour: ${artsSansCaisses.map(l => `${l.articleNom} (${l.clientNom})`).join(", ")}`)
       return
     }
     setCaissesError(null)
+
+    // Caisses totales par article — sommees sur tous les clients du trip
+    // (un meme article peut apparaitre chez plusieurs clients).
+    const nbCaissesByArticle: Record<string, { gros: number; demi: number; articleNom: string }> = {}
+    for (const l of allLines) {
+      const entry = nbCaissesByArticle[l.articleId] ?? (nbCaissesByArticle[l.articleId] = { gros: 0, demi: 0, articleNom: l.articleNom })
+      entry.gros += Number(l.nbCaisseGros) || 0
+      entry.demi += Number(l.nbCaisseDemi) || 0
+    }
 
     // Save KM depart on the trip
     store.updateTrip(tripId, {
       kmDepart: Number(km),
       kmDepartConfirme: true,
       caissesValidees: true,
-      nbCaissesByArticle: Object.fromEntries(tc.lines.map(l => [l.articleId, {
-        gros: Number(l.nbCaisseGros) || 0,
-        demi: Number(l.nbCaisseDemi) || 0,
-        articleNom: l.articleNom,
-      }])),
+      nbCaissesByArticle,
     })
 
     setSubmitting(tripId)
     const now = new Date()
     let totalGros = 0, totalDemi = 0
-    const anomalies = tc.lines.filter(l => l.conforme === false)
+    const anomalies = allLines.filter(l => l.conforme === false)
     const report = {
       id: store.genId(), date: store.today(), heure: now.toTimeString().slice(0,5),
       type: "ctrl_preparation_trip", tripId, tripNumero: tc.trip.numero,
       controlleurId: user.id, controlleurNom: user.name,
-      lines: tc.lines.map(l => {
+      lines: allLines.map(l => {
         const brutQty = Number(l.qtePrepared)
         const netQty = l.typePoids === "net" ? brutQty : calcPoidsNet(l)
         const g = Number(l.nbCaisseGros)||0; const d = Number(l.nbCaisseDemi)||0
         totalGros += g; totalDemi += d
-        return { articleId: l.articleId, articleNom: l.articleNom, unite: l.unite,
+        return { articleId: l.articleId, articleNom: l.articleNom, unite: l.unite, commandeId: l.commandeId, clientNom: l.clientNom,
           qteAttendue: l.qteAttendue, qteBrute: brutQty, qteNette: netQty, typePoids: l.typePoids,
           nbCaisseGros: g, nbCaisseDemi: d, conforme: l.conforme, ecart: netQty - l.qteAttendue, photos: l.photos }
       }),
-      commandesScannees: tc.commandes.filter(c=>c.scanned).length,
-      commandesTotal: tc.commandes.length,
+      commandesScannees: tc.clients.filter(c=>c.scanned).length,
+      commandesTotal: tc.clients.length,
       notes: notes[tripId]??"", anomalies: anomalies.length, totalCaisseGros: totalGros, totalCaisseDemi: totalDemi,
     }
     try {
@@ -403,7 +426,9 @@ export default function MobileControlPrep({ user }: Props) {
 
   // ── Camera overlay ──────────────────────────────────────────────────────────
   if (cam.active && camTarget) {
-    const artNom = activeTc?.lines.find(l => l.articleId === camTarget.artId)?.articleNom ?? ""
+    const camCc = activeTc?.clients.find(cc => cc.commandeId === camTarget.commandeId)
+    const camLine = camCc?.lines.find(l => l.articleId === camTarget.artId)
+    const artNom = camLine?.articleNom ?? ""
     return (
       <div className="fixed inset-0 z-50 flex flex-col bg-black">
         <div className="flex items-center justify-between px-4 py-3">
@@ -415,9 +440,9 @@ export default function MobileControlPrep({ user }: Props) {
         <video ref={cam.videoRef} autoPlay playsInline muted className="flex-1 object-cover w-full" />
         <canvas ref={cam.canvasRef} className="hidden" />
         <div className="px-4 py-5 bg-black flex flex-col gap-3">
-          {activeTc?.lines.find(l=>l.articleId===camTarget.artId)?.photos.length ? (
+          {camLine?.photos.length ? (
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {activeTc.lines.find(l=>l.articleId===camTarget.artId)!.photos.map((p,i)=>(
+              {camLine.photos.map((p,i)=>(
                 <img key={i} src={p} alt={`Photo ${i+1}`} className="h-16 w-16 rounded-xl object-cover border-2 border-green-400 shrink-0" />
               ))}
             </div>
@@ -431,7 +456,7 @@ export default function MobileControlPrep({ user }: Props) {
               </svg>
               Prendre photo
             </button>
-            {(activeTc?.lines.find(l=>l.articleId===camTarget.artId)?.photos.length??0)>=1 && (
+            {(camLine?.photos.length??0)>=1 && (
               <button onClick={closeCamera}
                 className="flex-1 py-4 rounded-2xl font-bold text-white text-sm"
                 style={{ background: "oklch(0.38 0.2 145)" }}>
@@ -449,11 +474,11 @@ export default function MobileControlPrep({ user }: Props) {
     return (
       <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 px-6 gap-6">
         <div className="bg-white rounded-3xl p-6 flex flex-col items-center gap-4 w-full max-w-xs">
-          <p className="font-black text-lg text-gray-900 text-center">{showQR.cmd.clientNom}</p>
-          <p className="text-xs text-gray-500">{showQR.cmd.secteur} — {showQR.cmd.nbArticles} article(s)</p>
-          <QRCode data={showQR.cmd.qrData} size={200} />
-          <p className="text-xs text-gray-400 font-mono break-all text-center">{showQR.cmd.commandeId}</p>
-          <p className="text-sm font-bold text-gray-800">{showQR.cmd.montant.toFixed(2)} DH</p>
+          <p className="font-black text-lg text-gray-900 text-center">{showQR.client.clientNom}</p>
+          <p className="text-xs text-gray-500">{showQR.client.secteur} — {showQR.client.lines.length} article(s)</p>
+          <QRCode data={showQR.client.qrData} size={200} />
+          <p className="text-xs text-gray-400 font-mono break-all text-center">{showQR.client.commandeId}</p>
+          <p className="text-sm font-bold text-gray-800">{showQR.client.montant.toFixed(2)} DH</p>
           <button onClick={() => setShowQR(null)}
             className="w-full py-3 rounded-xl font-bold text-white"
             style={{ background: "oklch(0.38 0.2 260)" }}>
@@ -493,7 +518,7 @@ export default function MobileControlPrep({ user }: Props) {
       {/* Trip tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {tripControls.map(tc => (
-          <button key={tc.trip.id} onClick={() => setActiveTrip(tc.trip.id)}
+          <button key={tc.trip.id} onClick={() => { setActiveTrip(tc.trip.id); setActiveClientCmd(null) }}
             className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${
               activeTrip === tc.trip.id ? "border-primary text-white" : "border-border text-foreground bg-card hover:bg-muted"
             } ${tc.submitted ? "opacity-60" : ""}`}
@@ -504,90 +529,49 @@ export default function MobileControlPrep({ user }: Props) {
         ))}
       </div>
 
-      {activeTc && (activeTc.submitted ? (
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col items-center gap-2 text-center">
-          <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p className="text-base font-bold text-green-800">Expedition validee — Trip {activeTc.trip.numero}</p>
-          <p className="text-sm text-green-700">{activeTc.lines.filter(l=>l.conforme===false).length} anomalie(s)</p>
-        </div>
-      ) : (
-        <>
-          {/* Source badge */}
-          <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${
-            activeTc.sourcePrep ? "bg-green-50 border-green-300 text-green-800" : "bg-amber-50 border-amber-300 text-amber-800"
-          }`}>
-            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={activeTc.sourcePrep ? "M5 13l4 4L19 7" : "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"} />
+      {activeTc && (() => {
+        const allLines = activeTc.clients.flatMap(cc => cc.lines)
+        const activeCc = activeClientCmd ? activeTc.clients.find(cc => cc.commandeId === activeClientCmd) : null
+
+        if (activeTc.submitted) return (
+          <div className="bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col items-center gap-2 text-center">
+            <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            {activeTc.sourcePrep ? "Quantites depuis preparation validee" : "Quantites depuis commandes (aucune prep validee)"}
+            <p className="text-base font-bold text-green-800">Expedition validee — Trip {activeTc.trip.numero}</p>
+            <p className="text-sm text-green-700">{allLines.filter(l=>l.conforme===false).length} anomalie(s)</p>
           </div>
+        )
 
-          {/* Progress summary */}
-          <div className="grid grid-cols-4 gap-2">
-            {[
-              { label: "Articles", val: activeTc.lines.length, color: "text-blue-800 bg-blue-50 border-blue-200" },
-              { label: "Qty OK", val: activeTc.lines.filter(l=>l.qtePrepared!=="").length, color: "text-green-800 bg-green-50 border-green-200" },
-              { label: "Photos OK", val: activeTc.lines.filter(l=>l.photos.length>=1).length, color: "text-purple-800 bg-purple-50 border-purple-200" },
-              { label: "QR Scan", val: `${activeTc.commandes.filter(c=>c.scanned).length}/${activeTc.commandes.length}`, color: "text-cyan-800 bg-cyan-50 border-cyan-200" },
-            ].map(s => (
-              <div key={s.label} className={`border rounded-xl px-2 py-2 text-center ${s.color}`}>
-                <p className="text-[10px]">{s.label}</p>
-                <p className="text-sm font-black">{s.val}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* ── SECTION QR Commandes ── */}
-          <div className="bg-card rounded-2xl border border-border p-4 flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-bold text-sm text-foreground">QR Codes Commandes</p>
-                <p className="text-xs text-muted-foreground">Affichez ou scannez le QR de chaque commande</p>
-              </div>
-              <button onClick={() => setShowScanner(activeTc.trip.id)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white"
-                style={{ background: "oklch(0.45 0.18 200)" }}>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Scanner QR
+        // ── SCREEN B : détail d'un client (articles de CE client uniquement) ──
+        if (activeCc) return (
+          <>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setActiveClientCmd(null)} className="w-9 h-9 rounded-xl bg-muted flex items-center justify-center shrink-0">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
               </button>
-            </div>
-            {activeTc.commandes.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-2">Aucune commande liee a ce trip</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {activeTc.commandes.map(cmd => (
-                  <div key={cmd.commandeId}
-                    className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border ${
-                      cmd.scanned ? "bg-green-50 border-green-300" : "bg-card border-border"
-                    }`}>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-foreground truncate">{cmd.clientNom}</p>
-                      <p className="text-xs text-muted-foreground">{cmd.secteur} — {cmd.nbArticles} art. — {cmd.montant.toFixed(0)} DH</p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {cmd.scanned && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">Scanne</span>
-                      )}
-                      <button onClick={() => setShowQR({ tripId: activeTc.trip.id, cmd })}
-                        className="px-2.5 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:bg-muted">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-base text-foreground truncate">{activeCc.clientNom}</p>
+                <p className="text-xs text-muted-foreground">{activeCc.secteur} — {activeCc.lines.length} article{activeCc.lines.length>1?"s":""} — {activeCc.montant.toFixed(0)} DH</p>
               </div>
-            )}
-          </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {activeCc.scanned && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300">Scanné</span>}
+                <button onClick={() => setShowQR({ tripId: activeTc.trip.id, client: activeCc })}
+                  className="px-2.5 py-2 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:bg-muted">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+                <button onClick={() => setShowScanner(activeTc.trip.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white"
+                  style={{ background: "oklch(0.45 0.18 200)" }}>
+                  Scanner
+                </button>
+              </div>
+            </div>
 
-          {/* ── SECTION Articles ── */}
-          <div className="flex flex-col gap-3">
-            {activeTc.lines.map(line => {
+            <div className="flex flex-col gap-3">
+              {activeCc.lines.map(line => {
               const prepared = Number(line.qtePrepared)
               const ecart = line.qtePrepared !== "" ? prepared - line.qteAttendue : null
               const qteUM = line.um && line.colisageParUM ? (line.qteAttendue/line.colisageParUM).toFixed(1) : null
@@ -623,7 +607,7 @@ export default function MobileControlPrep({ user }: Props) {
                       <span className={`text-xs font-semibold ${hasPhoto ? "text-purple-700":"text-red-600"}`}>
                         {hasPhoto ? `${line.photos.length} photo(s)` : "Photo obligatoire"}
                       </span>
-                      <button onClick={() => openCam(activeTc.trip.id, line.articleId)}
+                      <button onClick={() => openCam(activeTc.trip.id, activeCc.commandeId, line.articleId)}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-white"
                         style={{ background: hasPhoto ? "oklch(0.5 0.18 300)" : "oklch(0.45 0.2 25)" }}>
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -635,7 +619,7 @@ export default function MobileControlPrep({ user }: Props) {
                         {line.photos.map((p,i) => (
                           <div key={i} className="relative shrink-0">
                             <img src={p} alt={`Photo ${i+1}`} className="h-16 w-16 rounded-xl object-cover border-2 border-purple-300" />
-                            <button onClick={() => removePhoto(activeTc.trip.id, line.articleId, i)}
+                            <button onClick={() => removePhoto(activeTc.trip.id, activeCc.commandeId, line.articleId, i)}
                               className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] font-black">x</button>
                           </div>
                         ))}
@@ -654,7 +638,7 @@ export default function MobileControlPrep({ user }: Props) {
                           {sugg.gros > 0 && <span>{sugg.gros} gros</span>}{" "}
                           {sugg.demi > 0 && <span>{sugg.demi} demi</span>}
                         </p>
-                        <button onClick={() => applyCaisseSuggestion(activeTc.trip.id, line.articleId, sugg.gros, sugg.demi)}
+                        <button onClick={() => applyCaisseSuggestion(activeTc.trip.id, activeCc.commandeId, line.articleId, sugg.gros, sugg.demi)}
                           className="text-xs font-bold text-amber-800 underline">Appliquer</button>
                       </div>
                     )
@@ -664,7 +648,7 @@ export default function MobileControlPrep({ user }: Props) {
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground font-semibold">Poids:</span>
                     {(["brut","net"] as const).map(tp => (
-                      <button key={tp} onClick={() => updateLine(activeTc.trip.id, line.articleId, "typePoids", tp)}
+                      <button key={tp} onClick={() => updateLine(activeTc.trip.id, activeCc.commandeId, line.articleId, "typePoids", tp)}
                         className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors ${line.typePoids===tp?"bg-primary text-white border-primary":"border-border text-muted-foreground"}`}>
                         {tp==="brut"?"Brut":"Net"}
                       </button>
@@ -676,7 +660,7 @@ export default function MobileControlPrep({ user }: Props) {
                     <div className="flex-1 flex flex-col gap-1">
                       <label className="text-xs text-muted-foreground">Qte {line.typePoids==="brut"?"brute":"nette"} preparee ({line.unite})</label>
                       <input type="number" min="0" step="0.1" value={line.qtePrepared}
-                        onChange={e => updateLine(activeTc.trip.id, line.articleId, "qtePrepared", e.target.value)}
+                        onChange={e => updateLine(activeTc.trip.id, activeCc.commandeId, line.articleId, "qtePrepared", e.target.value)}
                         className={`w-full px-3 py-2.5 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary ${
                           line.conforme===true?"border-green-400 bg-white text-green-800":
                           line.conforme===false?"border-red-400 bg-white text-red-800":
@@ -684,7 +668,7 @@ export default function MobileControlPrep({ user }: Props) {
                         }`}
                         placeholder={`Attendu: ${line.qteAttendue}`} />
                     </div>
-                    <button onClick={() => updateLine(activeTc.trip.id, line.articleId, "qtePrepared", String(line.qteAttendue))}
+                    <button onClick={() => updateLine(activeTc.trip.id, activeCc.commandeId, line.articleId, "qtePrepared", String(line.qteAttendue))}
                       className="mt-5 px-3 py-2.5 rounded-xl border border-border text-xs font-semibold text-muted-foreground hover:bg-muted">
                       = Att.
                     </button>
@@ -696,13 +680,13 @@ export default function MobileControlPrep({ user }: Props) {
                       <div className="flex-1 flex flex-col gap-1">
                         <label className="text-xs text-amber-700 font-semibold">Gros caisses</label>
                         <input type="number" min="0" value={line.nbCaisseGros}
-                          onChange={e => updateLine(activeTc.trip.id, line.articleId, "nbCaisseGros", e.target.value)}
+                          onChange={e => updateLine(activeTc.trip.id, activeCc.commandeId, line.articleId, "nbCaisseGros", e.target.value)}
                           className="px-3 py-2 rounded-xl border border-amber-300 bg-amber-50 text-sm font-bold text-amber-900 focus:outline-none" />
                       </div>
                       <div className="flex-1 flex flex-col gap-1">
                         <label className="text-xs text-cyan-700 font-semibold">Demi-caisses</label>
                         <input type="number" min="0" value={line.nbCaisseDemi}
-                          onChange={e => updateLine(activeTc.trip.id, line.articleId, "nbCaisseDemi", e.target.value)}
+                          onChange={e => updateLine(activeTc.trip.id, activeCc.commandeId, line.articleId, "nbCaisseDemi", e.target.value)}
                           className="px-3 py-2 rounded-xl border border-cyan-300 bg-cyan-50 text-sm font-bold text-cyan-900 focus:outline-none" />
                       </div>
                     </div>
@@ -724,87 +708,166 @@ export default function MobileControlPrep({ user }: Props) {
                   )}
                 </div>
               )
-            })}
-          </div>
-
-          {/* Notes */}
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-foreground uppercase tracking-wide">Notes</label>
-            <textarea value={notes[activeTc.trip.id]??""} onChange={e => setNotes(prev=>({...prev,[activeTc.trip.id]:e.target.value}))}
-              rows={2} className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none resize-none"
-              placeholder="Conditions de preparation, remarques..." />
-          </div>
-
-          {/* KM Depart — OBLIGATOIRE */}
-          <div className="rounded-2xl p-4 flex flex-col gap-2"
-            style={{ background: "oklch(0.10 0.014 72)", border: "1px solid oklch(0.24 0.10 72)" }}>
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 shrink-0" style={{ color: "oklch(0.72 0.18 72)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <span className="text-xs font-black" style={{ color: "oklch(0.72 0.18 72)" }}>KM DEPART — Obligatoire avant expedition</span>
+              })}
             </div>
-            <input
-              type="number" min="0" step="1"
-              value={kmDepart[activeTc.trip.id] ?? ""}
-              onChange={e => setKmDepart(prev => ({ ...prev, [activeTc.trip.id]: e.target.value }))}
-              className="w-full px-3 py-3 rounded-xl border text-base font-bold focus:outline-none focus:ring-2"
-              style={{
-                background: "oklch(0.14 0.012 72)",
-                border: kmDepart[activeTc.trip.id] ? "1px solid oklch(0.55 0.18 148)" : "1px solid oklch(0.34 0.10 72)",
-                color: "oklch(0.90 0.006 100)",
-              }}
-              placeholder="Ex: 45230 km" />
-            {kmError && <p className="text-xs font-semibold" style={{ color: "oklch(0.72 0.20 27)" }}>{kmError}</p>}
-          </div>
+          </>
+        )
 
-          {/* Validation blockers */}
-          {(() => {
-            const allQtyOK = activeTc.lines.every(l=>l.qtePrepared!=="")
-            const allPhotosOK = !photoRequise || activeTc.lines.every(l=>l.photos.length>=1)
-            const allCaissesOK = activeTc.lines.every(l =>
-              (Number(l.nbCaisseGros) > 0 || Number(l.nbCaisseDemi) > 0)
-            )
-            const kmOK = !!(kmDepart[activeTc.trip.id] && Number(kmDepart[activeTc.trip.id]) > 0)
-            const canSubmit = allQtyOK && allPhotosOK && allCaissesOK && kmOK
-            const anomaliesCount = activeTc.lines.filter(l=>l.conforme===false).length
-            return (
-              <>
-                {(!allQtyOK || !allPhotosOK || !allCaissesOK || !kmOK) && (
-                  <div className="rounded-xl px-4 py-3 flex flex-col gap-1"
-                    style={{ background: "oklch(0.10 0.020 72)", border: "1px solid oklch(0.30 0.12 72)" }}>
-                    <p className="text-xs font-black" style={{ color: "oklch(0.72 0.18 72)" }}>Pour valider le chargement:</p>
-                    {!kmOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>— KM depart obligatoire</p>}
-                    {!allCaissesOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>
-                      — Caisses obligatoires: {activeTc.lines.filter(l=>!(Number(l.nbCaisseGros)>0||Number(l.nbCaisseDemi)>0)).map(l=>l.articleNom).join(", ")}
-                    </p>}
-                    {!allQtyOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>— Quantites manquantes ({activeTc.lines.filter(l=>l.qtePrepared==="").length} articles)</p>}
-                    {photoRequise && !allPhotosOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>— Photos obligatoires ({activeTc.lines.filter(l=>l.photos.length===0).length} articles)</p>}
-                  </div>
-                )}
-                {caissesError && (
-                  <div className="rounded-xl px-4 py-3" style={{ background: "oklch(0.10 0.020 27)", border: "1px solid oklch(0.30 0.12 27)" }}>
-                    <p className="text-xs font-bold" style={{ color: "oklch(0.72 0.20 27)" }}>{caissesError}</p>
-                  </div>
-                )}
-                <button onClick={() => handleSubmitTrip(activeTc.trip.id)}
-                  disabled={!canSubmit || submitting===activeTc.trip.id}
-                  className="w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2"
-                  style={{ background: canSubmit ? (anomaliesCount>0?"oklch(0.45 0.2 25)":"oklch(0.38 0.2 145)") : "oklch(0.22 0.010 145)" }}>
-                  {submitting===activeTc.trip.id ? (
-                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Validation...</>
-                  ) : canSubmit ? (
-                    <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                      Valider expedition — Trip {activeTc.trip.numero ?? activeTc.trip.id} ({anomaliesCount} anomalie{anomaliesCount!==1?"s":""})
-                    </>
-                  ) : "Remplir KM + Caisses + Quantites + Photos"}
+        // ── SCREEN A : liste des clients du trip (clic → détail articles) ──
+        const anomaliesCount = allLines.filter(l=>l.conforme===false).length
+        return (
+          <>
+            {/* Source badge */}
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold border ${
+              activeTc.sourcePrep ? "bg-green-50 border-green-300 text-green-800" : "bg-amber-50 border-amber-300 text-amber-800"
+            }`}>
+              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={activeTc.sourcePrep ? "M5 13l4 4L19 7" : "M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"} />
+              </svg>
+              {activeTc.sourcePrep ? "Quantites depuis preparation validee" : "Quantites depuis commandes (aucune prep validee)"}
+            </div>
+
+            {/* Progress summary */}
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                { label: "Articles", val: allLines.length, color: "text-blue-800 bg-blue-50 border-blue-200" },
+                { label: "Qty OK", val: allLines.filter(l=>l.qtePrepared!=="").length, color: "text-green-800 bg-green-50 border-green-200" },
+                { label: "Photos OK", val: allLines.filter(l=>l.photos.length>=1).length, color: "text-purple-800 bg-purple-50 border-purple-200" },
+                { label: "QR Scan", val: `${activeTc.clients.filter(c=>c.scanned).length}/${activeTc.clients.length}`, color: "text-cyan-800 bg-cyan-50 border-cyan-200" },
+              ].map(s => (
+                <div key={s.label} className={`border rounded-xl px-2 py-2 text-center ${s.color}`}>
+                  <p className="text-[10px]">{s.label}</p>
+                  <p className="text-sm font-black">{s.val}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* ── SECTION Clients — clic sur un client pour voir/saisir SES articles ── */}
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-sm text-foreground">Clients du trip</p>
+                <button onClick={() => setShowScanner(activeTc.trip.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-white"
+                  style={{ background: "oklch(0.45 0.18 200)" }}>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Scanner QR
                 </button>
-              </>
-            )
-          })()}
-        </>
-      ))}
+              </div>
+              {activeTc.clients.length === 0 ? (
+                <p className="text-xs text-muted-foreground text-center py-2">Aucune commande liee a ce trip</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {activeTc.clients.map(cc => {
+                    const total = cc.lines.length
+                    const qtyOK = cc.lines.filter(l => l.qtePrepared !== "").length
+                    const photosOK = cc.lines.filter(l => l.photos.length >= 1).length
+                    const caissesOK = cc.lines.filter(l => Number(l.nbCaisseGros) > 0 || Number(l.nbCaisseDemi) > 0).length
+                    const done = total > 0 && qtyOK === total && (!photoRequise || photosOK === total) && caissesOK === total
+                    return (
+                      <button key={cc.commandeId} onClick={() => setActiveClientCmd(cc.commandeId)}
+                        className={`w-full text-left flex items-center justify-between gap-2 px-3 py-3 rounded-xl border transition-colors ${
+                          done ? "bg-green-50 border-green-300" : "bg-card border-border hover:bg-muted"
+                        }`}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-sm text-foreground truncate">{cc.clientNom}</p>
+                            {cc.scanned && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-800 border border-green-300 shrink-0">Scanné</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">{cc.secteur} — {total} art. — {cc.montant.toFixed(0)} DH</p>
+                          <p className={`text-xs font-semibold mt-0.5 ${done ? "text-green-700" : "text-amber-700"}`}>
+                            {qtyOK}/{total} qté{photoRequise ? ` · ${photosOK}/${total} photo` : ""} · {caissesOK}/{total} caisses
+                          </p>
+                        </div>
+                        <svg className="w-5 h-5 text-muted-foreground shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-foreground uppercase tracking-wide">Notes</label>
+              <textarea value={notes[activeTc.trip.id]??""} onChange={e => setNotes(prev=>({...prev,[activeTc.trip.id]:e.target.value}))}
+                rows={2} className="w-full px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none resize-none"
+                placeholder="Conditions de preparation, remarques..." />
+            </div>
+
+            {/* KM Depart — OBLIGATOIRE */}
+            <div className="rounded-2xl p-4 flex flex-col gap-2"
+              style={{ background: "oklch(0.10 0.014 72)", border: "1px solid oklch(0.24 0.10 72)" }}>
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 shrink-0" style={{ color: "oklch(0.72 0.18 72)" }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span className="text-xs font-black" style={{ color: "oklch(0.72 0.18 72)" }}>KM DEPART — Obligatoire avant expedition</span>
+              </div>
+              <input
+                type="number" min="0" step="1"
+                value={kmDepart[activeTc.trip.id] ?? ""}
+                onChange={e => setKmDepart(prev => ({ ...prev, [activeTc.trip.id]: e.target.value }))}
+                className="w-full px-3 py-3 rounded-xl border text-base font-bold focus:outline-none focus:ring-2"
+                style={{
+                  background: "oklch(0.14 0.012 72)",
+                  border: kmDepart[activeTc.trip.id] ? "1px solid oklch(0.55 0.18 148)" : "1px solid oklch(0.34 0.10 72)",
+                  color: "oklch(0.90 0.006 100)",
+                }}
+                placeholder="Ex: 45230 km" />
+              {kmError && <p className="text-xs font-semibold" style={{ color: "oklch(0.72 0.20 27)" }}>{kmError}</p>}
+            </div>
+
+            {/* Validation blockers */}
+            {(() => {
+              const allQtyOK = allLines.every(l=>l.qtePrepared!=="")
+              const allPhotosOK = !photoRequise || allLines.every(l=>l.photos.length>=1)
+              const allCaissesOK = allLines.every(l =>
+                (Number(l.nbCaisseGros) > 0 || Number(l.nbCaisseDemi) > 0)
+              )
+              const kmOK = !!(kmDepart[activeTc.trip.id] && Number(kmDepart[activeTc.trip.id]) > 0)
+              const canSubmit = allQtyOK && allPhotosOK && allCaissesOK && kmOK
+              return (
+                <>
+                  {(!allQtyOK || !allPhotosOK || !allCaissesOK || !kmOK) && (
+                    <div className="rounded-xl px-4 py-3 flex flex-col gap-1"
+                      style={{ background: "oklch(0.10 0.020 72)", border: "1px solid oklch(0.30 0.12 72)" }}>
+                      <p className="text-xs font-black" style={{ color: "oklch(0.72 0.18 72)" }}>Pour valider le chargement:</p>
+                      {!kmOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>— KM depart obligatoire</p>}
+                      {!allCaissesOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>
+                        — Caisses obligatoires: {allLines.filter(l=>!(Number(l.nbCaisseGros)>0||Number(l.nbCaisseDemi)>0)).map(l=>l.articleNom).join(", ")}
+                      </p>}
+                      {!allQtyOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>— Quantites manquantes ({allLines.filter(l=>l.qtePrepared==="").length} articles)</p>}
+                      {photoRequise && !allPhotosOK && <p className="text-xs" style={{ color: "oklch(0.65 0.14 72)" }}>— Photos obligatoires ({allLines.filter(l=>l.photos.length===0).length} articles)</p>}
+                    </div>
+                  )}
+                  {caissesError && (
+                    <div className="rounded-xl px-4 py-3" style={{ background: "oklch(0.10 0.020 27)", border: "1px solid oklch(0.30 0.12 27)" }}>
+                      <p className="text-xs font-bold" style={{ color: "oklch(0.72 0.20 27)" }}>{caissesError}</p>
+                    </div>
+                  )}
+                  <button onClick={() => handleSubmitTrip(activeTc.trip.id)}
+                    disabled={!canSubmit || submitting===activeTc.trip.id}
+                    className="w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-40 flex items-center justify-center gap-2"
+                    style={{ background: canSubmit ? (anomaliesCount>0?"oklch(0.45 0.2 25)":"oklch(0.38 0.2 145)") : "oklch(0.22 0.010 145)" }}>
+                    {submitting===activeTc.trip.id ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Validation...</>
+                    ) : canSubmit ? (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        Valider expedition — Trip {activeTc.trip.numero ?? activeTc.trip.id} ({anomaliesCount} anomalie{anomaliesCount!==1?"s":""})
+                      </>
+                    ) : "Remplir KM + Caisses + Quantites + Photos"}
+                  </button>
+                </>
+              )
+            })()}
+          </>
+        )
+      })()}
     </div>
   )
 }
