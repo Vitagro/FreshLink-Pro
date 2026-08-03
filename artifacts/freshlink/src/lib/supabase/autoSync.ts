@@ -28,6 +28,10 @@ const SYNCED_KEYS = new Set<string>([
   // double versement au prévendeur si consulté depuis deux appareils.
   "fl_loyalty_transactions", "fl_primes_nouveaux_clients",
   "fl_reglements_cv",
+  // Jamais synchronisés avant (même bug) — 100% localStorage, donc invisibles
+  // dès qu'on change de navigateur/appareil (ex: liste des transporteurs qui
+  // "disparaît" — elle n'a jamais existé que sur l'appareil qui l'a créée).
+  "fl_transferts", "fl_transport_companies",
 ])
 
 // La clé localStorage ne correspond pas toujours 1:1 au nom de la table
@@ -36,7 +40,9 @@ const SYNCED_KEYS = new Set<string>([
 // Sans cette table, TOUTE la caisse restait piégée en localStorage,
 // jamais synchronisée cross-device — bug critique sur des données
 // financières (aucune sauvegarde centrale, perte possible au vidage cache).
-const TABLE_NAME_OVERRIDE: Record<string, string> = { fl_caisse: "fl_caisse_entries" }
+// "fl_transferts" (store.ts getTransferts/saveTransferts) suit le même
+// schéma : la table Supabase s'appelle "fl_transferts_stock".
+const TABLE_NAME_OVERRIDE: Record<string, string> = { fl_caisse: "fl_caisse_entries", fl_transferts: "fl_transferts_stock" }
 
 // Configs (objets uniques, PAS des tableaux) : process, workflow, alertes, emails.
 // Stockés en base comme une ligne unique id="config" → propagation cross-device.

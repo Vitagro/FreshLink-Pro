@@ -32,6 +32,24 @@ async function pushFournisseur(f: Fournisseur): Promise<boolean> {
 
 const emptyPoint = (): ItinerairePoint => ({ nom: "", lat: undefined, lng: undefined, jour: "", heureDepart: "", heureArrivee: "" })
 
+// Détection de doublon à la création d'un fournisseur (même logique que
+// BOArticles/BOComptesExternes) : deux fiches distinctes pour le même
+// fournisseur dispersent bons d'achat, crédit et itinéraires sur deux comptes.
+function normFournisseurText(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim()
+}
+function normFournisseurPhone(s: string): string {
+  return s.replace(/\D/g, "")
+}
+function findDuplicateFournisseur(all: Fournisseur[], nom: string, telephone: string | undefined): Fournisseur | undefined {
+  const nomN = normFournisseurText(nom)
+  const telN = telephone ? normFournisseurPhone(telephone) : ""
+  return all.find(f =>
+    normFournisseurText(f.nom) === nomN ||
+    (telN.length >= 6 && normFournisseurPhone(f.telephone || "") === telN)
+  )
+}
+
 export default function BOFournisseurs({ user }: { user: { id: string; name: string; role: UserRole } }) {
   const [fournisseurs, setFournisseurs] = useState<Fournisseur[]>([])
   const [showForm, setShowForm] = useState(false)
@@ -73,6 +91,16 @@ export default function BOFournisseurs({ user }: { user: { id: string; name: str
 
   const handleSave = async () => {
     if (!form.nom.trim()) return
+    if (!hasPermission(user.role, "approuver_compte_fournisseur")) { logAction(user, "approuver_compte_fournisseur", "denied", { type: "fournisseur_sauvegarde", label: form.nom }); return }
+    if (!editing) {
+      const dup = findDuplicateFournisseur(store.getFournisseurs(), form.nom, form.telephone)
+      if (dup && !window.confirm(
+        `Un fournisseur "${dup.nom}"${dup.telephone ? ` (tél. ${dup.telephone})` : ""} existe déjà et semble être le même fournisseur.\n\n` +
+        `Créer un doublon disperse bons d'achat, crédit et itinéraires sur deux fiches.\n` +
+        `Préférez plutôt "Modifier" cette fiche existante.\n\n` +
+        `Créer quand même un nouveau fournisseur ?`
+      )) return
+    }
     const full: Fournisseur = editing
       ? { ...form, id: editing.id }
       : { ...form, id: store.genId() }
@@ -81,6 +109,7 @@ export default function BOFournisseurs({ user }: { user: { id: string; name: str
     } else {
       store.addFournisseur(full)
     }
+    logAction(user, "approuver_compte_fournisseur", "success", { type: "fournisseur_sauvegarde", id: full.id, label: full.nom })
     setShowForm(false)
     refresh()
     // ✅ Sync Supabase (service-role) → la boutique et la fiche fournisseur partagent le même enregistrement

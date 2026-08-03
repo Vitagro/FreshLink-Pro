@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo } from "react"
 import { store, type User, type Client, ROLE_LABELS, getAllSecteurs, userHasRole } from "@/lib/store"
 import { loadZonesConfig, zoneOfSecteur, type ZonesConfig } from "@/lib/commercial/zones"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 interface Props { user: User }
 
@@ -61,6 +63,8 @@ export default function BOAffectationCommerciale({ user }: Props) {
   const flash = () => { setSaved(true); setTimeout(() => setSaved(false), 2000) }
 
   const assignClientSecteur = (clientId: string, secteur: string) => {
+    if (!hasPermission(user.role, "reaffecter_client_equipe")) { logAction(user, "reaffecter_client_equipe", "denied", { type: "client_secteur", id: clientId, label: secteur }); return }
+    logAction(user, "reaffecter_client_equipe", "success", { type: "client_secteur", id: clientId, label: secteur })
     store.updateClient(clientId, { secteur })
     reload(); flash()
   }
@@ -74,6 +78,8 @@ export default function BOAffectationCommerciale({ user }: Props) {
   }
 
   const assignClientPrevendeur = (clientId: string, prevendeurId: string) => {
+    if (!hasPermission(user.role, "reaffecter_client_equipe")) { logAction(user, "reaffecter_client_equipe", "denied", { type: "client_prevendeur", id: clientId, label: prevendeurId }); return }
+    logAction(user, "reaffecter_client_equipe", "success", { type: "client_prevendeur", id: clientId, label: prevendeurId })
     const prev = users.find(u => u.id === prevendeurId)
     store.updateClient(clientId, {
       prevendeurId: prevendeurId || undefined,
@@ -83,6 +89,8 @@ export default function BOAffectationCommerciale({ user }: Props) {
   }
 
   const assignPrevendeurSecteur = (userId: string, secteur: string) => {
+    if (!hasPermission(user.role, "reaffecter_client_equipe")) { logAction(user, "reaffecter_client_equipe", "denied", { type: "prevendeur_secteur", id: userId, label: secteur }); return }
+    logAction(user, "reaffecter_client_equipe", "success", { type: "prevendeur_secteur", id: userId, label: secteur })
     const all = store.getUsers()
     const idx = all.findIndex(u => u.id === userId)
     if (idx >= 0) {
@@ -100,6 +108,8 @@ export default function BOAffectationCommerciale({ user }: Props) {
   // For each client without a prevendeurId, try to find a prevendeur in the same secteur.
   // If multiple prevendeurs in the same secteur, assign round-robin.
   const autoAffecterTous = () => {
+    if (!hasPermission(user.role, "reaffecter_client_equipe")) { logAction(user, "reaffecter_client_equipe", "denied", { type: "auto_affectation_tous" }); return }
+    logAction(user, "reaffecter_client_equipe", "success", { type: "auto_affectation_tous" })
     const unassigned = clients.filter(c => !c.prevendeurId && c.secteur)
     if (unassigned.length === 0) return
     const countByPrev: Record<string, number> = {}

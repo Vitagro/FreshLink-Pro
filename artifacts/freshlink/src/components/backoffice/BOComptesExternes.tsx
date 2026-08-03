@@ -20,6 +20,26 @@ async function avecAffectation<T extends { secteur?: string; prevendeurId?: stri
   return data
 }
 
+// Détection de doublon à la création d'un client (même logique que
+// BOArticles) : deux fiches distinctes pour le même client dispersent
+// historique commandes/crédit/visites sur deux comptes. On compare le nom
+// normalisé (casse/accents/espaces) et le téléphone normalisé (chiffres
+// seuls) — un téléphone identique est un signal de doublon très fiable.
+function normClientText(s: string): string {
+  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim()
+}
+function normPhone(s: string): string {
+  return s.replace(/\D/g, "")
+}
+function findDuplicateClient(all: Client[], nom: string, telephone: string | undefined): Client | undefined {
+  const nomN = normClientText(nom)
+  const telN = telephone ? normPhone(telephone) : ""
+  return all.find(c =>
+    normClientText(c.nom) === nomN ||
+    (telN.length >= 6 && normPhone(c.telephone || "") === telN)
+  )
+}
+
 const ALLOWED_ROLES = ["super_super_admin", "super_admin", "admin", "resp_commercial", "resp_achat", "ctrl_achat", "team_leader"]
 
 const TYPE_OPTIONS = [
@@ -504,6 +524,13 @@ export default function BOComptesExternes({ user }: Props) {
   const handleAdd = async (data: Omit<Client, "id" | "createdBy" | "createdAt">) => {
     if (!hasPermission(user.role, "creer_client")) { logAction(user, "creer_client", "denied", { label: data.nom }); return }
     if (!data.nom.trim()) { flash(false, "Le nom est obligatoire."); return }
+    const dup = findDuplicateClient(store.getClients(), data.nom, data.telephone)
+    if (dup && !window.confirm(
+      `Un client "${dup.nom}"${dup.telephone ? ` (tél. ${dup.telephone})` : ""} existe déjà et semble être le même client.\n\n` +
+      `Créer un doublon disperse commandes, crédit et historique de visites sur deux fiches.\n` +
+      `Préférez plutôt "Modifier" cette fiche existante.\n\n` +
+      `Créer quand même un nouveau client ?`
+    )) return
     data = await avecAffectation(data)   // auto-rattachement prévendeur selon le secteur
     const clientId = await nextClientId()
     const fullClient = { ...data, id: clientId, createdBy: user.id, createdAt: new Date().toISOString() }

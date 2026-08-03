@@ -1,8 +1,13 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════
 // /api/ext/gifts — Centre Cadeaux Incentives (Section 1.1)
+//
+//   Protege par requireDeviceApi (device BO connu) — seul BOGifts.tsx
+//   appelle cette route ; sans garde-fou, n'importe qui pouvait
+//   attribuer des cadeaux (decremente le stock reel) a distance.
 //
 //  GET  ?scope=materials    → catalogue des matériels (Balance, Pack couteaux)
 //  GET  ?scope=attributions → historique des attributions (joint material)
@@ -40,6 +45,7 @@ function corsHeaders(origin: string | undefined) {
 router.use((req: Request, res: Response, next) => {
   Object.entries(corsHeaders(req.headers.origin)).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   next();
 });
 

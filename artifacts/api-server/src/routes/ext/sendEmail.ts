@@ -1,12 +1,21 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { sendEmail } from "../../lib/email.js";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // /api/ext/send-email — envoi email côté SERVEUR (clé secrète jamais exposée)
 // Logique d'envoi (Brevo/Resend + auto-réparation) partagée dans lib/email.ts —
 // aussi utilisée par les notifications internes (ex: alerte commande Shop).
 // Body: { to, subject, html?, text?, from?, replyTo? }
+//
+// Protege par requireDeviceApi (device BO connu) : sans ca, n'importe qui
+// pouvait faire envoyer un email arbitraire (sujet/corps HTML libres) depuis
+// l'adresse d'expedition de l'app — le seul garde-fou etait un rate-limit par
+// IP lu depuis X-Forwarded-For, un en-tete que l'appelant controle lui-meme
+// et peut donc varier a chaque requete pour le contourner entierement.
+// Les appels internes (cron rapport-credit/rapport-journalier) n'utilisent
+// plus cette route HTTP : ils appellent sendEmail() directement en process.
 // ══════════════════════════════════════════════════════════════════════════════
 
 const router = Router();
@@ -64,6 +73,7 @@ router.get("/", (_req: Request, res: Response) => {
 });
 
 router.post("/", async (req: Request, res: Response) => {
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   const limited = rateLimited(req, { key: "send-email", limit: 5, windowMs: 60_000 });
   if (limited) {
     res.setHeader("Retry-After", String(limited.retry));

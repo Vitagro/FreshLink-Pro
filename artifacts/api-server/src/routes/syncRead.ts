@@ -32,6 +32,12 @@ const ALLOWED_TABLES = new Set([
   "fl_reglements_cv",
   "fl_group_names",
   "fl_mobile_tabs_visibility",
+  // Manquantes jusqu'ici -> ces tables ne remontaient/redescendaient jamais
+  // de Supabase malgre un cote client deja pret (autoSync.ts / db.ts) :
+  // 100% locales a l'appareil qui les avait creees, "disparaissant" sur
+  // tout autre navigateur/appareil (ex: liste des transporteurs).
+  "fl_messages", "fl_visites", "fl_demandes_achat", "fl_non_achats",
+  "fl_transferts_stock", "fl_transport_companies",
 ]);
 
 router.get("/", async (req: Request, res: Response) => {

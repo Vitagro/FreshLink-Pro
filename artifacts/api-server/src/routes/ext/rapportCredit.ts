@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { requireDeviceApi } from "../../lib/deviceGuard.js";
+import { sendEmail } from "../../lib/email.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // /api/ext/rapport-credit — Analyse des crédits FOURNISSEURS + CLIENTS
@@ -235,20 +236,16 @@ router.get("/", async (req: Request, res: Response) => {
     }
     const to = (req.query["to"] as string | undefined) || process.env.REPORT_EMAIL || "contact@vita-core.org";
     try {
-      // NOTE: /api/ext/send-email n'a pas encore été porté vers Express ;
-      // appel best-effort relatif (no-op silencieux si l'endpoint est absent).
-      const origin = `${req.protocol}://${req.get("host")}`;
-      const sendRes = await fetch(`${origin}/api/ext/send-email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to,
-          subject: `📊 Rapport crédit ${rep.date} — F: ${money(rep.fournisseurs.totalCredits)} · C: ${money(rep.clients.totalCredits)}`,
-          html: reportHtml(rep),
-        }),
+      // Appel direct en process (pas de round-trip HTTP vers /api/ext/send-email,
+      // qui exige un device connu — un cron n'en a pas) : sendEmail() reste la
+      // seule voie d'envoi, mais utilisée ici comme fonction, pas comme route
+      // publique atteignable sans authentification.
+      const mail = await sendEmail({
+        to,
+        subject: `📊 Rapport crédit ${rep.date} — F: ${money(rep.fournisseurs.totalCredits)} · C: ${money(rep.clients.totalCredits)}`,
+        html: reportHtml(rep),
       });
-      const mail = await sendRes.json().catch(() => ({}));
-      res.json({ ...rep, emailSent: sendRes.ok, emailDetail: mail });
+      res.json({ ...rep, emailSent: mail.ok, emailDetail: mail });
       return;
     } catch (e) {
       res.json({ ...rep, emailSent: false, emailDetail: { error: String(e) } });

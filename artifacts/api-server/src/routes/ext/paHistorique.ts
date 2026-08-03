@@ -1,8 +1,12 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════
 // /api/ext/pa-historique — Saisie PA marché de gros (Section 5)
+//
+//   Protege par requireDeviceApi (device BO connu) — seul
+//   BOPaHistorique.tsx appelle cette route.
 //   Table : fl_pa_historique
 //   Alimente la fonction SQL fl_pa_predit (pricing dynamique)
 //
@@ -37,6 +41,7 @@ function corsHeaders(origin: string | undefined) {
 router.use((req: Request, res: Response, next) => {
   Object.entries(corsHeaders(req.headers.origin)).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   next();
 });
 

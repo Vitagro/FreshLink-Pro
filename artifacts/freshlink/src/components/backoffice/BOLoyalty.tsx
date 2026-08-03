@@ -96,6 +96,7 @@ export default function BOLoyalty({ user }: Props) {
 
   // ── Add / Edit rule ─────────────────────────────────────────────────────────
   const saveRule = () => {
+    if (!hasPermission(user.role, "appliquer_remise")) { logAction(user, "appliquer_remise", "denied", { type: "regle_remise_sauvegarde" }); return }
     if (!newRule.nom.trim()) { flash("Nom requis."); return }
     if (editingRule) {
       store.updateDiscountRule(editingRule.id, { ...newRule, updatedAt: new Date().toISOString() } as Partial<DiscountRule>)
@@ -108,6 +109,7 @@ export default function BOLoyalty({ user }: Props) {
       }
       store.addDiscountRule(rule)
     }
+    logAction(user, "appliquer_remise", "success", { type: "regle_remise_sauvegarde", label: newRule.nom, id: editingRule?.id })
     setRules(store.getDiscountRules())
     setShowNewRule(false)
     setEditingRule(null)

@@ -23,6 +23,7 @@ import type {
   Trip, BonLivraison, Retour, BonPreparation,
   TransfertStock, Message, Notice, CaisseEntry,
   LoyaltyTransaction, PrimeNouveauClient, CaisseEtrangere,
+  DemandeAchat, NonAchatSignalement, TransportCompany,
 } from "@/lib/store"
 
 // ── Helpers JSONB ─────────────────────────────────────────────────────────────
@@ -519,6 +520,15 @@ export async function syncFromSupabase(): Promise<{ ok: boolean; tables: string[
     ["fl_loyalty_transactions", (d) => store.saveLoyaltyTransactions(d as LoyaltyTransaction[]), () => store.getLoyaltyTransactions()],
     ["fl_primes_nouveaux_clients", (d) => store.savePrimesNouveauxClients(d as PrimeNouveauClient[]), () => store.getPrimesNouveauxClients()],
     ["fl_caisses_etrangeres", (d) => store.saveCaissesEtrangeres(d as CaisseEtrangere[]), () => store.getCaissesEtrangeres()],
+    // Jamais synchronisés avant (même bug) — 100% localStorage jusqu'ici,
+    // "disparaissant" dès qu'on changeait de navigateur/appareil (ex: la
+    // liste des transporteurs n'a jamais existé qu'sur l'appareil qui
+    // l'avait créée, faute de lecture/écriture cross-device).
+    ["fl_visites",       (d) => store.saveVisites(d as Visite[]),               () => store.getVisites()],
+    ["fl_demandes_achat",(d) => store.saveDemandesAchat(d as DemandeAchat[]),   () => store.getDemandesAchat()],
+    ["fl_non_achats",    (d) => store.saveNonAchatSignalements(d as NonAchatSignalement[]), () => store.getNonAchatSignalements()],
+    ["fl_transferts_stock",     (d) => store.saveTransferts(d as TransfertStock[]),         () => store.getTransferts()],
+    ["fl_transport_companies",  (d) => store.saveTransportCompanies(d as TransportCompany[]), () => store.getTransportCompanies()],
   ]
 
   // Requêtes parallèles — toutes les tables en même temps (x10 plus rapide)
