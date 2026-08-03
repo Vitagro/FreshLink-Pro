@@ -588,7 +588,10 @@ export default function BOGPSTracker({ user }: Props) {
       let nearestDist = Infinity
       remaining.forEach((id, i) => {
         const c = etaClients.find(cl => cl.id === id)
-        if (!c?.gpsLat || !c?.gpsLng) { nearestIdx = i; return }
+        // Client sans GPS : ne sert de repli que si aucun candidat valide n'a
+        // encore ete trouve dans ce passage (sinon il ecrasait a tort le plus
+        // proche reel trouve plus tot dans le forEach).
+        if (!c?.gpsLat || !c?.gpsLng) { if (nearestDist === Infinity) nearestIdx = i; return }
         const d = haversineKm(currentLat, currentLng, c.gpsLat, c.gpsLng)
         if (d < nearestDist) { nearestDist = d; nearestIdx = i }
       })

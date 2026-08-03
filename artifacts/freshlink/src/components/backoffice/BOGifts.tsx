@@ -118,6 +118,7 @@ export default function BOGifts({ user }: { user: User }) {
   }, [load])
 
   const attribuer = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "attribution manuelle" }); return }
     if (!attribForm.clientId.trim()) { setError("ID client requis"); return }
     if (!attribForm.materialId)      { setError("Choisis un matériel"); return }
     setBusy(true)
@@ -129,6 +130,7 @@ export default function BOGifts({ user }: { user: User }) {
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error ?? "Erreur attribution")
+      logAction(user, "catalogue_toggle", "success", { type: "gifts", id: attribForm.materialId, label: `attribution manuelle -> ${attribForm.clientId}` })
       setShowAttribForm(false)
       setAttribForm({ clientId: "", materialId: "", declenchePar: "manuel_bo" })
       await load()
@@ -141,6 +143,7 @@ export default function BOGifts({ user }: { user: User }) {
   }
 
   const creerMateriel = async () => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "creation materiel" }); return }
     if (!matForm.nom.trim()) { setError("Nom du matériel requis"); return }
     setBusy(true)
     try {
@@ -151,6 +154,7 @@ export default function BOGifts({ user }: { user: User }) {
       })
       const data = await res.json()
       if (!data.ok) throw new Error(data.error ?? "Erreur création matériel")
+      logAction(user, "catalogue_toggle", "success", { type: "gifts", label: `creation materiel : ${matForm.nom}` })
       setShowMatForm(false)
       setMatForm({ nom: "", segment: "marchand", description: "", seuilType: "volume_kg", seuilValeur: 0, stockQte: 0, coutUnitaire: 0 })
       await load()
@@ -203,6 +207,8 @@ export default function BOGifts({ user }: { user: User }) {
   }
 
   const patchAttribution = async (id: string, statut: Attribution["statut"]) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", id, label: `statut -> ${statut}` }); return }
+    logAction(user, "catalogue_toggle", "success", { type: "gifts", id, label: `statut -> ${statut}` })
     setAttributions(prev => prev.map(x => x.id === id ? { ...x, statut, livre_le: statut === "livre" ? new Date().toISOString() : x.livre_le } : x))
     try {
       await fetch("/api/ext/gifts", {
@@ -214,7 +220,9 @@ export default function BOGifts({ user }: { user: User }) {
   }
 
   const supprimerAttribution = async (id: string) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "suppression attribution", id }); return }
     if (!window.confirm("Supprimer cette attribution ?")) return
+    logAction(user, "catalogue_toggle", "success", { type: "gifts", label: "suppression attribution", id })
     setAttributions(prev => prev.filter(x => x.id !== id))
     try {
       await fetch(`/api/ext/gifts?scope=attribution&id=${encodeURIComponent(id)}`, { method: "DELETE" })
@@ -222,7 +230,9 @@ export default function BOGifts({ user }: { user: User }) {
   }
 
   const supprimerMateriel = async (id: string) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "suppression materiel", id }); return }
     if (!window.confirm("Supprimer ce matériel ? Les attributions existantes resteront mais sans nom joint.")) return
+    logAction(user, "catalogue_toggle", "success", { type: "gifts", label: "suppression materiel", id })
     setMaterials(prev => prev.filter(x => x.id !== id))
     try {
       await fetch(`/api/ext/gifts?scope=material&id=${encodeURIComponent(id)}`, { method: "DELETE" })
@@ -230,6 +240,8 @@ export default function BOGifts({ user }: { user: User }) {
   }
 
   const adjustStock = async (m: Material, delta: number) => {
+    if (!hasPermission(user.role, "catalogue_toggle")) { logAction(user, "catalogue_toggle", "denied", { type: "gifts", label: "ajustement stock", id: m.id }); return }
+    logAction(user, "catalogue_toggle", "success", { type: "gifts", id: m.id, label: `ajustement stock (${delta > 0 ? "+" : ""}${delta})` })
     const newQte = Math.max(0, m.stock_qte + delta)
     setMaterials(prev => prev.map(x => x.id === m.id ? { ...x, stock_qte: newQte } : x))
     try {
