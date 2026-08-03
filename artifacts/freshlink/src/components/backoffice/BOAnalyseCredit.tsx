@@ -32,7 +32,6 @@ interface Report {
 }
 
 const money = (n: number) => `${(n ?? 0).toLocaleString("fr-MA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} DH`
-const ADMIN_KEY = "vita-bypass-2026"
 
 export default function BOAnalyseCredit() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
@@ -69,7 +68,9 @@ export default function BOAnalyseCredit() {
     setSending(true); setSendMsg(null)
     try {
       const to = sendTo.trim()
-      const url = `/api/ext/rapport-credit?date=${encodeURIComponent(date)}&send=1&key=${encodeURIComponent(ADMIN_KEY)}${to ? `&to=${encodeURIComponent(to)}` : ""}`
+      // Pas de clé transmise : le device BO connu (cookie signé) suffit à
+      // autoriser l'envoi côté serveur, cf. requireDeviceApi dans rapportCredit.ts.
+      const url = `/api/ext/rapport-credit?date=${encodeURIComponent(date)}&send=1${to ? `&to=${encodeURIComponent(to)}` : ""}`
       const res = await fetch(url, { cache: "no-store" })
       const j = await res.json().catch(() => ({})) as { emailSent?: boolean; emailDetail?: { error?: string; hint?: string } }
       if (res.ok && j.emailSent) setSendMsg({ ok: true, text: "✅ Rapport envoyé par email." })

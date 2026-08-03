@@ -296,6 +296,19 @@ export default function MobileControlRetour({ user }: Props) {
       {/* Valider tab */}
       {tab === "valider" && (
         <div className="flex flex-col gap-3">
+          {/* Ce circuit de triage IA (declarer → valider commercial → valider
+              logistique) est independant du circuit officiel des retours
+              (MobileLogistique → BORetour) : valider ici ne met PAS a jour le
+              stock et ne cree AUCUN enregistrement dans Retour/BORetour —
+              sans cet avertissement, l'ecran donnait l'illusion d'un
+              traitement complet du retour. */}
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
+            <span className="text-amber-600 text-sm">⚠️</span>
+            <p className="text-xs text-amber-800">
+              Ce triage qualité ne remet <strong>pas</strong> le stock à jour et ne crée pas de retour officiel.
+              Traitez également ce retour via le circuit habituel (Logistique / Retour) pour qu&apos;il soit pris en compte au stock et en comptabilité.
+            </p>
+          </div>
           {/* Pending */}
           {pending.length > 0 && (
             <div>

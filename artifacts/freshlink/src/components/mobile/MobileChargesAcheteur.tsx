@@ -15,6 +15,8 @@ import {
   type ChargeTypeAcheteur,
   CHARGE_TYPE_LABELS,
 } from "@/lib/store"
+import { hasPermission } from "@/lib/permissions"
+import { logAction } from "@/lib/auditLog"
 
 interface Props { user: User }
 
@@ -41,7 +43,7 @@ function emptyForm() {
   return {
     clientNom:   "",
     bonAchatId:  "",
-    date:        new Date().toISOString().slice(0, 10),
+    date:        store.today(),
     type:        "transport" as ChargeTypeAcheteur,
     montant:     "",
     description: "",
@@ -95,7 +97,7 @@ export default function MobileChargesAcheteur({ user }: Props) {
   // Totals
   const totalAll    = allRows.reduce((s, r) => s + r.montant, 0)
   const totalToday  = allRows
-    .filter(r => r.date === new Date().toISOString().slice(0, 10))
+    .filter(r => r.date === store.today())
     .reduce((s, r) => s + r.montant, 0)
 
   function validate() {
@@ -109,6 +111,7 @@ export default function MobileChargesAcheteur({ user }: Props) {
 
   function handleSave() {
     if (!validate()) return
+    if (!hasPermission(user.role, "modifier_bon_achat")) { logAction(user, "modifier_bon_achat", "denied", { type: "charge_acheteur" }); return }
 
     const existing = store.getChargesClient()
 
@@ -133,6 +136,7 @@ export default function MobileChargesAcheteur({ user }: Props) {
     }
 
     store.saveChargesClient(existing)
+    logAction(user, "modifier_bon_achat", "success", { type: "charge_acheteur", label: `${form.bonAchatId} — ${form.type} ${form.montant}DH` })
     reload()
     setForm(emptyForm())
     setShowForm(false)
@@ -141,12 +145,14 @@ export default function MobileChargesAcheteur({ user }: Props) {
   }
 
   function handleDelete(bonAchatId: string, idx: number) {
+    if (!hasPermission(user.role, "modifier_bon_achat")) { logAction(user, "modifier_bon_achat", "denied", { type: "charge_acheteur" }); return }
     const existing = store.getChargesClient()
     const recIdx   = existing.findIndex(c => c.bonAchatId === bonAchatId)
     if (recIdx < 0) return
     existing[recIdx].charges.splice(idx, 1)
     if (existing[recIdx].charges.length === 0) existing.splice(recIdx, 1)
     store.saveChargesClient(existing)
+    logAction(user, "modifier_bon_achat", "success", { type: "charge_acheteur", id: bonAchatId, label: "suppression charge" })
     reload()
   }
 

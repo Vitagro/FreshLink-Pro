@@ -6,7 +6,6 @@
  */
 
 export const DEVICE_COOKIE  = "fl_device_token"
-export const DEVICE_BYPASS  = "vita-bypass-2026"
 export const SADMIN_COOKIE  = "fl_sadmin_bypass"
 
 export interface DeviceEntry {

@@ -45,8 +45,12 @@ interface BesoinRow extends BesoinLigneEmail {
   // Nombre de caisses tel que saisi directement par le commercial sur ses commandes
   // (quantiteUM des lignes de commande). En mode crossdocking le colisage achat differe
   // du colisage vente : recalculer les caisses depuis les kg via colisageParUM donnerait
-  // un nombre faux, donc on prend directement ce qui a ete saisi par le commercial.
+  // un nombre faux, donc on prend directement ce qui a ete saisi par le commercial —
+  // sauf si le commercial a saisi directement en kg (pas de quantiteUM du tout), auquel
+  // cas on estime via colisageParUM (colisage vente, cf. caissesEstimee) plutot que de
+  // silencieusement ignorer la commande (elle disparaissait totalement du total avant).
   caissesCommercial: number
+  caissesEstimee: boolean
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,15 +70,16 @@ function computeStats(dateDebut: string, dateFin: string = dateDebut): DailyStat
   const totalAchats     = bonsAchat.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0)
   const totalCommandes  = commandes.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite * l.prixVente, 0), 0)
   const totalLivraisons = bls.reduce((s, b) => s + b.montantTotal, 0)
-  // Categorie client (CHR/Marchand/Particulier) par commandeId — pour valoriser un
-  // retour au prix reellement facture (store.computePV), pas au prix generique du
-  // catalogue qui ignore les prix CHR/Marchand/Particulier surchages.
+  // Client par commandeId — pour valoriser un retour au prix REELLEMENT
+  // facture (store.computePrixEffectif), pas juste au prix de categorie
+  // (store.computePV ignore les surcharges client individuel/echelle/secteur,
+  // prioritaires sur la categorie — cf. computePrixEffectif).
   const clientsForRetours = store.getClients()
-  const categorieParCommande = new Map<string, "chr" | "marchand" | "particulier" | undefined>()
-  store.getCommandes().forEach(c => categorieParCommande.set(c.id, clientsForRetours.find(cl => cl.id === c.clientId)?.categorie))
+  const clientParCommande = new Map<string, ReturnType<typeof store.getClients>[number] | undefined>()
+  store.getCommandes().forEach(c => clientParCommande.set(c.id, clientsForRetours.find(cl => cl.id === c.clientId)))
   const totalRetours    = retours.reduce((s, r) => s + r.lignes.reduce((ls, l) => {
     const art = articles.find(a => a.id === l.articleId)
-    const pv = art ? store.computePV(art, categorieParCommande.get(l.commandeId)) : 0
+    const pv = art ? store.computePrixEffectif(art, clientParCommande.get(l.commandeId)) : 0
     return ls + l.quantite * pv
   }, 0), 0)
   const totalCash = bls.filter(b => b.statut === "encaissé").reduce((s, b) => s + b.montantTotal, 0)
@@ -149,9 +154,22 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         const l = c.lignes.find(l => l.articleId === art.id)
         return s + (l?.quantite ?? 0)
       }, 0)
+      let caissesEstimee = false
       const caissesCommercial = commandes.reduce((s, c) => {
         const l = c.lignes.find(l => l.articleId === art.id)
-        return s + (l?.quantiteUM ?? 0)
+        if (!l) return s
+        if (l.quantiteUM) return s + l.quantiteUM
+        // Le commercial a saisi directement en kg (pas en mode UM) : sans ce
+        // fallback la commande disparaissait purement et simplement du total
+        // "Caisses (saisies commercial)" (0 alors qu'une vraie commande existe).
+        // On estime via colisageParUM (colisage vente — celui qui aurait ete
+        // utilise si la saisie avait ete faite en mode UM), jamais via
+        // colisageCaisses/colisageDemiCaisses (colisage achat, different).
+        if (l.quantite > 0 && art.colisageParUM && art.colisageParUM > 0) {
+          caissesEstimee = true
+          return s + l.quantite / art.colisageParUM
+        }
+        return s
       }, 0)
       const retourQty = retours.reduce((s, r) => {
         const l = r.lignes.find(l => l.articleId === art.id)
@@ -186,7 +204,8 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         colisageCaisses: art.colisageCaisses,
         colisageDemiCaisses: art.colisageDemiCaisses,
         articleNomAr:   art.nomAr,
-        caissesCommercial,
+        caissesCommercial: Math.round(caissesCommercial * 10) / 10,
+        caissesEstimee,
       }
     })
     .filter(r => r.commandeTotal > 0)
@@ -497,7 +516,7 @@ export default function BORecap() {
           "Besoin net": r.besoinNet,
           Unite: r.unite ?? "",
           UM: r.um ?? "",
-          "Caisses (saisies commercial)": r.caissesCommercial,
+          "Somme Total (UM saisie commercial)": r.caissesEstimee ? `≈${r.caissesCommercial}` : r.caissesCommercial,
           Selectionne: r.selected ? "oui" : "non",
         }
       }
@@ -853,7 +872,7 @@ export default function BORecap() {
                         className="w-4 h-4 rounded" />
                     </th>
                     {(crossdock
-                      ? ["Article", "Fournisseur", "Commandes", "Retours", "Besoin net", "Caisses (saisies commercial)"]
+                      ? ["Article", "Fournisseur", "Commandes", "Retours", "Besoin net", "Somme Total"]
                       : ["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net", "Caisses"]
                     ).map(h => (
                       <th key={h} className="text-left px-3 py-3 text-muted-foreground font-medium text-xs uppercase tracking-wide">{h}</th>
@@ -892,11 +911,16 @@ export default function BORecap() {
                       </td>
                       <td className="px-3 py-3 text-center text-xs">
                         {crossdock ? (
-                          r.caissesCommercial > 0
-                            ? <span className="font-semibold text-blue-700">
-                                {r.caissesCommercial} {r.um ? r.um.toLowerCase() + (r.caissesCommercial > 1 ? "s" : "") : `caisse${r.caissesCommercial > 1 ? "s" : ""}`}
+                          <div className="flex flex-col items-center gap-0.5">
+                            {r.caissesCommercial > 0 ? (
+                              <span className="font-semibold text-blue-700" title={r.caissesEstimee ? "Estime via le colisage (saisi en kg, pas en UM)" : "Saisi directement en UM par le commercial"}>
+                                {r.caissesEstimee ? "≈" : ""}{r.caissesCommercial} {r.um ? r.um.toLowerCase() + (r.caissesCommercial > 1 ? "s" : "") : `caisse${r.caissesCommercial > 1 ? "s" : ""}`}
                               </span>
-                            : <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground">{r.commandeTotal} {r.unite}</span>
+                          </div>
                         ) : (
                           r.besoinNet > 0 ? (() => {
                             const c = computeCaissesAuto(r.besoinNet, r.unite, r.colisageParUM, r.colisageCaisses, r.colisageDemiCaisses)

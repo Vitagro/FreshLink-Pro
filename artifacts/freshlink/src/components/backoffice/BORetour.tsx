@@ -13,22 +13,22 @@ export default function BORetour({ user }: { user: User }) {
 
   const filtered = retours.filter(r => !filter.date || r.date === filter.date)
 
-  // Categorie client (CHR/Marchand/Particulier) par commandeId — necessaire pour
-  // valoriser un retour au prix reellement facture (store.computePV), pas au prix
-  // generique du catalogue qui ignore les prix CHR/Marchand/Particulier surchages.
-  const categorieParCommande = (() => {
+  // Client par commandeId — necessaire pour valoriser un retour au prix
+  // REELLEMENT facture (store.computePrixEffectif), pas juste au prix de
+  // categorie (store.computePV ignore les surcharges client individuel/
+  // echelle/secteur, prioritaires sur la categorie — cf. computePrixEffectif).
+  const clientParCommande = (() => {
     const clients = store.getClients()
-    const map = new Map<string, "chr" | "marchand" | "particulier" | undefined>()
+    const map = new Map<string, ReturnType<typeof store.getClients>[number] | undefined>()
     store.getCommandes().forEach(c => {
-      const cat = clients.find(cl => cl.id === c.clientId)?.categorie
-      map.set(c.id, cat)
+      map.set(c.id, clients.find(cl => cl.id === c.clientId))
     })
     return map
   })()
   const pvForLigne = (l: { articleId: string; commandeId: string }): number => {
     const art = store.getArticles().find(a => a.id === l.articleId)
     if (!art) return 0
-    return store.computePV(art, categorieParCommande.get(l.commandeId))
+    return store.computePrixEffectif(art, clientParCommande.get(l.commandeId))
   }
 
   const handleValider = (id: string) => {

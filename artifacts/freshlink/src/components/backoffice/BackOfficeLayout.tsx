@@ -116,7 +116,6 @@ const ShelfLifePanel         = React.lazy(() => import("./ShelfLifePanel"))
 const ForecastPanel          = React.lazy(() => import("./ForecastPanel"))
 const CameraPermissionsPanel = React.lazy(() => import("./CameraPermissionsPanel"))
 const CaissesVidesPanel      = React.lazy(() => import("./CaissesVidesPanel"))
-const DeployGuidePanel       = React.lazy(() => import("./DeployGuidePanel"))
 const BODepots               = React.lazy(() => import("./BODepots"))
 const BOResources            = React.lazy(() => import("./BOResources"))
 const BOComptabiliteRH       = React.lazy(() => import("./BOComptabiliteRH"))
@@ -173,7 +172,7 @@ export type Tab =
   | "gps_tracker"
   | "feedback" | "trip_charges" | "analyse_achat" | "temps_achat" | "analyse_reception" | "caisse_acheteur" | "analyse_credit" | "roles_permissions" | "rapport_marche" | "shop_analytics" | "promo_codes"
   | "caisses_vides" | "shelf_life" | "forecast"
-  | "camera_perms" | "cutoffs" | "deploy_guide"
+  | "camera_perms" | "cutoffs"
   | "depots"
   | "rh_productivite" | "rh_comptabilite"
   | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
@@ -418,7 +417,6 @@ const NAV_GROUPS_RAW: NavGroup[] = [
         ),
       },
       { id: "import_externe",    label: "Import Bases Externes", labelAr: "استيراد قواعد البيانات", permKey: "canViewDatabase", icon: <Icon d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4M15 3l2 2-2 2M9 3L7 5l2 2" /> },
-      { id: "deploy_guide",      label: "Guide de deploiement",  labelAr: "دليل النشر",        permKey: "canViewDatabase", superOnly: true, icon: <Icon d="M13 10V3L4 14h7v7l9-11h-7z" /> },
     ],
   },
 ]
@@ -477,7 +475,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   // puis config operationnelle (cutoffs, mobile, depots, integrations), puis
   // outils techniques rarement ouverts (BDD, imports, liens) et enfin les
   // ecrans reserves super-admin (camera) en dernier.
-  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms", "deploy_guide"] },
+  { label: "Administration & Système",    labelAr: "الإدارة والنظام",      ids: ["users", "settings", "roles_permissions", "equipes", "cutoffs", "journal_activite", "mobile_gestion", "device_access", "depots", "web_integration", "gsheets", "database", "liens_externes", "import_externe", "camera_perms"] },
 ]
 
 const NAV_GROUPS: NavGroup[] = NAV_GROUP_DEF.map(g => ({
@@ -548,7 +546,6 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   forecast:            (_u) => <ForecastPanel />,
   camera_perms:      (u) => <CameraPermissionsPanel currentUser={u} />,
   cutoffs:           (u)  => <BOCutoffsV3 user={u} />,
-  deploy_guide:      (_u) => <DeployGuidePanel />,
   rh_productivite:   (u) => <BOResources user={u} />,
   rh_comptabilite:   (u) => <BOComptabiliteRH user={u} />,
   intelligence_prix: (u) => <BOIntelligencePrix user={u} />,
