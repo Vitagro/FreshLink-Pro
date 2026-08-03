@@ -2,6 +2,12 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import { sendPushToUser } from "../../lib/push.js";
 import { sendWebPushToUser } from "../../lib/webPush.js";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
+
+// Protege par requireDeviceApi (device BO connu) — seuls CallCenter.tsx et
+// BONotificationsBell.tsx (montes dans BackOfficeLayout) appellent cette
+// route ; sans garde-fou, n'importe qui pouvait lire/creer des notifications
+// internes (visibles direction/services) a distance.
 
 const router = Router();
 
@@ -28,6 +34,7 @@ function corsHeaders(origin: string | undefined) {
 router.use((req: Request, res: Response, next) => {
   Object.entries(corsHeaders(req.headers.origin)).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   next();
 });
 

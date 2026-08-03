@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════
 // /ext/bonus-matrix — CRUD matrice bonus (Section 3)
@@ -12,6 +13,11 @@ import type { Request, Response } from "express";
 //
 //   Le calcul réel du bonus est dans la fonction SQL fl_calc_bonus
 //   (garde-fou plafond global) appelée via /api/ext/commercial
+//
+//   Protege par requireDeviceApi (device BO connu) : sans ca, les taux de
+//   bonus commerciaux (donnee sensible) etaient lisibles/modifiables par
+//   n'importe qui connaissant l'URL (BOMoteurCommercial.tsx est le seul
+//   appelant frontend, toujours avec cookie device deja pose).
 // ══════════════════════════════════════════════════════════════════
 
 const router = Router();
@@ -37,6 +43,7 @@ function corsHeaders(origin: string | undefined) {
 router.use((req: Request, res: Response, next) => {
   Object.entries(corsHeaders(req.headers.origin)).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   next();
 });
 

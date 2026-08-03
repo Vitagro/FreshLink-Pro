@@ -1,8 +1,14 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════
 // /ext/cutoffs — Régulation des flux (blocages manuels + auto)
+//
+//   Protege par requireDeviceApi (device BO connu) : seul BOCutoffs.tsx
+//   appelle cette route (mobile/shop lisent les cutoffs via le cache
+//   store, pas d'appel HTTP direct) — sans ce garde-fou, n'importe qui
+//   pouvait activer/lever un blocage flux commande/achat a distance.
 //
 //   GET                       → liste tous les cutoffs (actifs + inactifs)
 //   GET ?actif=true           → seulement les cutoffs actifs (= blocages en cours)
@@ -40,6 +46,7 @@ function corsHeaders(origin: string | undefined) {
 router.use((req: Request, res: Response, next) => {
   Object.entries(corsHeaders(req.headers.origin)).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   next();
 });
 

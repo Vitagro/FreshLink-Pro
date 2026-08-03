@@ -1,8 +1,13 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════
 // /api/ext/pricing-rules — CRUD règles de prix (gratuités + remises)
+//
+//   Protege par requireDeviceApi (device BO connu) — seul
+//   BOMoteurCommercial.tsx appelle cette route ; sans garde-fou,
+//   n'importe qui pouvait creer/modifier des remises appliquees en caisse.
 //   Table : fl_pricing_rules
 //
 //   GET                  → liste toutes les règles (tri priorité)
@@ -42,6 +47,7 @@ function corsHeaders(origin: string | undefined) {
 router.use((req: Request, res: Response, next) => {
   Object.entries(corsHeaders(req.headers.origin)).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") { res.sendStatus(204); return; }
+  if (requireDeviceApi(req)) { res.status(401).json({ ok: false, error: "Device non autorisé" }); return; }
   next();
 });
 

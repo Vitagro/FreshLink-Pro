@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { requireDeviceApi } from "../../lib/deviceGuard.js";
+import { sendEmail } from "../../lib/email.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // /api/ext/rapport-journalier — Rapport quotidien (ventes/achats/marge/BL)
@@ -108,16 +109,14 @@ Envoyé automatiquement par FreshLink Vita Fresh
   return { dateJ, body, totalVentes, totalAchats, margeJour, nbCommandes: cmdsJour.length, nbBonsAchat: bonsJour.length, nbBls: blsJour.length };
 }
 
-async function sendViaEmailEndpoint(req: Request, to: string, subject: string, body: string): Promise<{ ok: boolean; error?: string }> {
+// Appel direct en process (pas de round-trip HTTP vers /api/ext/send-email,
+// qui exige un device connu — un cron n'en a pas) : sendEmail() reste la
+// seule voie d'envoi, mais utilisee ici comme fonction, pas comme route
+// publique atteignable sans authentification.
+async function sendViaEmailEndpoint(_req: Request, to: string, subject: string, body: string): Promise<{ ok: boolean; error?: string }> {
   try {
-    const origin = `${req.protocol}://${req.get("host")}`;
-    const r = await fetch(`${origin}/api/ext/send-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, subject, text: body }),
-    });
-    const data = await r.json().catch(() => ({})) as { ok?: boolean; error?: string };
-    if (!r.ok || !data.ok) return { ok: false, error: data.error ?? "Email send failed" };
+    const result = await sendEmail({ to, subject, text: body });
+    if (!result.ok) return { ok: false, error: result.error ?? "Email send failed" };
     return { ok: true };
   } catch (e) {
     return { ok: false, error: String(e) };
