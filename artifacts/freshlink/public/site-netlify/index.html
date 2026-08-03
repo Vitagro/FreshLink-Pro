@@ -2002,6 +2002,15 @@ GET  /api/ext/commandes/:id → suivi commande</div>
         <div id="cart-items"><div class="cempty" data-i18n="ord_cart_empty">Votre panier est vide.<br>Ajoutez des produits depuis le catalogue.</div></div>
         <div id="cart-totals" style="display:none">
           <div class="ibox"><span style="font-size:17px">ℹ️</span><div class="ibox-t" id="del-info">Livraison standard — gratuite dès 150 MAD.</div></div>
+          <div class="tr" style="align-items:center;gap:8px;flex-wrap:nowrap">
+            <input id="promo-input" placeholder="Code promo" style="flex:1;min-width:0;padding:8px 10px;border-radius:8px;border:1px solid #d1d5db;font-size:13px;box-sizing:border-box" onkeydown="if(event.key==='Enter'){event.preventDefault();applyPromoCode();}">
+            <button onclick="applyPromoCode()" style="padding:8px 14px;border-radius:8px;background:#1e5631;color:#fff;border:none;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">Appliquer</button>
+          </div>
+          <div id="promo-msg" style="font-size:11px;margin:-4px 0 8px;display:none"></div>
+          <div class="tr" id="t-promo-row" style="display:none">
+            <span>Remise (<span id="t-promo-code"></span>) <button onclick="removePromoCode()" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:12px;margin-left:4px" title="Retirer le code">✕</button></span>
+            <span id="t-promo" style="color:#16a34a;font-weight:700">-0 MAD</span>
+          </div>
           <div class="tr"><span>Sous-total</span><span id="t-sub">0 MAD</span></div>
           <div class="tr"><span>Livraison</span><span id="t-del">Gratuite</span></div>
           <div class="tf2"><div class="tl2">Total</div><div class="ta" id="t-tot">0 MAD</div></div>
@@ -3293,6 +3302,7 @@ var TL={frais:"🌿 Frais",epluche:"🔪 Épluché",lave:"💧 Lavé",combo:"✨
 var TC={frais:"tf",epluche:"te",lave:"tl",combo:"tc",promo:"tp"};
 
 var cart={}, delMode="std", currentFilter="tous";
+var appliedPromo=null; // {code,type,valeur,livraisonGratuite,label} — validé via /api/ext/promo
 var sbSynced=false;
 
 // DEFAULT PRODUCTS (fallback — shown when ERP/Supabase unreachable)
@@ -3719,13 +3729,28 @@ function upCart(id,d){
   }
   updateCartUI(); showToast(parseInt(d)>0?"🛒 Ajouté au panier !":"🗑️ Retiré du panier");
 }
-function updateCartUI(){
+// Calcul unique du panier (sous-total, livraison, remise code promo, total)
+// — utilisé par updateCartUI() ET submitOrder() pour éviter toute divergence
+// entre le total affiché et le total réellement envoyé à l'ERP.
+function computeCartTotals(){
   var items=Object.values(cart);
+  var sub=items.reduce(function(s,p){return s+p.p*p.qty;},0);
+  var remise=0, promoLivraisonGratuite=false;
+  if(appliedPromo && sub>0){
+    if(appliedPromo.type==="montant"||appliedPromo.type==="article_gratuit") remise=Math.min(appliedPromo.valeur||0, sub);
+    else if(appliedPromo.type==="pourcentage") remise=Math.round(sub*(appliedPromo.valeur||0)/100*100)/100;
+    else if(appliedPromo.type==="livraison_gratuite") promoLivraisonGratuite=true;
+  }
+  var df=delMode==="exp"?CFG.exp:(sub>=CFG.free?0:CFG.std);
+  if(promoLivraisonGratuite) df=0;
+  var tot=Math.max(0, Math.round((sub+df-remise)*100)/100);
+  return {items:items, sub:sub, df:df, remise:remise, promoLivraisonGratuite:promoLivraisonGratuite, tot:tot};
+}
+function updateCartUI(){
+  var c=computeCartTotals(), items=c.items, sub=c.sub, df=c.df, tot=c.tot;
   var total=items.reduce(function(s,p){return s+p.qty;},0);
   var cartNEl=document.getElementById("cart-n"); if(cartNEl) cartNEl.textContent=total;
   var badge=document.getElementById("cart-badge"); if(badge){badge.textContent=total;badge.style.display=total?"flex":"none";}
-  var sub=items.reduce(function(s,p){return s+p.p*p.qty;},0);
-  var df=delMode==="exp"?CFG.exp:(sub>=CFG.free?0:CFG.std), tot=sub+df;
   var fmt2=function(n){return (Number(n)||0).toFixed(2);};   // ✅ toujours 2 décimales
   var totBtn=document.getElementById("total-btn"); if(totBtn) totBtn.textContent=fmt2(tot)+" MAD";
   var ci=document.getElementById("cart-items"), ct=document.getElementById("cart-totals");
@@ -3741,6 +3766,43 @@ function updateCartUI(){
   document.getElementById("t-tot").textContent=fmt2(tot)+" MAD";
   document.getElementById("t-conf").textContent=fmt2(tot)+" MAD";
   document.getElementById("del-info").textContent=delMode==="exp"?"⚡ Express — livraison en "+CFG.expDelay+", supplément +"+CFG.exp+" MAD.":sub>=CFG.free?"🚛 Standard gratuite — commande ≥ "+CFG.free+" MAD.":"🚛 Standard — gratuite dès "+CFG.free+" MAD (actuellement +"+CFG.std+" MAD).";
+  var promoRow=document.getElementById("t-promo-row");
+  if(promoRow){
+    if(appliedPromo && (c.remise>0||c.promoLivraisonGratuite)){
+      promoRow.style.display="flex";
+      document.getElementById("t-promo-code").textContent=appliedPromo.label||appliedPromo.code;
+      document.getElementById("t-promo").textContent=c.promoLivraisonGratuite?"Livraison offerte":("-"+fmt2(c.remise)+" MAD");
+    } else { promoRow.style.display="none"; }
+  }
+}
+/** Valide un code promo saisi via /api/ext/promo (côté serveur — jamais de calcul de remise en dur côté client). */
+function applyPromoCode(){
+  var inp=document.getElementById("promo-input"), msg=document.getElementById("promo-msg");
+  if(!inp) return;
+  var code=(inp.value||"").trim();
+  if(!code) return;
+  var sub=Object.values(cart).reduce(function(s,p){return s+p.p*p.qty;},0);
+  msg.style.display="block"; msg.style.color="#6b7280"; msg.textContent="Vérification...";
+  fetch(CONFIG.API_URL+"/api/ext/promo?code="+encodeURIComponent(code)+"&total="+sub)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d && d.valid){
+        appliedPromo={code:d.code, type:d.type, valeur:d.valeur, livraisonGratuite:!!d.livraisonGratuite, label:d.label||d.code};
+        msg.style.color="#16a34a"; msg.textContent="✅ Code appliqué : "+(d.label||d.code);
+        inp.value="";
+      } else {
+        appliedPromo=null;
+        msg.style.color="#dc2626"; msg.textContent="❌ "+((d&&d.reason)||"Code invalide");
+      }
+      updateCartUI();
+    })
+    .catch(function(){ msg.style.color="#dc2626"; msg.textContent="❌ Erreur de vérification — réessayez"; });
+}
+function removePromoCode(){
+  appliedPromo=null;
+  var msg=document.getElementById("promo-msg"); if(msg) msg.style.display="none";
+  var inp=document.getElementById("promo-input"); if(inp) inp.value="";
+  updateCartUI();
 }
 
 function filt(el,f){ document.querySelectorAll(".fb").forEach(function(b){b.classList.remove("on");}); el.classList.add("on"); renderProds(f); }
@@ -3836,8 +3898,7 @@ function submitOrder(){
   if(!nom||!tel||!adr){showToast("⚠️ Remplissez nom, téléphone et adresse");return;}
   if(!Object.keys(cart).length){showToast("🛒 Panier vide — ajoutez des produits");return;}
   var btn=document.getElementById("submit-btn"); btn.disabled=true; btn.innerHTML="⏳ Envoi en cours... <span id='total-btn' style='display:none'>0</span>";
-  var items=Object.values(cart), sub=items.reduce(function(s,p){return s+p.p*p.qty;},0);
-  var df=delMode==="exp"?CFG.exp:(sub>=CFG.free?0:CFG.std), tot=sub+df;
+  var ctot=computeCartTotals(), items=ctot.items, sub=ctot.sub, df=ctot.df, tot=ctot.tot, remise=ctot.remise;
   var co=(document.getElementById("f-co")||{}).value||"", email=document.getElementById("f-email").value||"";
   var zone=document.getElementById("f-zone").value, notes=document.getElementById("f-notes").value, pay=document.getElementById("f-pay").value;
   var preps=Array.from(document.querySelectorAll(".popt.on")).map(function(e){return e.textContent.trim();}).join(", ");
@@ -3864,6 +3925,7 @@ function submitOrder(){
   if(notes) msgFull+="📝 *Notes :* "+notes+"\n";
   msgFull+="━━━━━━━━━━━━━━━━━━━━\n";
   msgFull+="💰 *Sous-total :* "+sub+" MAD\n";
+  if(appliedPromo && remise>0) msgFull+="🎟️ *Code "+appliedPromo.code+" :* -"+remise+" MAD\n";
   msgFull+="🚚 *Livraison :* "+(df===0?"Gratuite ✅":"+"+df+" MAD")+"\n";
   msgFull+="✅ *TOTAL : "+tot+" MAD*\n";
   msgFull+="📅 "+new Date().toLocaleDateString("fr-FR",{weekday:"long",year:"numeric",month:"long",day:"numeric"})+"\n";
@@ -3878,8 +3940,11 @@ function submitOrder(){
   function onSuccess(num){
     // 1. Restaurer le bouton EN PREMIER (avant updateCartUI) pour que total-btn soit dans le DOM
     btn.disabled=false; btn.innerHTML="🔍 Vérifier ma commande — <span id='total-btn'>0 MAD</span>";
-    // 2. Vider le panier et rafraîchir l'UI
+    // 2. Vider le panier (+ code promo appliqué) et rafraîchir l'UI
     cart={};
+    appliedPromo=null;
+    var promoMsg=document.getElementById("promo-msg"); if(promoMsg) promoMsg.style.display="none";
+    var promoInp=document.getElementById("promo-input"); if(promoInp) promoInp.value="";
     updateCartUI();
     // 3. Réinitialiser les champs variables (notes, zone, paiement)
     ["f-notes","vir-ref","f-co"].forEach(function(id){var el=document.getElementById(id);if(el)el.value="";});
@@ -3933,7 +3998,8 @@ function submitOrder(){
     instructions:[preps?"Préparation: "+preps:"",hasSurCommande?"⏳ CONTIENT DES ARTICLES SUR COMMANDE (hors saison/rupture) — confirmer disponibilité avant livraison":"",notes].filter(Boolean).join(" | ")||null,
     statut:hasSurCommande?"a_confirmer":"nouveau",
     contientSurCommande:hasSurCommande,
-    source:"site_web"
+    source:"site_web",
+    codePromo:appliedPromo?appliedPromo.code:null
   };
 
   fetch(CONFIG.API_URL+"/api/ext/commandes",{
@@ -5625,6 +5691,7 @@ setTimeout(function(){ var dot=document.getElementById("chat-notif-dot"); if(dot
 // Expose globals
 window.filt=filt; window.fcat=fcat; window.setDel=setDel; window.setCt=setCt; window.upCart=upCart;
 window.submitOrder=submitOrder; window.onPayChange=onPayChange; window.openCfg=openCfg; window.closeCfg=closeCfg; window.cfgTab=cfgTab;
+window.applyPromoCode=applyPromoCode; window.removePromoCode=removePromoCode;
 window.saveConfig=saveConfig; window.refreshPriceBox=refreshPriceBox; window.syncFromSupabase=syncFromSupabase;
 window.testSupabase=testSupabase; window.showToast=showToast; window.toggleMenu=toggleMenu;
 window.closeMobileMenu=closeMobileMenu; window.openLogin=openLogin; window.closeLogin=closeLogin;

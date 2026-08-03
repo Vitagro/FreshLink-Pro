@@ -82,6 +82,28 @@ async function injectToLogistique(
   console.warn("[commandes] injectToLogistique: aucune table disponible pour", bonId);
 }
 
+// ── Consommation du code promo (incrémente usageCount) — Fire-and-forget ───
+// Point de consommation réel : jusqu'ici usageCount n'était jamais incrémenté
+// nulle part (le endpoint /ext/promo ne fait que VALIDER, il est aussi
+// appelé à chaque frappe côté client pendant la saisie du code). On
+// n'incrémente donc qu'ici, une fois la commande effectivement enregistrée.
+async function consumePromoCode(sbUrl: string, sbKey: string, code: string): Promise<void> {
+  try {
+    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+    const r = await fetch(`${sbUrl}/rest/v1/fl_coupons?id=eq.${encodeURIComponent(code)}&select=payload`, { headers });
+    if (!r.ok) return;
+    const rows = await r.json() as { payload?: Record<string, unknown> }[];
+    const current = rows[0]?.payload;
+    if (!current) return;
+    const usageCount = (Number(current.usageCount) || 0) + 1;
+    await fetch(`${sbUrl}/rest/v1/fl_coupons?id=eq.${encodeURIComponent(code)}`, {
+      method: "PATCH",
+      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ payload: { ...current, usageCount } }),
+    });
+  } catch { /* consommation best-effort — la commande reste enregistrée */ }
+}
+
 // ── Alerte email équipe (+ confirmation client) — Fire-and-forget ───────────
 // Remplace l'ancien envoi EmailJS côté navigateur (peu fiable : bloqueurs de
 // pub, JS désactivé, réseau client...) par un envoi serveur via Resend/Brevo.
@@ -174,7 +196,7 @@ router.post("/", async (req: Request, res: Response) => {
   const {
     nom_client, telephone, email, adresse_livraison,
     lignes, montant_total, creneau, instructions,
-    statut = "nouveau", source = "site_web",
+    statut = "nouveau", source = "site_web", codePromo,
   } = body as Record<string, unknown>;
 
   if (!nom_client || !telephone) {
@@ -203,6 +225,7 @@ router.post("/", async (req: Request, res: Response) => {
     instructions:      instructions ? String(instructions) : null,
     statut:            String(statut),
     source:            String(source),   // "site_web"
+    code_promo:        codePromo ? String(codePromo).trim().toUpperCase() : null,
     created_at:        now,
   };
 
@@ -235,6 +258,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (r.ok) {
       console.log("[commandes] ✅ Enregistré dans fl_commandes (JSONB):", numero);
       void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
+      if (payloadData.code_promo) void consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo);
       void notifyOrder(payloadData);
       res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
       return;
@@ -256,6 +280,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (r.ok) {
       console.log("[commandes] ✅ Enregistré dans fl_commandes (flat):", numero);
       void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
+      if (payloadData.code_promo) void consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo);
       void notifyOrder(payloadData);
       res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
       return;
@@ -276,6 +301,7 @@ router.post("/", async (req: Request, res: Response) => {
     if (r.ok) {
       console.log("[commandes] ✅ Enregistré dans fl_commandes_web:", numero);
       void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
+      if (payloadData.code_promo) void consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo);
       void notifyOrder(payloadData);
       res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
       return;
