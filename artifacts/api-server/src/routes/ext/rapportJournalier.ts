@@ -1,14 +1,17 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // /api/ext/rapport-journalier — Rapport quotidien (ventes/achats/marge/BL)
 //
 //   POST { to, subject, body } → envoi manuel (bouton "Envoyer maintenant",
 //                                 données calculées côté client depuis le cache)
+//                                 device connu requis (cf. requireDeviceApi)
+//   GET                        → rapport JSON (device connu requis)
 //   GET  ?send=1&key=…&to=…    → calcule (Supabase, données du jour) ET envoie
-//                                 (clé = CRON_SECRET ou DEVICE_BYPASS_KEY)
-//                                 Un cron quotidien (20h) appelle cette route.
+//                                 (device connu OU clé = CRON_SECRET/DEVICE_BYPASS_KEY)
+//                                 Un cron quotidien (20h) appelle cette route avec la clé.
 //
 // L'envoi passe par /api/ext/send-email (Brevo/Resend, jamais de SMTP brut —
 // voir ce fichier pour le détail des fournisseurs).
@@ -25,7 +28,9 @@ const SB_SRV =
   process.env.service_role ||
   process.env.SUPABASE_SERVICE_KEY ||
   "";
-const SEND_KEY = process.env.CRON_SECRET || process.env.DEVICE_BYPASS_KEY || "vita-bypass-2026";
+// Pas de valeur par défaut : cf. rapportCredit.ts — un secret public connu en
+// fallback annule toute protection par clé.
+const SEND_KEY = process.env.CRON_SECRET || process.env.DEVICE_BYPASS_KEY || "";
 
 function corsHeaders(origin: string | undefined) {
   return {
@@ -124,14 +129,20 @@ router.get("/", async (req: Request, res: Response) => {
 
   const dateJ = (req.query["date"] as string | undefined) || new Date().toISOString().slice(0, 10);
   const wantSend = (req.query["send"] as string | undefined) === "1";
+  const hasValidDevice = !requireDeviceApi(req);
   if (!wantSend) {
+    // Lecture protégée par le device-guard (cookie signé posé à la connexion
+    // BO) — ce rapport (CA, achats, marge du jour) ne doit pas être public.
+    if (!hasValidDevice) { res.status(401).json({ error: "Device non autorisé" }); return; }
     const rep = await buildReport(dateJ);
     res.json(rep);
     return;
   }
 
+  // Autorisé via device BO connu (pas de clé exposée côté client) ou clé
+  // CRON_SECRET/DEVICE_BYPASS_KEY (cron sans session navigateur, aucun fallback).
   const key = (req.query["key"] as string | undefined) ?? (req.headers.authorization ?? "").replace("Bearer ", "") ?? "";
-  if (key !== SEND_KEY) {
+  if (!hasValidDevice && (!SEND_KEY || key !== SEND_KEY)) {
     res.status(401).json({ error: "clé d'envoi invalide" });
     return;
   }
@@ -143,6 +154,10 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 router.post("/", async (req: Request, res: Response) => {
+  // Sans ce garde-fou, ce endpoint servait de relais email ouvert (n'importe
+  // qui pouvait faire envoyer un email arbitraire, sujet/corps inclus, depuis
+  // l'adresse d'expedition de l'app — abus spam/phishing).
+  if (requireDeviceApi(req)) { res.status(401).json({ error: "Device non autorisé" }); return; }
   const payload = (req.body ?? {}) as { to?: string; subject?: string; body?: string };
   const { to, subject, body } = payload;
   if (!to || !subject || !body) {

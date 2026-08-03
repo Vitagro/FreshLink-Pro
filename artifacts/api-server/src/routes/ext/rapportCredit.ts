@@ -1,13 +1,14 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireDeviceApi } from "../../lib/deviceGuard.js";
 
 // ══════════════════════════════════════════════════════════════════════════════
 // /api/ext/rapport-credit — Analyse des crédits FOURNISSEURS + CLIENTS
 //
-//   GET                  → rapport JSON du jour
+//   GET                  → rapport JSON du jour (device connu requis, cf. requireDeviceApi)
 //   GET ?date=YYYY-MM-DD → rapport pour une autre journée
 //   GET ?send=1&key=…    → calcule ET envoie le rapport par email
-//                          (clé = CRON_SECRET ou DEVICE_BYPASS_KEY)
+//                          (device connu OU clé = CRON_SECRET/DEVICE_BYPASS_KEY)
 //                          destinataire : ?to=… ou REPORT_EMAIL ou EMAIL_FROM
 //
 // Sources :
@@ -16,7 +17,7 @@ import type { Request, Response } from "express";
 //   Clients      : fl_bons_livraison — crédit = BL « émis » non encaissés
 //                  (montantTTC, prevendeurNom, clientNom, date)
 //
-// Un cron quotidien appelle ?send=1.
+// Un cron quotidien appelle ?send=1 avec la clé (aucun device cookie disponible).
 // ══════════════════════════════════════════════════════════════════════════════
 
 const router = Router();
@@ -30,7 +31,10 @@ const SB_SRV =
   process.env.service_role ||
   process.env.SUPABASE_SERVICE_KEY ||
   "";
-const SEND_KEY = process.env.CRON_SECRET || process.env.DEVICE_BYPASS_KEY || "vita-bypass-2026";
+// Pas de valeur par défaut : si ni CRON_SECRET ni DEVICE_BYPASS_KEY ne sont
+// configurés, l'envoi via clé reste indisponible (échec fermé) plutôt que de
+// retomber sur un secret public connu (qui était visible dans le bundle client).
+const SEND_KEY = process.env.CRON_SECRET || process.env.DEVICE_BYPASS_KEY || "";
 
 function corsHeaders(origin: string | undefined) {
   return {
@@ -201,6 +205,16 @@ function reportHtml(rep: Report): string {
 router.get("/", async (req: Request, res: Response) => {
   if (!SB_SRV) { res.status(500).json({ error: "service-role unavailable" }); return; }
 
+  // Lecture protégée par le même device-guard que le reste de l'app (cookie
+  // signé posé à la connexion BO) — ce rapport crédit (soldes fournisseurs +
+  // clients) ne doit pas rester accessible sans authentification.
+  const wantSendPre = (req.query["send"] as string | undefined) === "1";
+  const hasValidDevice = !requireDeviceApi(req);
+  if (!wantSendPre && !hasValidDevice) {
+    res.status(401).json({ error: "Device non autorisé" });
+    return;
+  }
+
   const dateJ = (req.query["date"] as string | undefined) || new Date().toISOString().slice(0, 10);
   // groupeId : filtre optionnel côté équipe (BOAnalyseCredit.tsx l'envoie pour
   // un membre d'équipe non super_super_admin — cf. effectiveGroupId côté BO).
@@ -209,10 +223,13 @@ router.get("/", async (req: Request, res: Response) => {
   const rep = await buildReport(dateJ, groupeId);
 
   // ── Envoi email (cron quotidien ou bouton « Envoyer maintenant ») ─────────
+  // Deux façons d'être autorisé : device BO connu (bouton interactif, cookie
+  // signé — pas de clé transmise/exposée côté client), ou clé CRON_SECRET/
+  // DEVICE_BYPASS_KEY (cron sans session navigateur). Aucun fallback public.
   const wantSend = (req.query["send"] as string | undefined) === "1";
   if (wantSend) {
     const key = (req.query["key"] as string | undefined) ?? (req.headers.authorization ?? "").replace("Bearer ", "") ?? "";
-    if (key !== SEND_KEY) {
+    if (!hasValidDevice && (!SEND_KEY || key !== SEND_KEY)) {
       res.status(401).json({ error: "clé d'envoi invalide" });
       return;
     }
