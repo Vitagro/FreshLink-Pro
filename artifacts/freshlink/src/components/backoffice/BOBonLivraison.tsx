@@ -183,7 +183,12 @@ function genNumero() {
   const y = new Date().getFullYear()
   const existing = getBLs().filter(b => (b.numero ?? "").includes(`BL-${y}`))
   const n = (existing.length + 1).toString().padStart(4, "0")
-  return `BL-${y}-${n}`
+  // Suffixe aleatoire indispensable : ce compteur est purement local (chaque
+  // appareil compte ses propres BL en cache) donc deux appareils generant un
+  // BL au meme moment calculent le meme "BL-2026-0047" — meme correctif que
+  // store.genBL()/genCommande() (cf. genUniqueSuffix) pour eviter que le
+  // second write n'ecrase silencieusement le premier a la synchronisation.
+  return `BL-${y}-${n}-${store.genUniqueSuffix()}`
 }
 
 const EMPTY_LIGNE: Omit<BLLigne, "id" | "totalLigne"> = {

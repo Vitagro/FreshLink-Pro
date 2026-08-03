@@ -435,7 +435,10 @@ export default function MobileLogistique({ user }: Props) {
       const num = (b as unknown as { numero?: string }).numero ?? b.id
       return num.includes(`BL-${y}`)
     })
-    const newNumero = `BL-${y}-${String(blsThisYear.length + 1).padStart(4, "0")}`
+    // Suffixe aleatoire : deux livreurs qui terminent une livraison au meme
+    // moment, chacun avec son propre cache local, calculeraient sinon le
+    // meme "BL-2026-0006" — meme correctif que store.genBL() (genUniqueSuffix).
+    const newNumero = `BL-${y}-${String(blsThisYear.length + 1).padStart(4, "0")}-${store.genUniqueSuffix()}`
 
     const existingBL = store.getBonsLivraison().find(b => b.commandeId === commandeId)
     if (existingBL) {
@@ -1112,6 +1115,12 @@ const RECEP_EMPTY_LIGNE: RecepLigneForm = {
   articleId: "", articleNom: "", unite: "", quantiteCommandee: 0,
   quantiteRecue: "", prixAchat: "", prixFacture: "", dlc: "", motifReliquat: "", uniteMode: "base",
 }
+// Date locale (jamais .toISOString() : convertit en UTC avant de tronquer,
+// ce qui decale la DLC calculee d'un jour entre 00h00 et 00h59 heure locale).
+function fmtLocalDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 // Quantité reçue convertie en unité de BASE (kg...) — que la saisie ait été
 // faite en unité de base ou en nombre d'UM (ex: 3 Caisses × 15kg = 45kg).
 function qtyBaseRecue(l: RecepLigneForm, art?: Article): number {
@@ -1155,7 +1164,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
     if (!art?.shelfLifeJours) return ""
     const d = new Date()
     d.setDate(d.getDate() + art.shelfLifeJours)
-    return d.toISOString().split("T")[0]
+    return fmtLocalDate(d)
   }
 
   // When a PO is selected, pre-fill the single article line
@@ -1195,7 +1204,7 @@ function MagasinierReceptionTab({ user }: { user: User }) {
           if (art.shelfLifeJours) {
             const d = new Date()
             d.setDate(d.getDate() + art.shelfLifeJours)
-            updated[i].dlc = d.toISOString().split("T")[0]
+            updated[i].dlc = fmtLocalDate(d)
           }
         }
       }

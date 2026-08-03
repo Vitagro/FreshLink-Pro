@@ -3660,7 +3660,10 @@ export const store = {
         yearCounters[y] = store.getBonsLivraison().filter(b => ((b as unknown as { numero?: string }).numero ?? b.id).includes(`BL-${y}`)).length
       }
       yearCounters[y]++
-      return `BL-${y}-${String(yearCounters[y]).padStart(4, "0")}`
+      // Suffixe aleatoire : deux appareils lancant cette regularisation en
+      // masse au meme moment calculeraient sinon le meme numero (meme
+      // correctif que genBL()/genCommande() — cf. genUniqueSuffix).
+      return `BL-${y}-${String(yearCounters[y]).padStart(4, "0")}-${store.genUniqueSuffix()}`
     }
     const tauxTVA = store.getFiscalConfig().tauxTVA
     let count = 0

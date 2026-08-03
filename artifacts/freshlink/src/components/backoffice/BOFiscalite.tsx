@@ -90,7 +90,10 @@ export default function BOFiscalite({ user }: Props) {
         coutMarchandise += (Number(l.quantite) || 0) * (Number(art?.prixAchat) || 0)
       })
     })
-    const caLivre = blInPeriod.reduce((s, b) => s + (Number(b.payload?.montantTTC ?? b.payload?.montantTotal) || 0), 0)
+    // montantTotal = HT (jamais montantTTC : le CA fiscal — cotisation minimale,
+    // base de la TVA collectée — se calcule sur le HT, pas sur un montant qui
+    // inclut déjà la TVA collectée pour compte de tiers).
+    const caLivre = blInPeriod.reduce((s, b) => s + (Number(b.payload?.montantTotal) || 0), 0)
     const ca = caLivre > 0 ? caLivre : caCommande // CA facturé fait foi ; à défaut, CA commandé (pipeline)
     const margeBrute = caCommande - coutMarchandise
     const nbJours = joursSet.size
