@@ -10,7 +10,7 @@
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useRef, useEffect } from "react"
-import { store, type User } from "@/lib/store"
+import { store, type User, recordHeure, inHeureRange } from "@/lib/store"
 import BOImportConcurrence from "./BOImportConcurrence"
 import BOComparatifExterne from "./BOComparatifExterne"
 import { getExternalPricesByArticle, getTonnageDuJour, getExternalPriceHistory } from "@/lib/extCompetitorPrices"
@@ -122,6 +122,8 @@ export default function BOConcurrence({ user }: { user: User }) {
   const [ventes, setVentes] = useState<ConcVente[]>(() => { try { return JSON.parse(localStorage.getItem("fl_conc_ventes") ?? "[]") } catch { return [] } })
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [heureFrom, setHeureFrom] = useState("")
+  const [heureTo, setHeureTo] = useState("")
   const [msg, setMsg] = useState<string | null>(null)
   const prixFileRef = useRef<HTMLInputElement>(null)
   const fluxFileRef = useRef<HTMLInputElement>(null)
@@ -268,7 +270,7 @@ export default function BOConcurrence({ user }: { user: User }) {
     const byClient = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
     const byPrevendeur = { commande: {} as Record<string, number>, achat: {} as Record<string, number>, facture: {} as Record<string, number> }
 
-    store.getVisibleCommandes().filter(c => inRange(c.date)).forEach(c => {
+    store.getVisibleCommandes().filter(c => inRange(c.date) && inHeureRange(heureFrom, heureTo, recordHeure(c))).forEach(c => {
       const jour = String(c.date ?? "").slice(0, 10)
       let total = 0
       c.lignes.forEach(l => { add(byArticle.commande, l.articleNom, l.quantite); total += Number(l.quantite) || 0 })
@@ -277,14 +279,14 @@ export default function BOConcurrence({ user }: { user: User }) {
       add(byPrevendeur.commande, c.commercialNom, total)
     })
 
-    store.getReceptions().filter(r => inRange(r.date)).forEach(r => {
+    store.getReceptions().filter(r => inRange(r.date) && inHeureRange(heureFrom, heureTo, recordHeure(r))).forEach(r => {
       const jour = String(r.date ?? "").slice(0, 10)
       let total = 0
       r.lignes.forEach(l => { add(byArticle.achat, l.articleNom, l.quantiteRecue); total += Number(l.quantiteRecue) || 0 })
       add(byJour.achat, jour, total)
     })
 
-    store.getVisibleBonsLivraison().filter(b => inRange(b.date) && !!b.factureId).forEach(b => {
+    store.getVisibleBonsLivraison().filter(b => inRange(b.date) && !!b.factureId && inHeureRange(heureFrom, heureTo, recordHeure(b))).forEach(b => {
       const jour = String(b.date ?? "").slice(0, 10)
       let total = 0
       b.lignes.forEach(l => { add(byArticle.facture, l.articleNom, l.quantite); total += Number(l.quantite) || 0 })
@@ -307,7 +309,7 @@ export default function BOConcurrence({ user }: { user: User }) {
       jour: buildRows("jour"), article: buildRows("article"), client: buildRows("client"), prevendeur: buildRows("prevendeur"),
       totaux: { commande: sumOf(byJour.commande), achat: sumOf(byJour.achat), facture: sumOf(byJour.facture) },
     }
-  }, [dateFrom, dateTo])
+  }, [dateFrom, dateTo, heureFrom, heureTo])
 
   // ── Prix & marge : croise le catalogue avec les relevés concurrents ───────
   // Articles réellement commandés (toutes commandes confondues) — pour le
@@ -515,8 +517,18 @@ export default function BOConcurrence({ user }: { user: User }) {
               </select>
             </div>
           )}
-          {(dateFrom || dateTo) && (
-            <button onClick={() => { setDateFrom(""); setDateTo("") }}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">De</label>
+            <input type="time" value={heureFrom} onChange={e => setHeureFrom(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-50" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">à</label>
+            <input type="time" value={heureTo} onChange={e => setHeureTo(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 text-sm bg-slate-50" />
+          </div>
+          {(dateFrom || dateTo || heureFrom || heureTo) && (
+            <button onClick={() => { setDateFrom(""); setDateTo(""); setHeureFrom(""); setHeureTo("") }}
               className="px-3 py-2 text-xs font-bold text-slate-500 hover:text-red-500 pb-2">↺ Tout (cumul)</button>
           )}
           <span className="text-[11px] text-slate-400 pb-2">

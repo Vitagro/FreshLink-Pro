@@ -28,6 +28,8 @@ export default function BOJournalActivite({ user }: Props) {
   const [result, setResult] = useState<"" | "success" | "denied">("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
+  const [heureFrom, setHeureFrom] = useState("")
+  const [heureTo, setHeureTo] = useState("")
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -42,10 +44,15 @@ export default function BOJournalActivite({ user }: Props) {
         const day = e.timestamp.slice(0, 10)
         const matchFrom = !dateFrom || day >= dateFrom
         const matchTo = !dateTo || day <= dateTo
-        return matchSearch && matchCat && matchResult && matchFrom && matchTo
+        // AuditLogEntry porte toujours un vrai timestamp ISO : pas besoin de
+        // recordHeure()/inHeureRange() (aucune entree sans heure ici).
+        const heure = e.timestamp.slice(11, 16)
+        const matchHeureFrom = !heureFrom || heure >= heureFrom
+        const matchHeureTo = !heureTo || heure <= heureTo
+        return matchSearch && matchCat && matchResult && matchFrom && matchTo && matchHeureFrom && matchHeureTo
       })
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))
-  }, [entries, search, category, result, dateFrom, dateTo])
+  }, [entries, search, category, result, dateFrom, dateTo, heureFrom, heureTo])
 
   const exportCSV = () => {
     const headers = ["Date", "Utilisateur", "Rôle", "Action", "Catégorie", "Entité", "Résultat"]
@@ -95,8 +102,13 @@ export default function BOJournalActivite({ user }: Props) {
         <span className="text-xs text-muted-foreground">→</span>
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
           className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
-        {(search || category || result || dateFrom || dateTo) && (
-          <button onClick={() => { setSearch(""); setCategory(""); setResult(""); setDateFrom(""); setDateTo("") }}
+        <input type="time" value={heureFrom} onChange={e => setHeureFrom(e.target.value)}
+          className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
+        <span className="text-xs text-muted-foreground">→</span>
+        <input type="time" value={heureTo} onChange={e => setHeureTo(e.target.value)}
+          className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
+        {(search || category || result || dateFrom || dateTo || heureFrom || heureTo) && (
+          <button onClick={() => { setSearch(""); setCategory(""); setResult(""); setDateFrom(""); setDateTo(""); setHeureFrom(""); setHeureTo("") }}
             className="px-3 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">
             ✕ Effacer
           </button>
