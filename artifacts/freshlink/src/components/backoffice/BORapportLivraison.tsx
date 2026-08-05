@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { store, type Trip, type BonLivraison, type Commande, type User } from "@/lib/store"
+import { store, type Trip, type BonLivraison, type Commande, type User, recordHeure, inHeureRange } from "@/lib/store"
 
 interface Props { user: User }
 
@@ -72,6 +72,8 @@ export default function BORapportLivraison({ user: _user }: Props) {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split("T")[0]
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0])
+  const [heureFrom, setHeureFrom] = useState("")
+  const [heureTo, setHeureTo] = useState("")
   const [filterLivreur, setFilterLivreur] = useState("")
   const [activeTab, setActiveTab] = useState<"global" | "detail" | "livreur">("global")
 
@@ -85,6 +87,7 @@ export default function BORapportLivraison({ user: _user }: Props) {
 
   const filteredTrips = trips.filter(t => {
     if (t.date < dateFrom || t.date > dateTo) return false
+    if (!inHeureRange(heureFrom, heureTo, recordHeure(t))) return false
     if (filterLivreur && t.livreurNom !== filterLivreur) return false
     return true
   })
@@ -203,6 +206,16 @@ export default function BORapportLivraison({ user: _user }: Props) {
         <div className="flex flex-col gap-1">
           <label className="text-xs font-semibold text-muted-foreground">Au</label>
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-muted-foreground">De</label>
+          <input type="time" value={heureFrom} onChange={e => setHeureFrom(e.target.value)}
+            className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-semibold text-muted-foreground">à</label>
+          <input type="time" value={heureTo} onChange={e => setHeureTo(e.target.value)}
             className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         </div>
         <div className="flex flex-col gap-1">

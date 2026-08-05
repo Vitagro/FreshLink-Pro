@@ -5,7 +5,7 @@ import {
   store, type User, type BonPreparation, type LignePreparation,
   type ModePreparation, type TypePreparation, type FormatPreparation,
   type Trip, type Commande, type Article, type ClientSequenceInfo,
-  type SequenceModePrep, computeCaissesAuto,
+  type SequenceModePrep, computeCaissesAuto, userHasRole,
 } from "@/lib/store"
 
 interface Props { user: User; onValidated?: () => void }
@@ -825,7 +825,11 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
     setTrips(store.getTrips())
     setCommandes(store.getVisibleCommandes())
     setArticles(store.getArticles())
-    setPreparateurs(store.getUsers().filter(u => (u.role === "preparateur" || u.role === "magasinier") && u.actif))
+    // userHasRole (et pas u.role ===) : un compte multi-role ayant "preparateur"
+    // en role secondaire (u.roles) etait invisible ici — l'assignation d'un bon
+    // de preparation n'affichait aucun candidat alors que des preparateurs
+    // existaient bel et bien.
+    setPreparateurs(store.getUsers().filter(u => (userHasRole(u, "preparateur") || userHasRole(u, "magasinier")) && u.actif))
   }, [])
 
   const refresh = () => setBons(store.getBonsPreparation())
@@ -1416,7 +1420,7 @@ export default function BOBonPreparation({ user, onValidated }: Props) {
                 className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
                 <option value="">-- Non assigné (visible de tous les préparateurs) --</option>
                 {preparateurs.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.role === "preparateur" ? "Préparateur" : "Magasinier"})</option>
+                  <option key={p.id} value={p.id}>{p.name} ({userHasRole(p, "preparateur") ? "Préparateur" : "Magasinier"})</option>
                 ))}
               </select>
               <p className="text-[11px] text-muted-foreground">Liste tirée des comptes Utilisateurs (rôle préparateur/magasinier). Laisser vide = n&apos;importe quel préparateur peut le prendre.</p>

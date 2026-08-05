@@ -2786,6 +2786,27 @@ export const MOBILE_TABS_REGISTRY: { id: string; screenId: string; label: string
 // STORE API
 // ============================================================
 
+// ── Filtre "intervalle date + heure" partagé (rapports/écrans BO) ──────────
+// Extrait l'heure "HH:MM" d'un enregistrement, quel que soit son type — la
+// plupart des entités (BonAchat, Retour, CaisseEntry…) n'ont qu'une date
+// calendaire sans heure : dans ce cas recordHeure() renvoie "" et inHeureRange()
+// laisse toujours passer l'enregistrement (jamais de perte de données pour
+// une info qui n'existe simplement pas encore sur cette entité).
+export function recordHeure(record: unknown): string {
+  const r = (record ?? {}) as { createdAt?: string; heureDepart?: string; heureLivraisonReelle?: string; heureEffective?: string; heurelivraison?: string; timestamp?: string }
+  if (r.createdAt) return r.createdAt.slice(11, 16)
+  if (r.timestamp) return r.timestamp.slice(11, 16)
+  if (r.heureDepart && r.heureDepart.includes("T")) return r.heureDepart.slice(11, 16)   // ISO complet (ex: Trip.heureDepart)
+  return r.heureLivraisonReelle || r.heureEffective || r.heurelivraison || r.heureDepart || ""
+}
+export function inHeureRange(heureDebut: string, heureFin: string, heure: string): boolean {
+  if (!heureDebut && !heureFin) return true
+  if (!heure) return true
+  if (heureDebut && heure < heureDebut) return false
+  if (heureFin && heure > heureFin) return false
+  return true
+}
+
 export const store = {
   // --- Users ---
   getUsers: (): User[] => {
@@ -3887,13 +3908,15 @@ export const store = {
   // par defaut le jour meme, comme avant. Permet a l'acheteur de voir le
   // besoin cumule sur plusieurs jours (ex: apres un jour ferie) plutot que
   // seulement aujourd'hui.
-  computeBesoinNet: (range?: { dateDebut?: string; dateFin?: string }): { articleId: string; articleNom: string; unite: string; commandeQty: number; stockQty: number; retourQty: number; besoinNet: number }[] => {
+  computeBesoinNet: (range?: { dateDebut?: string; dateFin?: string; heureDebut?: string; heureFin?: string }): { articleId: string; articleNom: string; unite: string; commandeQty: number; stockQty: number; retourQty: number; besoinNet: number }[] => {
     const today = store.today()
     const dateDebut = range?.dateDebut ?? today
     const dateFin = range?.dateFin ?? today
+    const heureDebut = range?.heureDebut ?? ""
+    const heureFin = range?.heureFin ?? ""
     const articles = store.getArticles()
     const crossdock = store.isCrossdockMode()
-    const commandes = store.getCommandes().filter(c => c.date >= dateDebut && c.date <= dateFin && (c.statut === "en_attente" || c.statut === "valide"))
+    const commandes = store.getCommandes().filter(c => c.date >= dateDebut && c.date <= dateFin && (c.statut === "en_attente" || c.statut === "valide") && inHeureRange(heureDebut, heureFin, recordHeure(c)))
     const retours = store.getRetours().filter(r => r.date >= dateDebut && r.date <= dateFin && r.statut === "validé")
     return articles.map(art => {
       const commandeQty = commandes.reduce((s, c) => s + (c.lignes.find(l => l.articleId === art.id)?.quantite ?? 0), 0)

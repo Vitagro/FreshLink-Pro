@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { store, type Commande, type LigneCommande, type Client, type Article, type BonPreparation, type LignePreparation, type BonLivraison, type LigneBL } from "@/lib/store"
+import { store, type Commande, type LigneCommande, type Client, type Article, type BonPreparation, type LignePreparation, type BonLivraison, type LigneBL, recordHeure, inHeureRange } from "@/lib/store"
 import type { User } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
@@ -319,6 +319,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
   // Vue par défaut = cycle commande en cours (J-1 14h → J 4h) — pas l'historique complet.
   const [filterDateDebut, setFilterDateDebut] = useState(() => commandeCycleRange(commandeOperationalDate()).debut)
   const [filterDateFin, setFilterDateFin]     = useState(() => commandeCycleRange(commandeOperationalDate()).fin)
+  const [filterHeureDebut, setFilterHeureDebut] = useState("")
+  const [filterHeureFin, setFilterHeureFin]     = useState("")
   const [selected, setSelected]           = useState<CmdUnifiee | null>(null)
   const [updating, setUpdating]           = useState(false)
   // Sélection multiple — clé "table-id" pour distinguer fl_commandes / fl_commandes_web
@@ -801,6 +803,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
     if (filterCategorie !== "tous" && c.categorie !== filterCategorie) return false
     if (filterDateDebut && c.date.slice(0, 10) < filterDateDebut) return false
     if (filterDateFin && c.date.slice(0, 10) > filterDateFin) return false
+    if (!inHeureRange(filterHeureDebut, filterHeureFin, recordHeure(c))) return false
     if (search.trim()) {
       const q = search.toLowerCase()
       return (
@@ -1296,6 +1299,20 @@ export default function BOCommandesUnifiees({ user }: Props) {
           className="px-3 py-2 rounded-xl text-xs font-bold bg-muted text-muted-foreground hover:bg-muted whitespace-nowrap">
           🌙 Cycle commande
         </button>
+        <input
+          type="time"
+          value={filterHeureDebut}
+          onChange={e => setFilterHeureDebut(e.target.value)}
+          title="De"
+          className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-foreground"
+        />
+        <input
+          type="time"
+          value={filterHeureFin}
+          onChange={e => setFilterHeureFin(e.target.value)}
+          title="à"
+          className="px-3 py-2 rounded-xl border border-border text-sm bg-white text-foreground"
+        />
 
         {/* Recherche libre */}
         <input
@@ -1318,9 +1335,9 @@ export default function BOCommandesUnifiees({ user }: Props) {
           </button>
         </div>
 
-        {(search || filterStatut !== "tous" || filterSource !== "tous" || filterZone !== "tous" || filterCategorie !== "tous" || !isDefaultDateRange) && (
+        {(search || filterStatut !== "tous" || filterSource !== "tous" || filterZone !== "tous" || filterCategorie !== "tous" || !isDefaultDateRange || filterHeureDebut || filterHeureFin) && (
           <button
-            onClick={() => { setSearch(""); setFilterStatut("tous"); setFilterSource("tous"); setFilterZone("tous"); setFilterCategorie("tous"); setFilterDateDebut(cycleDefault.debut); setFilterDateFin(cycleDefault.fin) }}
+            onClick={() => { setSearch(""); setFilterStatut("tous"); setFilterSource("tous"); setFilterZone("tous"); setFilterCategorie("tous"); setFilterDateDebut(cycleDefault.debut); setFilterDateFin(cycleDefault.fin); setFilterHeureDebut(""); setFilterHeureFin("") }}
             className="px-3 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted"
           >
             ✕ Reset

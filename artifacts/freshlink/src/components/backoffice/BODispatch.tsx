@@ -96,6 +96,10 @@ export default function BODispatch({ user }: Props) {
   const [vehicule, setVehicule] = useState("")
   const [selectedCmds, setSelectedCmds] = useState<string[]>([])
   const [filterZone, setFilterZone] = useState("")
+  // Le secteur n'etait qu'un critere de TRI : impossible de n'afficher que les
+  // commandes d'un secteur pour construire une tournee dediee. On en fait un
+  // vrai filtre, au meme titre que la zone.
+  const [filterSecteur, setFilterSecteur] = useState("")
   const [filterPrevendeur, setFilterPrevendeur] = useState("")
   const [filterClient, setFilterClient] = useState("")
   const [sortMode, setSortMode] = useState<"alpha" | "secteur">("alpha")
@@ -181,6 +185,7 @@ export default function BODispatch({ user }: Props) {
 
   const filtered = availableCommandes.filter(c => {
     if (filterZone && !c.zone.toLowerCase().includes(filterZone.toLowerCase())) return false
+    if (filterSecteur && (c.secteur || "").toLowerCase() !== filterSecteur.toLowerCase()) return false
     if (filterPrevendeur && !c.commercialNom.toLowerCase().includes(filterPrevendeur.toLowerCase())) return false
     if (filterClient && !c.clientNom.toLowerCase().includes(filterClient.toLowerCase())) return false
     return true
@@ -196,6 +201,7 @@ export default function BODispatch({ user }: Props) {
     return a.clientNom.localeCompare(b.clientNom, "fr")
   })
   const zones = [...new Set(availableCommandes.map(c => c.zone).filter(Boolean))]
+  const secteurs = [...new Set(availableCommandes.map(c => c.secteur).filter(Boolean))].sort((a, b) => a.localeCompare(b, "fr"))
   const prevendeurs = [...new Set(availableCommandes.map(c => c.commercialNom))]
 
   // Démarrage / fin de tournée = action exclusive du LIVREUR assigné (le
@@ -880,6 +886,11 @@ export default function BODispatch({ user }: Props) {
                   className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none">
                   <option value="">Toutes les zones</option>
                   {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+                <select value={filterSecteur} onChange={e => setFilterSecteur(e.target.value)}
+                  className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none">
+                  <option value="">Tous les secteurs</option>
+                  {secteurs.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <select value={filterPrevendeur} onChange={e => setFilterPrevendeur(e.target.value)}
                   className="px-3 py-2 rounded-xl border border-border bg-background text-sm focus:outline-none">

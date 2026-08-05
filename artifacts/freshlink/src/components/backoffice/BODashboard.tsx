@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole } from "@/lib/store"
+import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole, recordHeure, inHeureRange } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import {
@@ -86,6 +86,11 @@ export default function BODashboard({ user }: Props) {
   // ancrees sur dateFin pour rester lisibles meme en mode periode.
   const [dateDebut, setDateDebut] = useState(store.today())
   const [dateFin, setDateFin] = useState(store.today())
+  // Intervalle heure (optionnel) — n'affecte que les entites avec une heure
+  // reelle (createdAt/timestamp) ; recordHeure()/inHeureRange() laissent
+  // toujours passer les entites sans heure (voir lib/store.ts).
+  const [heureDebut, setHeureDebut] = useState("")
+  const [heureFin, setHeureFin] = useState("")
   // Factures impayées (fl_invoices) → intégrées au crédit (sinon crédit=0 alors
   // qu'une facture est « Impayée » côté Finance).
   const [unpaidByClient, setUnpaidByClient] = useState<Record<string, number>>({})
@@ -179,7 +184,7 @@ export default function BODashboard({ user }: Props) {
   // --- Commandes helpers ---
   // "Today" = tout l'intervalle choisi (dateDebut..dateFin) — un seul jour
   // par defaut, comportement identique a avant.
-  const cmdsToday    = useMemo(() => commandesActives.filter(c => c.date >= dateDebut && c.date <= dateFin), [commandesActives, dateDebut, dateFin])
+  const cmdsToday    = useMemo(() => commandesActives.filter(c => c.date >= dateDebut && c.date <= dateFin && inHeureRange(heureDebut, heureFin, recordHeure(c))), [commandesActives, dateDebut, dateFin, heureDebut, heureFin])
   const cmdsYday     = useMemo(() => commandesActives.filter(c => c.date === yesterday), [commandesActives, yesterday])
   const cmdsLastWkDay= useMemo(() => commandesActives.filter(c => c.date === lastWeekSameDay), [commandesActives, lastWeekSameDay])
   const cmdsWeek     = useMemo(() => commandesActives.filter(c => c.date >= weekRange.start && c.date <= weekRange.end), [commandesActives, weekRange])
@@ -201,12 +206,12 @@ export default function BODashboard({ user }: Props) {
   const tonnageLastWkDay= tonnOf(cmdsLastWkDay)
 
   // --- Visites ---
-  const visitesToday  = visites.filter((v: { date: string }) => v.date >= dateDebut && v.date <= dateFin).length
+  const visitesToday  = visites.filter((v: { date: string }) => v.date >= dateDebut && v.date <= dateFin && inHeureRange(heureDebut, heureFin, recordHeure(v))).length
   const visitesYday   = visites.filter((v: { date: string }) => v.date === yesterday).length
   const visitesLastWk = visites.filter((v: { date: string }) => v.date === lastWeekSameDay).length
 
   // ── Tournees du Jour ──────────────────────────────────────────────────────
-  const visitesTodayList = visites.filter((v: { date: string }) => v.date >= dateDebut && v.date <= dateFin) as Visite[]
+  const visitesTodayList = visites.filter((v: { date: string }) => v.date >= dateDebut && v.date <= dateFin && inHeureRange(heureDebut, heureFin, recordHeure(v))) as Visite[]
   const visitesTodayCommandes = visitesTodayList.filter(v => v.resultat === "commande").length
   const tauxConversionJ = visitesTodayList.length > 0
     ? Math.round((visitesTodayCommandes / visitesTodayList.length) * 100)
@@ -220,7 +225,7 @@ export default function BODashboard({ user }: Props) {
   const pvTourneesArr = Object.values(pvTourneesMap).sort((a, b) => b.visites - a.visites)
 
   // --- Retours ---
-  const retoursToday  = retours.filter(r => r.date >= dateDebut && r.date <= dateFin)
+  const retoursToday  = retours.filter(r => r.date >= dateDebut && r.date <= dateFin && inHeureRange(heureDebut, heureFin, recordHeure(r)))
   const retoursAll    = retours
 
   const totalRetourKg = retoursAll.reduce((s, r) => s + r.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
@@ -506,8 +511,18 @@ export default function BODashboard({ user }: Props) {
             onChange={e => setDateFin(e.target.value)}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
             style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
-          {(dateDebut !== today || dateFin !== today) && (
-            <button onClick={() => { setDateDebut(today); setDateFin(today) }}
+          <span className="text-[10px] font-semibold text-muted-foreground">De</span>
+          <input type="time" value={heureDebut}
+            onChange={e => setHeureDebut(e.target.value)}
+            className="px-2 py-1 rounded-lg text-xs font-semibold"
+            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+          <span className="text-[10px] font-semibold text-muted-foreground">à</span>
+          <input type="time" value={heureFin}
+            onChange={e => setHeureFin(e.target.value)}
+            className="px-2 py-1 rounded-lg text-xs font-semibold"
+            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+          {(dateDebut !== today || dateFin !== today || heureDebut || heureFin) && (
+            <button onClick={() => { setDateDebut(today); setDateFin(today); setHeureDebut(""); setHeureFin("") }}
               title="Revenir a aujourd'hui"
               className="px-2 py-1 rounded-lg text-[10px] font-bold transition-colors hover:opacity-80"
               style={{ background: "oklch(0.18 0.06 148)", color: "oklch(0.72 0.18 148)", border: "1px solid oklch(0.28 0.10 148)" }}>

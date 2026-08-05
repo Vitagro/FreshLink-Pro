@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { store, type AnalyseAchat, type CmdVsFacturation } from "@/lib/store"
+import { store, type AnalyseAchat, type CmdVsFacturation, recordHeure, inHeureRange } from "@/lib/store"
 import { TrendingDown, TrendingUp, AlertTriangle, BarChart3 } from "lucide-react"
 
 // Compute AnalyseAchat dynamically from real bons + receptions filtered by date range
-function computeAnalyseAchat(dateFrom: string, dateTo: string): AnalyseAchat[] {
-  const bons = store.getBonsAchat().filter(b => b.date >= dateFrom && b.date <= dateTo)
-  const receptions = store.getReceptions().filter(r => r.date >= dateFrom && r.date <= dateTo)
+function computeAnalyseAchat(dateFrom: string, dateTo: string, heureFrom = "", heureTo = ""): AnalyseAchat[] {
+  const bons = store.getBonsAchat().filter(b => b.date >= dateFrom && b.date <= dateTo && inHeureRange(heureFrom, heureTo, recordHeure(b)))
+  const receptions = store.getReceptions().filter(r => r.date >= dateFrom && r.date <= dateTo && inHeureRange(heureFrom, heureTo, recordHeure(r)))
 
   // Aggregate by article name
   const map = new Map<string, AnalyseAchat>()
@@ -43,9 +43,9 @@ function computeAnalyseAchat(dateFrom: string, dateTo: string): AnalyseAchat[] {
   })
 }
 
-function computeCmdVsFacturation(dateFrom: string, dateTo: string): CmdVsFacturation[] {
-  const commandes = store.getCommandes().filter(c => c.date >= dateFrom && c.date <= dateTo)
-  const bls = store.getBonsLivraison().filter(b => b.date >= dateFrom && b.date <= dateTo)
+function computeCmdVsFacturation(dateFrom: string, dateTo: string, heureFrom = "", heureTo = ""): CmdVsFacturation[] {
+  const commandes = store.getCommandes().filter(c => c.date >= dateFrom && c.date <= dateTo && inHeureRange(heureFrom, heureTo, recordHeure(c)))
+  const bls = store.getBonsLivraison().filter(b => b.date >= dateFrom && b.date <= dateTo && inHeureRange(heureFrom, heureTo, recordHeure(b)))
 
   const rows: CmdVsFacturation[] = []
   for (const cmd of commandes) {
@@ -150,10 +150,12 @@ export default function AnalyseAchatPanel() {
   const [tab, setTab] = useState<"achat" | "cmd">("achat")
   const [dateFrom, setDateFrom] = useState(firstOfMonth)
   const [dateTo, setDateTo]   = useState(today)
+  const [heureFrom, setHeureFrom] = useState("")
+  const [heureTo, setHeureTo]   = useState("")
 
   // Compute dynamically from real data filtered by date range
-  const analyseData = useMemo(() => computeAnalyseAchat(dateFrom, dateTo), [dateFrom, dateTo])
-  const cmdData     = useMemo(() => computeCmdVsFacturation(dateFrom, dateTo), [dateFrom, dateTo])
+  const analyseData = useMemo(() => computeAnalyseAchat(dateFrom, dateTo, heureFrom, heureTo), [dateFrom, dateTo, heureFrom, heureTo])
+  const cmdData     = useMemo(() => computeCmdVsFacturation(dateFrom, dateTo, heureFrom, heureTo), [dateFrom, dateTo, heureFrom, heureTo])
 
   const totalDonne   = analyseData.reduce((s, a) => s + a.montantDonne, 0)
   const totalRetenu  = analyseData.reduce((s, a) => s + a.valeurRetenue, 0)
@@ -184,6 +186,18 @@ export default function AnalyseAchatPanel() {
           <div className="flex flex-col gap-0.5">
             <label className="text-[10px] font-semibold" style={{ color: "#4b5563" }}>Au</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ background: "#0f1623", border: "1px solid #1d3a5e", color: "#e2e8f0" }} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[10px] font-semibold" style={{ color: "#4b5563" }}>De</label>
+            <input type="time" value={heureFrom} onChange={e => setHeureFrom(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{ background: "#0f1623", border: "1px solid #1d3a5e", color: "#e2e8f0" }} />
+          </div>
+          <div className="flex flex-col gap-0.5">
+            <label className="text-[10px] font-semibold" style={{ color: "#4b5563" }}>à</label>
+            <input type="time" value={heureTo} onChange={e => setHeureTo(e.target.value)}
               className="px-3 py-1.5 rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={{ background: "#0f1623", border: "1px solid #1d3a5e", color: "#e2e8f0" }} />
           </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useRef } from "react"
-import { store, type Reception, type BonLivraison } from "@/lib/store"
+import { store, type Reception, type BonLivraison, recordHeure, inHeureRange } from "@/lib/store"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, PieChart, Pie, Legend,
@@ -56,6 +56,8 @@ export default function AnalyseReceptionPanel() {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
   })
   const [dateTo, setDateTo] = useState(store.today())
+  const [heureFrom, setHeureFrom] = useState("")
+  const [heureTo, setHeureTo] = useState("")
   const [filterArticle, setFilterArticle] = useState("")
   const [filterClient, setFilterClient] = useState("")
   const contentRef = useRef<HTMLDivElement>(null)
@@ -76,12 +78,12 @@ export default function AnalyseReceptionPanel() {
 
   // ─── Raw data ────────────────────────────────────────────────────────────
   const receptions: Reception[] = useMemo(() => {
-    return store.getReceptions().filter(r => r.date >= dateFrom && r.date <= dateTo)
-  }, [dateFrom, dateTo])
+    return store.getReceptions().filter(r => r.date >= dateFrom && r.date <= dateTo && inHeureRange(heureFrom, heureTo, recordHeure(r)))
+  }, [dateFrom, dateTo, heureFrom, heureTo])
 
   const bls: BonLivraison[] = useMemo(() => {
-    return store.getBonsLivraison().filter(b => b.date >= dateFrom && b.date <= dateTo)
-  }, [dateFrom, dateTo])
+    return store.getBonsLivraison().filter(b => b.date >= dateFrom && b.date <= dateTo && inHeureRange(heureFrom, heureTo, recordHeure(b)))
+  }, [dateFrom, dateTo, heureFrom, heureTo])
 
   // ─── GLOBAL metrics ──────────────────────────────────────────────────────
   const globalMetrics = useMemo(() => {
@@ -215,13 +217,15 @@ export default function AnalyseReceptionPanel() {
 
       {/* Date filter + active period badge */}
       <div className="flex items-end gap-3 flex-wrap">
-        {[
-          { label: "Du", val: dateFrom, set: setDateFrom },
-          { label: "Au", val: dateTo, set: setDateTo },
-        ].map(f => (
+        {([
+          { label: "Du", val: dateFrom, set: setDateFrom, type: "date" },
+          { label: "Au", val: dateTo, set: setDateTo, type: "date" },
+          { label: "De", val: heureFrom, set: setHeureFrom, type: "time" },
+          { label: "à", val: heureTo, set: setHeureTo, type: "time" },
+        ] as { label: string; val: string; set: (v: string) => void; type: "date" | "time" }[]).map(f => (
           <div key={f.label} className="flex flex-col gap-1">
             <label className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#6b7280" }}>{f.label}</label>
-            <input type="date" value={f.val} onChange={e => f.set(e.target.value)}
+            <input type={f.type} value={f.val} onChange={e => f.set(e.target.value)}
               className="px-3 py-2 rounded-xl text-xs font-semibold"
               style={{ background: "#0f1a2e", color: "#e2e8f0", border: "1px solid #1a2535" }} />
           </div>

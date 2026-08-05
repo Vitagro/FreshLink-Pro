@@ -32,6 +32,11 @@ const SYNCED_KEYS = new Set<string>([
   // dès qu'on change de navigateur/appareil (ex: liste des transporteurs qui
   // "disparaît" — elle n'a jamais existé que sur l'appareil qui l'a créée).
   "fl_transferts", "fl_transport_companies",
+  // Module Cout Prevendeur/Trajet. Comme pour les tables ci-dessus, une table
+  // absente d'UNE des trois allowlists (ici / db.ts ERP_TABLE_MAP / api-server
+  // ALLOWED_TABLES) reste 100% locale a l'appareil, sans aucune erreur visible.
+  "fl_cp_grilles", "fl_cp_vehicules", "fl_cp_regles_freelance",
+  "fl_cp_prevendeurs", "fl_cp_trajets",
 ])
 
 // La clé localStorage ne correspond pas toujours 1:1 au nom de la table
@@ -53,6 +58,7 @@ const TABLE_NAME_OVERRIDE: Record<string, string> = { fl_caisse: "fl_caisse_entr
 const CONFIG_KEYS = new Set<string>([
   "fl_process_config", "fl_workflow_config", "fl_alert_config", "fl_email_config", "fl_fiscal_config",
   "fl_company", "fl_loyalty_config", "fl_group_names", "fl_mobile_tabs_visibility",
+  "fl_business_day_profiles",
 ])
 
 type Row = { id: string; [k: string]: unknown }

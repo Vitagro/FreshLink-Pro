@@ -16,6 +16,7 @@
 // ============================================================
 
 import { store } from "@/lib/store"
+import * as cp from "@/lib/coutPrevendeur"
 import { suppressAutoSync } from "./autoSync"
 import type {
   User, Client, Article, Fournisseur, Livreur, MotifRetour,
@@ -498,6 +499,14 @@ export async function syncFromSupabase(): Promise<{ ok: boolean; tables: string[
   } catch { /* pas de marqueur → garde anti-perte normal */ }
 
   const ERP_TABLE_MAP: [string, (items: unknown[]) => void, () => unknown[]][] = [
+    // Module Cout Prevendeur/Trajet — sens Supabase -> localStorage (3e et
+    // derniere allowlist : sans cette entree les donnees remonteraient bien
+    // vers Supabase mais ne redescendraient jamais sur un autre appareil).
+    ["fl_cp_grilles",          (d) => cp.saveGrilles(d as cp.GrilleSalariale[]),   () => cp.getGrilles()],
+    ["fl_cp_vehicules",        (d) => cp.saveVehicules(d as cp.Vehicule[]),        () => cp.getVehicules()],
+    ["fl_cp_regles_freelance", (d) => cp.saveRegles(d as cp.RegleFreelance[]),     () => cp.getRegles()],
+    ["fl_cp_prevendeurs",      (d) => cp.savePrevendeurs(d as cp.PrevendeurCout[]),() => cp.getPrevendeurs()],
+    ["fl_cp_trajets",          (d) => cp.saveTrajets(d as cp.TrajetPrevente[]),    () => cp.getTrajets()],
     ["fl_users",            (d) => store.saveUsers(d as User[]),                  () => store.getUsers()],
     ["fl_clients",          (d) => store.saveClients(d as Client[]),              () => store.getClients()],
     ["fl_articles",         (d) => store.saveArticles(d as Article[]),            () => store.getArticles()],

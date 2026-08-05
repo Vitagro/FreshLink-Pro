@@ -83,7 +83,7 @@ function onlyActiveArticles(list: Article[]): Article[] {
 //   besoinNet > 0  → LANCER DA (red, purchase required)
 //   besoinNet <= 0 → RAS (green, stock sufficient)
 // Shows ALL articles that have active orders today for complete visibility
-function calcBesoinSKU(articles: Article[], range?: { dateDebut?: string; dateFin?: string }): BesoinSKU[] {
+function calcBesoinSKU(articles: Article[], range?: { dateDebut?: string; dateFin?: string; heureDebut?: string; heureFin?: string }): BesoinSKU[] {
   const besoinRaw = store.computeBesoinNet(range)
   return besoinRaw
     .map(b => {
@@ -224,6 +224,8 @@ export default function MobileAchat({ user }: Props) {
   // Intervalle de dates du besoin net — par defaut aujourd'hui seul (comportement historique).
   const [besoinDateDebut, setBesoinDateDebut] = useState(store.today())
   const [besoinDateFin, setBesoinDateFin] = useState(store.today())
+  const [besoinHeureDebut, setBesoinHeureDebut] = useState("")
+  const [besoinHeureFin, setBesoinHeureFin] = useState("")
   // Selection multiple des DA (Demandes d'Achat) a lancer d'un coup — evite de
   // cliquer "Lancer DA" article par article quand plusieurs sont en deficit.
   const [selectedDA, setSelectedDA] = useState<Set<string>>(new Set())
@@ -1239,7 +1241,7 @@ export default function MobileAchat({ user }: Props) {
               <h3 className="text-sm font-bold text-foreground">Demande d&apos;Achat — Besoin net</h3>
               <p className="text-xs text-muted-foreground">Commandes vs stock — articles a acheter en priorite</p>
             </div>
-            <button onClick={() => setBesoinSKU(calcBesoinSKU(articles, { dateDebut: besoinDateDebut, dateFin: besoinDateFin }))}
+            <button onClick={() => setBesoinSKU(calcBesoinSKU(articles, { dateDebut: besoinDateDebut, dateFin: besoinDateFin, heureDebut: besoinHeureDebut, heureFin: besoinHeureFin }))}
               className="p-2 rounded-xl bg-muted hover:bg-muted/80 transition-colors">
               <svg className="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -1264,14 +1266,29 @@ export default function MobileAchat({ user }: Props) {
                   className="px-2.5 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
               </div>
               <button
-                onClick={() => setBesoinSKU(calcBesoinSKU(articles, { dateDebut: besoinDateDebut, dateFin: besoinDateFin }))}
+                onClick={() => setBesoinSKU(calcBesoinSKU(articles, { dateDebut: besoinDateDebut, dateFin: besoinDateFin, heureDebut: besoinHeureDebut, heureFin: besoinHeureFin }))}
                 className="self-end px-3 py-2 rounded-lg text-xs font-bold text-white bg-primary hover:opacity-90 transition-opacity">
                 Calculer
               </button>
             </div>
-            {(besoinDateDebut !== store.today() || besoinDateFin !== store.today()) && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">De</label>
+                <input type="time" value={besoinHeureDebut}
+                  onChange={e => setBesoinHeureDebut(e.target.value)}
+                  className="px-2.5 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+              <div className="flex-1 flex flex-col gap-1">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">à</label>
+                <input type="time" value={besoinHeureFin}
+                  onChange={e => setBesoinHeureFin(e.target.value)}
+                  className="px-2.5 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+              </div>
+            </div>
+            {(besoinDateDebut !== store.today() || besoinDateFin !== store.today() || besoinHeureDebut || besoinHeureFin) && (
               <button onClick={() => {
                 setBesoinDateDebut(store.today()); setBesoinDateFin(store.today())
+                setBesoinHeureDebut(""); setBesoinHeureFin("")
                 setBesoinSKU(calcBesoinSKU(articles, { dateDebut: store.today(), dateFin: store.today() }))
               }} className="text-[11px] font-semibold text-primary self-start hover:underline">
                 ↺ Revenir a aujourd&apos;hui seul
