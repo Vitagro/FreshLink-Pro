@@ -124,6 +124,7 @@ const BOIntelligencePrix     = React.lazy(() => import("./BOIntelligencePrix"))
 const BOConcurrence          = React.lazy(() => import("./BOConcurrence"))
 const BOPricingConcurrence   = React.lazy(() => import("./BOPricingConcurrence"))
 const BOCoutLivraison        = React.lazy(() => import("./BOCoutLivraison"))
+const BOCoutPrevendeur       = React.lazy(() => import("./BOCoutPrevendeur"))
 const BOBonLivraison         = React.lazy(() => import("./BOBonLivraison"))
 const BOHRDocuments          = React.lazy(() => import("./BOHRDocuments"))
 const BOLoyalty              = React.lazy(() => import("./BOLoyalty"))
@@ -175,7 +176,7 @@ export type Tab =
   | "camera_perms" | "cutoffs"
   | "depots"
   | "rh_productivite" | "rh_comptabilite"
-  | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
+  | "intelligence_prix" | "concurrence" | "cout_livraison" | "cout_prevendeur" | "bon_livraison" | "hr_documents"
   | "loyalty" | "performance_incentives" | "template_editor"
   | "investissement" | "sourcing" | "pricing" | "pricing_concurrent" | "finance_cdg"
   | "demandes_comptes" | "web_integration" | "journal_activite"
@@ -357,6 +358,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
       { id: "retour",       label: "Retours",              labelAr: "المرتجعات",        permKey: "canViewLogistique", icon: <Icon d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /> },
       { id: "trip_charges", label: "Coût Trajet",          labelAr: "تكلفة المسار",     permKey: "canViewLogistique", icon: <Icon d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M12 7h.01M15 7h.01M9 7H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M7 7V5a2 2 0 012-2h8a2 2 0 012 2v2" /> },
       { id: "cout_livraison", label: "Coût Livraison",     labelAr: "تكلفة التوصيل",    permKey: "canViewLogistique", icon: <Icon d="M3 3v18h18M9 17V9m4 8V5m4 12v-6" /> },
+      { id: "cout_prevendeur", label: "Coût Prévendeur",   labelAr: "تكلفة البائع",     permKey: "canViewLogistique", icon: <Icon d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> },
       { id: "gps_tracker",  label: "GPS Livreurs",         labelAr: "تتبع GPS",         icon: (
         <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -462,7 +464,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
   { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "pricing_concurrent", "category_pricing", "echelons_client", "moteur_commercial", "intelligence_prix", "concurrence"] },
   { label: "Marketing & E-commerce",      labelAr: "التسويق والمتجر الإلكتروني", ids: ["marketplace", "promo_codes", "loyalty", "gifts_v3", "loterie", "shop_analytics"] },
   { label: "Clients & Comptes Web",       labelAr: "الزبائن والحسابات",    ids: ["comptes_externes", "demandes_comptes"] },
-  { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
+  { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "cout_prevendeur", "gps_tracker"] },
   // Cash & BL et Caisse Acheteur remontent devant Fiscalite : ce sont des
   // encaissements/decaissements quotidiens (vente au comptant + achats
   // payes cash), contrairement a la fiscalite/controle de gestion qui sont
@@ -552,6 +554,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
   concurrence: (u) => <BOConcurrence user={u} />,
   pricing_concurrent: (u) => <BOPricingConcurrence user={u} />,
   cout_livraison: (_u) => <BOCoutLivraison />,
+  cout_prevendeur: (u) => <BOCoutPrevendeur user={u} />,
   bon_livraison:     (u) => <BOBonLivraison user={u} />,
   hr_documents:          (u) => <BOHRDocuments user={u} />,
   loyalty:               (u) => <BOLoyalty user={u} />,

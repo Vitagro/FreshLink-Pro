@@ -38,6 +38,9 @@ const ALLOWED_TABLES = new Set([
   // tout autre navigateur/appareil (ex: liste des transporteurs).
   "fl_messages", "fl_visites", "fl_demandes_achat", "fl_non_achats",
   "fl_transferts_stock", "fl_transport_companies",
+  // Module Cout Prevendeur/Trajet
+  "fl_cp_grilles", "fl_cp_vehicules", "fl_cp_regles_freelance",
+  "fl_cp_prevendeurs", "fl_cp_trajets", "fl_business_day_profiles",
 ]);
 
 router.get("/", async (req: Request, res: Response) => {
