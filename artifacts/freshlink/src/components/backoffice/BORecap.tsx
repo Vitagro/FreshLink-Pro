@@ -51,6 +51,23 @@ interface BesoinRow extends BesoinLigneEmail {
   // silencieusement ignorer la commande (elle disparaissait totalement du total avant).
   caissesCommercial: number
   caissesEstimee: boolean
+  // Saisie BRUTE du commercial, sans aucune conversion de colisage : on cumule
+  // separement ce qui a ete tape en UM (quantiteUM, ex: 5 caisses) et ce qui a
+  // ete tape directement en kg (lignes sans quantiteUM, ex: 10 kg). Affiche tel
+  // quel ("5C + 10KG") — contrairement a caissesCommercial qui, lui, ramene les
+  // kg en caisses via colisageParUM et masque donc la saisie reelle.
+  saisieBrute: { um: number; kg: number }
+}
+
+// "5C + 10KG" — initiale de l'UM de l'article (C=Caisse, B=Botte, S=Sac…),
+// "C" par defaut quand l'article n'a pas d'UM definie.
+function fmtSaisieBrute(um: number, kg: number, umLabel?: string): string {
+  const r1 = (n: number) => String(Math.round(n * 10) / 10)
+  const initiale = (umLabel ?? "").trim().charAt(0).toUpperCase() || "C"
+  const parts: string[] = []
+  if (um > 0) parts.push(`${r1(um)}${initiale}`)
+  if (kg > 0) parts.push(`${r1(kg)}KG`)
+  return parts.length ? parts.join(" + ") : "—"
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -154,6 +171,16 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         const l = c.lignes.find(l => l.articleId === art.id)
         return s + (l?.quantite ?? 0)
       }, 0)
+      // Saisie brute : aucune conversion. Une ligne saisie en UM alimente
+      // uniquement le compteur UM, une ligne saisie en kg uniquement le
+      // compteur kg — les deux ne sont jamais additionnes entre eux.
+      const saisieBrute = commandes.reduce((acc, c) => {
+        const l = c.lignes.find(l => l.articleId === art.id)
+        if (!l) return acc
+        if (l.quantiteUM && l.quantiteUM > 0) acc.um += l.quantiteUM
+        else if (l.quantite > 0) acc.kg += l.quantite
+        return acc
+      }, { um: 0, kg: 0 })
       let caissesEstimee = false
       const caissesCommercial = commandes.reduce((s, c) => {
         const l = c.lignes.find(l => l.articleId === art.id)
@@ -206,6 +233,7 @@ function computeBesoinRows(dateDebut: string, dateFin: string, heureDebut: strin
         articleNomAr:   art.nomAr,
         caissesCommercial: Math.round(caissesCommercial * 10) / 10,
         caissesEstimee,
+        saisieBrute,
       }
     })
     .filter(r => r.commandeTotal > 0)
@@ -517,6 +545,9 @@ export default function BORecap() {
           Unite: r.unite ?? "",
           UM: r.um ?? "",
           "Somme Total (UM saisie commercial)": r.caissesEstimee ? `≈${r.caissesCommercial}` : r.caissesCommercial,
+          "Saisie commercial (brute)": fmtSaisieBrute(r.saisieBrute.um, r.saisieBrute.kg, r.um),
+          "Saisie UM": r.saisieBrute.um,
+          "Saisie kg": r.saisieBrute.kg,
           Selectionne: r.selected ? "oui" : "non",
         }
       }
@@ -533,6 +564,9 @@ export default function BORecap() {
         UM: r.um ?? "",
         "Caisses gros": c.gros,
         "Caisses demi": c.demi,
+        "Saisie commercial (brute)": fmtSaisieBrute(r.saisieBrute.um, r.saisieBrute.kg, r.um),
+        "Saisie UM": r.saisieBrute.um,
+        "Saisie kg": r.saisieBrute.kg,
         Selectionne: r.selected ? "oui" : "non",
       }
     })
@@ -872,8 +906,8 @@ export default function BORecap() {
                         className="w-4 h-4 rounded" />
                     </th>
                     {(crossdock
-                      ? ["Article", "Fournisseur", "Commandes", "Retours", "Besoin net", "Somme Total"]
-                      : ["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net", "Caisses"]
+                      ? ["Article", "Fournisseur", "Commandes", "Retours", "Besoin net", "Somme Total", "Saisie commercial"]
+                      : ["Article", "Fournisseur", "Commandes", "Stock", "Retours", "Besoin net", "Caisses", "Saisie commercial"]
                     ).map(h => (
                       <th key={h} className="text-left px-3 py-3 text-muted-foreground font-medium text-xs uppercase tracking-wide">{h}</th>
                     ))}
@@ -932,6 +966,13 @@ export default function BORecap() {
                             )
                           })() : <span className="text-muted-foreground">—</span>
                         )}
+                      </td>
+                      {/* Saisie brute du commercial, sans colisage : "5C + 10KG" */}
+                      <td className="px-3 py-3 text-center text-xs">
+                        <span className="font-semibold text-indigo-700 whitespace-nowrap"
+                          title="Exactement ce que le commercial a saisi, sans conversion de colisage">
+                          {fmtSaisieBrute(r.saisieBrute.um, r.saisieBrute.kg, r.um)}
+                        </span>
                       </td>
                     </tr>
                   ))}

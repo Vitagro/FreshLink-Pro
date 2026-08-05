@@ -1089,8 +1089,11 @@ export default function BOBonLivraison({ user }: { user: User }) {
 
   useEffect(() => { setBLs(getBLs()) }, [])
 
-  const canEdit = user.role === "super_super_admin" || user.role === "admin" || user.role === "super_admin" ||
-    user.role === "resp_logistique" || user.role === "dispatcheur" || user.role === "magasinier" || user.role === "cash_man"
+  // userHasRole : un compte multi-role (ex: prevendeur + magasinier) doit pouvoir
+  // editer les BL au titre de son role secondaire — un test sur user.role seul
+  // le bloquait silencieusement.
+  const canEdit = ["super_super_admin", "admin", "super_admin", "resp_logistique", "dispatcheur", "magasinier", "cash_man"]
+    .some(r => userHasRole(user, r))
   const canFacture = FACTURE_ROLES.includes(user.role)
 
   // ── Bons de preparation valides, pas encore utilisés pour un BL ──────────

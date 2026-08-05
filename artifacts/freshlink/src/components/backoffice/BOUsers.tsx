@@ -2308,7 +2308,14 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                   </div>
 
                   {/* Depot assignment — visible for roles that need depot access */}
-                  {(form.role === "magasinier" || form.role === "acheteur" || form.role === "livreur" || form.role === "conducteur" || form.role === "preparateur" || form.role === "admin" || form.role === "super_admin") && (
+                  {(() => {
+                    // On teste le role principal ET les roles secondaires : un compte
+                    // "prevendeur + preparateur" a besoin d'un depot au titre de son
+                    // second role, le champ restait invisible en ne lisant que form.role.
+                    const rolesForm: string[] = (form as { roles?: UserRole[] }).roles ?? [form.role as UserRole]
+                    const allRoles = new Set<string>([form.role as string, ...rolesForm])
+                    return ["magasinier", "acheteur", "livreur", "conducteur", "preparateur", "admin", "super_admin"].some(r => allRoles.has(r))
+                  })() && (
                     <div className="flex flex-col gap-1 sm:col-span-2">
                       <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5 text-primary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
