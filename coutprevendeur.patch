@@ -1,0 +1,1616 @@
+From dfd38e222c5de5d605d9353e46a7984555526d0f Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Wed, 5 Aug 2026 12:40:48 +0000
+Subject: [PATCH] Module Cout Prevendeur & Trajet (journee operationnelle +
+ moteur de calcul)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Nouvel ecran BO "Cout Prevendeur" (Logistique & Transport) qui calcule le cout
+reel d'une tournee de prevente :
+  Cout_trajet = C_fixe + C_transport + C_charges + C_freelance
+
+lib/businessDay.ts — la "journee operationnelle" devient un concept transverse.
+Un intervalle SEMI-OUVERT [debut, fin) : avec des bornes fermees des deux cotes,
+un enregistrement pile a 04:00 appartiendrait a J ET a J+1, donc compte deux fois
+dans le CA et deux fois dans les couts. Profils multiples (prevente / livraison /
+achat / calendaire). Le profil PREVENTE reste asservi a fl_commande_cutoff_config,
+la meme cle que store.getCommandeCutoffConfig() : une seule definition du cycle de
+commande, alors que ce projet a deja connu deux copies desynchronisees.
+Le TROU de couverture (14:00->04:00 laisse 10 h non couvertes) est traite
+explicitement par une politique choisie, jamais en silence : un enregistrement ne
+doit pas pouvoir disparaitre de tous les rapports faute de rattachement. L'ecran
+de configuration montre le trou et le nombre de commandes concernees AVANT
+validation. Tout est calcule en heure locale, jamais via toISOString().
+
+lib/coutPrevendeur.ts — modele + moteur. Points de calcul qui evitent des faux
+resultats silencieux :
+ - les charges patronales ne sont comptees qu'une fois (dans le cout fixe) ;
+ - un vehicule PERSONNEL n'ouvre droit ni a amortissement ni a loyer ;
+ - un km incoherent ou aberrant bascule sur une valeur de repli et leve une
+   anomalie, au lieu de retenir 0 et de minorer le cout ;
+ - une duree invalide bascule en forfait jour au lieu de facturer 0 h ;
+ - un taux de conversion 0/0 est INDEFINI, pas 0 % : l'assiette n'est pas
+   remuneree mais le prevendeur n'est pas penalise ;
+ - un bareme progressif ne s'applique jamais a une assiette de type ratio ;
+ - les parametres sont resolus a la version en vigueur a la date operationnelle,
+   pas a la version courante, sinon une augmentation reecrirait le passe ;
+ - reventilation de fin de journee pour la base FREQUENCE, sans quoi le premier
+   trajet cloture porterait 100 % du cout journalier ;
+ - les couts non ventiles (jours payes sans tournee) apparaissent dans le meme
+   tableau que le reste : les exclure donnerait une vision flatteuse et fausse.
+Les montants sont figes a la cloture avec un snapshot des parametres utilises,
+ce qui rend le calcul rejouable un an plus tard.
+
+Les 5 nouvelles tables sont declarees dans les TROIS allowlists de synchro
+(autoSync SYNCED_KEYS, db.ts ERP_TABLE_MAP, api-server ALLOWED_TABLES) : une
+table absente d'une seule des trois resterait 100 % locale a l'appareil, sans
+aucune erreur visible — le bug qui faisait "disparaitre la liste des transporteurs".
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_013uDkqnqj6aj3KBYD2TQoko
+---
+ artifacts/api-server/src/routes/syncRead.ts   |   3 +
+ artifacts/api-server/src/routes/syncWrite.ts  | Bin 6032 -> 6199 bytes
+ .../backoffice/BOCoutPrevendeur.tsx           | 580 +++++++++++++++++
+ .../backoffice/BackOfficeLayout.tsx           |   7 +-
+ artifacts/freshlink/src/lib/businessDay.ts    | 234 +++++++
+ artifacts/freshlink/src/lib/coutPrevendeur.ts | 593 ++++++++++++++++++
+ .../freshlink/src/lib/supabase/autoSync.ts    |   6 +
+ artifacts/freshlink/src/lib/supabase/db.ts    |   9 +
+ 8 files changed, 1430 insertions(+), 2 deletions(-)
+ create mode 100644 artifacts/freshlink/src/components/backoffice/BOCoutPrevendeur.tsx
+ create mode 100644 artifacts/freshlink/src/lib/businessDay.ts
+ create mode 100644 artifacts/freshlink/src/lib/coutPrevendeur.ts
+
+diff --git a/artifacts/api-server/src/routes/syncRead.ts b/artifacts/api-server/src/routes/syncRead.ts
+index 25d239f..aa331ff 100644
+--- a/artifacts/api-server/src/routes/syncRead.ts
++++ b/artifacts/api-server/src/routes/syncRead.ts
+@@ -38,6 +38,9 @@ const ALLOWED_TABLES = new Set([
+   // tout autre navigateur/appareil (ex: liste des transporteurs).
+   "fl_messages", "fl_visites", "fl_demandes_achat", "fl_non_achats",
+   "fl_transferts_stock", "fl_transport_companies",
++  // Module Cout Prevendeur/Trajet
++  "fl_cp_grilles", "fl_cp_vehicules", "fl_cp_regles_freelance",
++  "fl_cp_prevendeurs", "fl_cp_trajets", "fl_business_day_profiles",
+ ]);
+ 
+ router.get("/", async (req: Request, res: Response) => {
+diff --git a/artifacts/api-server/src/routes/syncWrite.ts b/artifacts/api-server/src/routes/syncWrite.ts
+index 0abd76651e4bdddbb407d47cf2441fe60945633a..fb3495714c079eeda39d8dda86532ac7f78d97fb 100644
+GIT binary patch
+delta 176
+zcmbQBzujQNX7+jo1$})5-~5!)oKywp{L&JIfTGm0)V!3`(jxtkqQtD!5-tS=rL>&*
+z<bwG0qRgC})M6zam_S)-MrJZlCz4Q6YC4b~pH`Hbnv<B9oT{XQ&|d&I8m>XPAie}_
+f3rr-bv^X;_wYWGwC9yKTpeR2rGiUQU_DB2xW$ZsL
+
+delta 12
+TcmdmPFhPIAX7<fd9C!HvBTfYp
+
+diff --git a/artifacts/freshlink/src/components/backoffice/BOCoutPrevendeur.tsx b/artifacts/freshlink/src/components/backoffice/BOCoutPrevendeur.tsx
+new file mode 100644
+index 0000000..f21a726
+--- /dev/null
++++ b/artifacts/freshlink/src/components/backoffice/BOCoutPrevendeur.tsx
+@@ -0,0 +1,580 @@
++"use client"
++
++// ═══════════════════════════════════════════════════════════════════════════
++//  Coût Prévendeur & Trajet — configuration + rapport de rentabilité
++//
++//  Trois onglets :
++//   • Rentabilité : coût ventilé en 4 composantes par prévendeur, marge, KPI.
++//   • Paramètres  : grilles salariales, véhicules, prévendeurs suivis.
++//   • Journée opérationnelle : profils horaires, avec visualisation du trou de
++//     couverture AVANT validation (une fenêtre 14:00→04:00 laisse 10 h non
++//     couvertes — mieux vaut le voir que le découvrir dans les chiffres).
++// ═══════════════════════════════════════════════════════════════════════════
++
++import { useState, useMemo } from "react"
++import { store, type User, userHasRole } from "@/lib/store"
++import { hasPermission } from "@/lib/permissions"
++import { logAction } from "@/lib/auditLog"
++import {
++  getBusinessDayProfiles, saveBusinessDayProfiles, heuresNonCouvertes,
++  resolveBusinessDay, type BusinessDayProfile, type PolitiqueHorsPlage,
++} from "@/lib/businessDay"
++import {
++  getGrilles, saveGrilles, getVehicules, saveVehicules, getRegles,
++  getPrevendeurs, savePrevendeurs, getTrajets, saveTrajets,
++  agregerParPrevendeur, coutsNonVentiles, reventilerJournee, cloturerTrajet,
++  genCoutId, metriquesTrajet, calculerCoutTrajet, nbTrajetsDuJour,
++  type GrilleSalariale, type Vehicule, type PrevendeurCout, type TrajetPrevente,
++} from "@/lib/coutPrevendeur"
++
++type Tab = "rentabilite" | "parametres" | "journee"
++
++const DH = (n: number) => `${(Math.round(n * 100) / 100).toLocaleString("fr-MA", { maximumFractionDigits: 2 })} DH`
++
++const POLITIQUES: { id: PolitiqueHorsPlage; label: string; aide: string }[] = [
++  { id: "RATTACHER_SUIVANT",   label: "Rattacher à la journée suivante",   aide: "Recommandé — aucune perte, « c'est déjà pour demain »." },
++  { id: "RATTACHER_PRECEDENT", label: "Rattacher à la journée précédente", aide: "Pour les profils où la saisie tardive est une régularisation." },
++  { id: "REJETER",             label: "Refuser la saisie",                 aide: "Bloque l'utilisateur hors fenêtre — source de blocages terrain." },
++]
++
++export default function BOCoutPrevendeur({ user }: { user: User }) {
++  const [tab, setTab] = useState<Tab>("rentabilite")
++  const [profiles, setProfiles] = useState<BusinessDayProfile[]>(getBusinessDayProfiles)
++  const [selectedProfile, setSelectedProfile] = useState("PREVENTE")
++  const [grilles, setGrilles] = useState<GrilleSalariale[]>(getGrilles)
++  const [vehicules, setVehicules] = useState<Vehicule[]>(getVehicules)
++  const [prevendeurs, setPrevendeurs] = useState<PrevendeurCout[]>(getPrevendeurs)
++  const [trajets, setTrajets] = useState<TrajetPrevente[]>(getTrajets)
++  const [msg, setMsg] = useState<string | null>(null)
++
++  const today = store.today()
++  const [dateDebut, setDateDebut] = useState(today)
++  const [dateFin, setDateFin] = useState(today)
++  const [detailTrajetId, setDetailTrajetId] = useState<string | null>(null)
++
++  // Écran financier + paramétrage de rémunération : même garde-fou que les
++  // autres écrans de coûts. Sans permission, l'écran reste consultable mais
++  // toutes les actions d'écriture sont retirées.
++  const canEdit = hasPermission(user.role, "voir_finance")
++    || userHasRole(user, "admin") || userHasRole(user, "super_admin") || userHasRole(user, "super_super_admin")
++
++  const flash = (t: string) => { setMsg(t); setTimeout(() => setMsg(null), 4000) }
++  const profile = profiles.find(p => p.id === selectedProfile) ?? profiles[0]
++
++  const updateProfile = (patch: Partial<BusinessDayProfile>) =>
++    setProfiles(prev => prev.map(p => p.id === selectedProfile ? { ...p, ...patch } : p))
++
++  const handleSaveProfiles = () => {
++    if (!canEdit) { logAction(user, "voir_finance", "denied", { type: "business_day_profil" }); return }
++    saveBusinessDayProfiles(profiles)
++    logAction(user, "voir_finance", "success", { type: "business_day_profil", label: selectedProfile })
++    flash("Profils de journée opérationnelle enregistrés.")
++  }
++
++  // Impact du profil courant sur les commandes réelles des 30 derniers jours :
++  // transforme une décision abstraite (« 10 h non couvertes ») en décision
++  // informée (« 47 commandes concernées »).
++  const impact = useMemo(() => {
++    if (!profile) return { total: 0, horsPlage: 0 }
++    const l = new Date(); l.setDate(l.getDate() - 30)
++    const limite = `${l.getFullYear()}-${String(l.getMonth() + 1).padStart(2, "0")}-${String(l.getDate()).padStart(2, "0")}`
++    const cmds = store.getCommandes().filter(c => c.date >= limite)
++    let horsPlage = 0
++    for (const c of cmds) {
++      if (resolveBusinessDay(c.createdAt ?? `${c.date}T12:00:00`, profile.id).horsPlage) horsPlage++
++    }
++    return { total: cmds.length, horsPlage }
++  }, [profile])
++
++  const lignes = useMemo(() => agregerParPrevendeur(dateDebut, dateFin), [dateDebut, dateFin, trajets])
++
++  const nonVentiles = useMemo(() =>
++    getPrevendeurs()
++      .filter(p => p.typeContrat === "SALARIE" && p.actif)
++      .map(p => ({ nom: p.nom, montant: coutsNonVentiles(p.id, dateDebut, dateFin) }))
++      .filter(x => x.montant > 0),
++  [dateDebut, dateFin, trajets])
++
++  const totaux = useMemo(() => {
++    const t = lignes.reduce((acc, l) => ({
++      cout: acc.cout + l.total, marge: acc.marge + l.margeBrute,
++      clients: acc.clients + l.nbClientsVisites, anomalies: acc.anomalies + l.anomalies,
++    }), { cout: 0, marge: 0, clients: 0, anomalies: 0 })
++    const nv = nonVentiles.reduce((s, x) => s + x.montant, 0)
++    return { ...t, coutAvecNV: t.cout + nv, nonVentiles: nv }
++  }, [lignes, nonVentiles])
++
++  const handleCloturerPeriode = () => {
++    if (!canEdit) { logAction(user, "voir_finance", "denied", { type: "cloture_journee_prevente" }); return }
++    const enCours = getTrajets().filter(t =>
++      t.dateOperationnelle >= dateDebut && t.dateOperationnelle <= dateFin && t.statut === "EN_COURS")
++    for (const t of enCours) cloturerTrajet(t.id, user.name)
++    const dates = [...new Set(getTrajets()
++      .filter(t => t.dateOperationnelle >= dateDebut && t.dateOperationnelle <= dateFin)
++      .map(t => t.dateOperationnelle))]
++    let reventiles = 0
++    for (const d of dates) reventiles += reventilerJournee(d)
++    setTrajets(getTrajets())
++    logAction(user, "voir_finance", "success", { type: "cloture_journee_prevente", label: `${dateDebut}->${dateFin}` })
++    flash(`Clôture effectuée — ${enCours.length} trajet(s) clôturé(s) d'office, ${reventiles} reventilé(s).`)
++  }
++
++  const detail = useMemo(() => {
++    if (!detailTrajetId) return null
++    const t = getTrajets().find(x => x.id === detailTrajetId)
++    if (!t) return null
++    const m = metriquesTrajet(t)
++    const d = calculerCoutTrajet(t, m, { nbTrajetsDuJour: nbTrajetsDuJour(t.prevendeurId, t.dateOperationnelle) })
++    return { t, m, d }
++  }, [detailTrajetId, trajets])
++
++  const trajetsPeriode = trajets.filter(t => t.dateOperationnelle >= dateDebut && t.dateOperationnelle <= dateFin)
++
++  return (
++    <div className="p-4 md:p-6 flex flex-col gap-5 max-w-7xl mx-auto">
++      <div>
++        <h1 className="text-2xl font-black text-slate-900">💰 Coût Prévendeur &amp; Trajet</h1>
++        <p className="text-sm text-slate-500 mt-1">
++          Coût réel d&apos;une tournée de prévente : salaire au prorata, transport, charges, rémunération externe.
++        </p>
++      </div>
++
++      {msg && <div className="px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm font-semibold">{msg}</div>}
++      {!canEdit && (
++        <div className="px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm">
++          Lecture seule — modifier les paramètres de coût requiert la permission « gérer finance ».
++        </div>
++      )}
++
++      <div className="flex gap-2 flex-wrap">
++        {([
++          { id: "rentabilite" as const, label: "📊 Rentabilité" },
++          { id: "parametres" as const,  label: "⚙️ Paramètres" },
++          { id: "journee" as const,     label: "🕐 Journée opérationnelle" },
++        ]).map(t => (
++          <button key={t.id} onClick={() => setTab(t.id)}
++            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
++              tab === t.id ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
++            {t.label}
++          </button>
++        ))}
++      </div>
++
++      {/* ══ RENTABILITÉ ═════════════════════════════════════════════════════ */}
++      {tab === "rentabilite" && (
++        <div className="flex flex-col gap-4">
++          <div className="bg-card rounded-2xl border border-border p-4 flex flex-wrap gap-3 items-end">
++            <div className="flex flex-col gap-1">
++              <label className="text-xs font-semibold text-muted-foreground">Du</label>
++              <input type="date" value={dateDebut} max={dateFin} onChange={e => setDateDebut(e.target.value)}
++                className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
++            </div>
++            <div className="flex flex-col gap-1">
++              <label className="text-xs font-semibold text-muted-foreground">Au</label>
++              <input type="date" value={dateFin} min={dateDebut} onChange={e => setDateFin(e.target.value)}
++                className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
++            </div>
++            {canEdit && (
++              <button onClick={handleCloturerPeriode}
++                className="px-4 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted">
++                Clôturer la période
++              </button>
++            )}
++            <span className="text-[11px] text-muted-foreground ml-auto max-w-md">
++              ⓘ Dates <strong>opérationnelles</strong> (profil Prévente : J{profile?.debutJourOffset === 0 ? "" : profile?.debutJourOffset}{" "}
++              {profile?.heureDebut} → J {profile?.heureFin}), pas les dates calendaires.
++            </span>
++          </div>
++
++          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
++            {[
++              { l: "Coût total", v: DH(totaux.coutAvecNV), c: "text-slate-900" },
++              { l: "Marge brute", v: DH(totaux.marge), c: "text-emerald-700" },
++              { l: "Coût / client", v: totaux.clients > 0 ? DH(totaux.coutAvecNV / totaux.clients) : "—", c: "text-sky-700" },
++              { l: "Ratio coût/marge", v: totaux.marge > 0 ? `${((totaux.coutAvecNV / totaux.marge) * 100).toFixed(1)} %` : "—", c: "text-indigo-700" },
++              { l: "Anomalies", v: String(totaux.anomalies), c: totaux.anomalies > 0 ? "text-amber-700" : "text-emerald-700" },
++            ].map(k => (
++              <div key={k.l} className="bg-card rounded-2xl border border-border p-4">
++                <p className="text-[11px] text-muted-foreground font-medium">{k.l}</p>
++                <p className={`text-lg font-black mt-1 ${k.c}`}>{k.v}</p>
++              </div>
++            ))}
++          </div>
++
++          <div className="overflow-x-auto rounded-2xl border border-border">
++            <table className="w-full text-sm">
++              <thead>
++                <tr className="bg-muted">
++                  {["Prévendeur", "Contrat", "Trajets", "Fixe", "Transport", "Charges", "Freelance", "TOTAL", "Marge nette"].map(h => (
++                    <th key={h} className="text-left px-3 py-3 text-muted-foreground font-medium text-xs uppercase tracking-wide">{h}</th>
++                  ))}
++                </tr>
++              </thead>
++              <tbody>
++                {lignes.length === 0 && nonVentiles.length === 0 && (
++                  <tr><td colSpan={9} className="px-4 py-10 text-center text-sm text-muted-foreground">
++                    Aucun trajet clôturé sur cette période.
++                  </td></tr>
++                )}
++                {lignes.map(l => (
++                  <tr key={l.prevendeurId} className="border-t border-border hover:bg-muted/20">
++                    <td className="px-3 py-3 font-semibold text-foreground">
++                      {l.nom}
++                      <span className="block text-[11px] font-normal text-muted-foreground">
++                        {l.nbClientsVisites} client(s) ·{" "}
++                        {l.nbClientsVisites > 0 ? `${DH(l.total / l.nbClientsVisites)}/client` : "—"}
++                        {l.anomalies > 0 && <span className="text-amber-700 font-semibold"> · ⚠ {l.anomalies}</span>}
++                      </span>
++                    </td>
++                    <td className="px-3 py-3 text-xs text-muted-foreground">{l.typeContrat}</td>
++                    <td className="px-3 py-3 text-center">{l.nbTrajets}</td>
++                    <td className="px-3 py-3 text-right tabular-nums">{l.fixeSalarial > 0 ? DH(l.fixeSalarial) : "—"}</td>
++                    <td className="px-3 py-3 text-right tabular-nums">{l.transport > 0 ? DH(l.transport) : "—"}</td>
++                    <td className="px-3 py-3 text-right tabular-nums">{l.charges > 0 ? DH(l.charges) : "—"}</td>
++                    <td className="px-3 py-3 text-right tabular-nums">{l.freelance > 0 ? DH(l.freelance) : "—"}</td>
++                    <td className="px-3 py-3 text-right tabular-nums font-bold">{DH(l.total)}</td>
++                    <td className={`px-3 py-3 text-right tabular-nums font-semibold ${l.margeBrute - l.total >= 0 ? "text-emerald-700" : "text-red-600"}`}>
++                      {DH(l.margeBrute - l.total)}
++                    </td>
++                  </tr>
++                ))}
++                {/* Les coûts non ventilés sont dans le MÊME tableau, pas dans un
++                    onglet à part : les exclure donnerait une vision flatteuse et fausse. */}
++                {nonVentiles.map(nv => (
++                  <tr key={nv.nom} className="border-t border-border bg-amber-50/40">
++                    <td className="px-3 py-3 font-semibold text-amber-900">
++                      Non ventilé — {nv.nom}
++                      <span className="block text-[11px] font-normal text-amber-700">Jours payés sans aucune tournée</span>
++                    </td>
++                    <td className="px-3 py-3 text-xs text-muted-foreground">SALARIE</td>
++                    <td className="px-3 py-3 text-center">—</td>
++                    <td className="px-3 py-3 text-right tabular-nums">{DH(nv.montant)}</td>
++                    <td className="px-3 py-3 text-center">—</td>
++                    <td className="px-3 py-3 text-center">—</td>
++                    <td className="px-3 py-3 text-center">—</td>
++                    <td className="px-3 py-3 text-right tabular-nums font-bold">{DH(nv.montant)}</td>
++                    <td className="px-3 py-3 text-right tabular-nums text-red-600 font-semibold">{DH(-nv.montant)}</td>
++                  </tr>
++                ))}
++              </tbody>
++            </table>
++          </div>
++
++          <div className="bg-card rounded-2xl border border-border p-4 flex flex-col gap-2">
++            <h3 className="text-sm font-bold text-foreground">Trajets de la période</h3>
++            {trajetsPeriode.length === 0 ? (
++              <p className="text-xs text-muted-foreground">
++                Aucun trajet enregistré. Les tournées s&apos;ouvrent depuis le mobile prévendeur ;
++                le bouton ci-dessous permet d&apos;en créer une manuellement pour valider le calcul.
++              </p>
++            ) : (
++              <div className="flex flex-col gap-1">
++                {trajetsPeriode.map(t => (
++                  <button key={t.id} onClick={() => setDetailTrajetId(t.id === detailTrajetId ? null : t.id)}
++                    className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted text-left text-xs">
++                    <span className="font-semibold">{t.numero} — {t.prevendeurNom}</span>
++                    <span className="text-muted-foreground">
++                      {t.dateOperationnelle} · {t.statut} · {t.coutTotal != null ? DH(t.coutTotal) : "non clôturé"}
++                    </span>
++                  </button>
++                ))}
++              </div>
++            )}
++            {canEdit && (
++              <button
++                onClick={() => {
++                  const p = getPrevendeurs()[0]
++                  if (!p) { flash("Crée d'abord un prévendeur dans l'onglet Paramètres."); return }
++                  const debut = new Date()
++                  const t: TrajetPrevente = {
++                    id: genCoutId("trj"),
++                    numero: `T-${Date.now().toString().slice(-6)}`,
++                    prevendeurId: p.id, prevendeurNom: p.nom,
++                    vehiculeId: p.vehiculeId, secteur: p.secteurDefaut,
++                    dateOperationnelle: resolveBusinessDay(debut, "PREVENTE").date,
++                    debutReel: debut.toISOString(), statut: "EN_COURS", kmDebut: 0,
++                  }
++                  const next = [...getTrajets(), t]; saveTrajets(next); setTrajets(next)
++                  flash(`Trajet ${t.numero} ouvert — journée opérationnelle ${t.dateOperationnelle}.`)
++                }}
++                className="self-start px-3 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted">
++                + Ouvrir un trajet
++              </button>
++            )}
++          </div>
++
++          {detail && (
++            <div className="bg-card rounded-2xl border border-primary/40 p-5 flex flex-col gap-2">
++              <h3 className="text-sm font-bold text-foreground">
++                {detail.t.numero} — {detail.t.prevendeurNom} · journée {detail.t.dateOperationnelle}
++              </h3>
++              <table className="text-xs w-full max-w-lg">
++                <tbody>
++                  {([
++                    ["Fixe salarial", detail.d.fixeSalarial, `${detail.d.dureeHeures.toFixed(2)} h`],
++                    ["Transport", detail.d.transport, `${detail.d.km.toFixed(0)} km`],
++                    ["Charges", detail.d.charges, ""],
++                    ["Freelance fixe", detail.d.freelanceFixe, ""],
++                    ["Freelance variable", detail.d.freelanceVariable, ""],
++                  ] as [string, number, string][]).map(([l, v, sub]) => (
++                    <tr key={l} className="border-b border-border/50">
++                      <td className="py-1.5 text-muted-foreground">{l}</td>
++                      <td className="py-1.5 text-[10px] text-muted-foreground">{sub}</td>
++                      <td className="py-1.5 text-right tabular-nums font-semibold">{DH(v)}</td>
++                    </tr>
++                  ))}
++                  <tr>
++                    <td className="py-2 font-bold">TOTAL</td><td />
++                    <td className="py-2 text-right tabular-nums font-black">{DH(detail.d.total)}</td>
++                  </tr>
++                </tbody>
++              </table>
++              <p className="text-xs text-muted-foreground">
++                {detail.m.nbClientsVisites} clients · {detail.m.nbCommandes} commandes ·{" "}
++                taux conv. {detail.m.tauxConversion == null ? "non évaluable" : `${detail.m.tauxConversion.toFixed(1)} %`} ·{" "}
++                CA {DH(detail.m.ca)} · marge {DH(detail.m.margeBrute)}
++              </p>
++              {detail.d.anomalies.length > 0 && (
++                <ul className="text-xs text-amber-700 list-disc pl-5">
++                  {detail.d.anomalies.map((a, i) => <li key={i}>{a}</li>)}
++                </ul>
++              )}
++              {detail.t.clotureLe && (
++                <p className="text-[11px] text-muted-foreground">
++                  🔒 Figé le {new Date(detail.t.clotureLe).toLocaleString("fr-FR")} par {detail.t.clotureesPar}
++                </p>
++              )}
++            </div>
++          )}
++        </div>
++      )}
++
++      {/* ══ PARAMÈTRES ══════════════════════════════════════════════════════ */}
++      {tab === "parametres" && (
++        <div className="flex flex-col gap-5">
++          <ParamSection
++            titre="Grilles salariales"
++            vide="Aucune grille. Sans grille, le coût fixe d'un salarié ne peut pas être calculé."
++            items={grilles.map(g => ({
++              id: g.id, principal: g.libelle,
++              secondaire: `${DH(g.salaireBrutMensuel)}/mois · charges ${(g.tauxChargesPatronales * 100).toFixed(0)} % · ${g.joursTravaillesMois} j · répartition ${g.baseRepartition}`,
++            }))}
++            canEdit={canEdit}
++            onAdd={() => {
++              const g: GrilleSalariale = {
++                id: genCoutId("grille"), libelle: "Nouvelle grille",
++                salaireBrutMensuel: 5000, tauxChargesPatronales: 0.20,
++                primePanierJour: 30, forfaitTelecomMois: 100, amortissementMaterielMois: 80,
++                joursTravaillesMois: 26, heuresParJour: 8, baseRepartition: "DUREE",
++                valideDu: today,
++              }
++              const next = [...grilles, g]; setGrilles(next); saveGrilles(next)
++              logAction(user, "voir_finance", "success", { type: "grille_salariale", id: g.id })
++            }}
++            onDelete={id => { const next = grilles.filter(x => x.id !== id); setGrilles(next); saveGrilles(next) }}
++          />
++
++          <ParamSection
++            titre="Véhicules"
++            vide="Aucun véhicule. Sans véhicule rattaché, le coût de transport reste à 0."
++            items={vehicules.map(v => ({
++              id: v.id, principal: `${v.immatriculation} — ${v.modeDetention}`,
++              secondaire: v.modeDetention === "PERSONNEL"
++                ? `Barème ${DH(v.indemniteKm ?? 0)}/km`
++                : `${v.consoL100km} L/100 · ${DH(v.prixCarburantLitre)}/L · assurance ${DH(v.assuranceMois)}/mois · ${v.kmMoyensMois} km/mois`,
++            }))}
++            canEdit={canEdit}
++            onAdd={() => {
++              const v: Vehicule = {
++                id: genCoutId("veh"), immatriculation: "NOUVEAU", modeDetention: "PROPRIETE",
++                coutAcquisition: 120000, dureeAmortissementMois: 60,
++                consoL100km: 8, prixCarburantLitre: 14.8,
++                assuranceMois: 400, entretienMois: 300, kmMoyensMois: 2000, actif: true,
++              }
++              const next = [...vehicules, v]; setVehicules(next); saveVehicules(next)
++            }}
++            onDelete={id => { const next = vehicules.filter(x => x.id !== id); setVehicules(next); saveVehicules(next) }}
++          />
++
++          <ParamSection
++            titre="Prévendeurs suivis"
++            vide="Aucun prévendeur rattaché au module de coût."
++            addLabel="Importer depuis les comptes ERP"
++            items={prevendeurs.map(p => ({
++              id: p.id, principal: `${p.nom} — ${p.typeContrat}`,
++              secondaire: [
++                p.grilleSalarialeId ? `grille ${grilles.find(g => g.id === p.grilleSalarialeId)?.libelle ?? "?"}` : null,
++                p.regleFreelanceId ? `règle ${getRegles().find(r => r.id === p.regleFreelanceId)?.libelle ?? "?"}` : null,
++                p.vehiculeId ? `véhicule ${vehicules.find(v => v.id === p.vehiculeId)?.immatriculation ?? "?"}` : null,
++              ].filter(Boolean).join(" · ") || "aucun paramètre rattaché",
++            }))}
++            canEdit={canEdit}
++            onAdd={() => {
++              // userHasRole : un compte portant "prevendeur" en rôle SECONDAIRE
++              // doit être proposé lui aussi (même angle mort que la préparation).
++              const candidats = store.getUsers().filter(u => userHasRole(u, "prevendeur") && u.actif)
++              const deja = new Set(prevendeurs.map(p => p.userId))
++              const nouveaux = candidats.filter(u => !deja.has(u.id)).map((u): PrevendeurCout => ({
++                id: genCoutId("prev"), userId: u.id, nom: u.name,
++                typeContrat: "SALARIE", grilleSalarialeId: grilles[0]?.id,
++                vehiculeId: vehicules[0]?.id, actif: true,
++              }))
++              if (nouveaux.length === 0) { flash("Tous les prévendeurs actifs sont déjà suivis."); return }
++              const next = [...prevendeurs, ...nouveaux]; setPrevendeurs(next); savePrevendeurs(next)
++              flash(`${nouveaux.length} prévendeur(s) importé(s) depuis les comptes ERP.`)
++            }}
++            onDelete={id => { const next = prevendeurs.filter(x => x.id !== id); setPrevendeurs(next); savePrevendeurs(next) }}
++          />
++        </div>
++      )}
++
++      {/* ══ JOURNÉE OPÉRATIONNELLE ══════════════════════════════════════════ */}
++      {tab === "journee" && profile && (
++        <div className="flex flex-col gap-4">
++          <div className="flex gap-2 flex-wrap">
++            {profiles.map(p => (
++              <button key={p.id} onClick={() => setSelectedProfile(p.id)}
++                className={`px-3 py-2 rounded-xl text-xs font-bold border text-left ${
++                  selectedProfile === p.id ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"}`}>
++                {p.libelle}
++                <span className="block text-[10px] font-normal opacity-70">
++                  J{p.debutJourOffset === 0 ? "" : p.debutJourOffset} {p.heureDebut} → J{p.finJourOffset === 0 ? "" : `+${p.finJourOffset}`} {p.heureFin}
++                </span>
++              </button>
++            ))}
++          </div>
++
++          <div className="bg-card rounded-2xl border border-border p-5 flex flex-col gap-4">
++            <div className="flex flex-wrap gap-4 items-end">
++              <div className="flex flex-col gap-1">
++                <label className="text-xs font-semibold text-muted-foreground">Début</label>
++                <div className="flex gap-1">
++                  <select value={profile.debutJourOffset} disabled={!canEdit}
++                    onChange={e => updateProfile({ debutJourOffset: Number(e.target.value) })}
++                    className="px-2 py-2 rounded-xl border border-border bg-background text-sm">
++                    <option value={-1}>J-1</option><option value={0}>J</option>
++                  </select>
++                  <input type="time" value={profile.heureDebut} disabled={!canEdit}
++                    onChange={e => updateProfile({ heureDebut: e.target.value })}
++                    className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
++                </div>
++              </div>
++              <div className="flex flex-col gap-1">
++                <label className="text-xs font-semibold text-muted-foreground">Fin</label>
++                <div className="flex gap-1">
++                  <select value={profile.finJourOffset} disabled={!canEdit}
++                    onChange={e => updateProfile({ finJourOffset: Number(e.target.value) })}
++                    className="px-2 py-2 rounded-xl border border-border bg-background text-sm">
++                    <option value={0}>J</option><option value={1}>J+1</option>
++                  </select>
++                  <input type="time" value={profile.heureFin} disabled={!canEdit}
++                    onChange={e => updateProfile({ heureFin: e.target.value })}
++                    className="px-3 py-2 rounded-xl border border-border bg-background text-sm" />
++                </div>
++              </div>
++            </div>
++
++            {/* Visualisation du trou de couverture, AVANT validation */}
++            {(() => {
++              const trou = heuresNonCouvertes(profile)
++              const couvert = 24 - trou
++              return (
++                <div className="rounded-xl border border-border p-4 bg-muted/30 flex flex-col gap-2">
++                  <div className="flex h-6 rounded-lg overflow-hidden border border-border">
++                    <div className="bg-emerald-500 flex items-center justify-center text-[10px] font-bold text-white"
++                      style={{ width: `${(couvert / 24) * 100}%` }}>
++                      {couvert.toFixed(1)} h couvertes
++                    </div>
++                    {trou > 0 && (
++                      <div className="bg-red-200 flex items-center justify-center text-[10px] font-bold text-red-800"
++                        style={{ width: `${(trou / 24) * 100}%` }}>
++                        {trou.toFixed(1)} h
++                      </div>
++                    )}
++                  </div>
++                  {trou > 0 && (
++                    <p className="text-xs text-amber-700 font-semibold">
++                      ⚠ {trou.toFixed(1)} h sur 24 ne sont couvertes par aucune journée opérationnelle.
++                      Sur les 30 derniers jours, <strong>{impact.horsPlage}</strong> commande(s) sur {impact.total} seraient
++                      concernées → traitées selon la politique choisie ci-dessous.
++                    </p>
++                  )}
++                </div>
++              )
++            })()}
++
++            <div className="flex flex-col gap-2">
++              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Enregistrements hors plage</span>
++              {POLITIQUES.map(p => (
++                <label key={p.id} className="flex items-start gap-2 text-sm cursor-pointer">
++                  <input type="radio" name="politique" checked={profile.politiqueHorsPlage === p.id} disabled={!canEdit}
++                    onChange={() => updateProfile({ politiqueHorsPlage: p.id })} className="mt-1" />
++                  <span>
++                    <span className="font-semibold text-foreground">{p.label}</span>
++                    <span className="block text-xs text-muted-foreground">{p.aide}</span>
++                  </span>
++                </label>
++              ))}
++            </div>
++
++            <p className="text-xs text-muted-foreground">
++              Types rattachés : {profile.typesEntite.length ? profile.typesEntite.join(", ") : "— (profil de repli)"}
++            </p>
++
++            {canEdit && (
++              <button onClick={handleSaveProfiles}
++                className="self-start px-4 py-2.5 rounded-xl bg-primary text-white text-sm font-bold hover:opacity-90">
++                Enregistrer
++              </button>
++            )}
++          </div>
++        </div>
++      )}
++    </div>
++  )
++}
++
++// ─── Bloc de paramétrage générique ──────────────────────────────────────────
++
++function ParamSection({ titre, vide, items, canEdit, onAdd, onDelete, addLabel }: {
++  titre: string
++  vide: string
++  items: { id: string; principal: string; secondaire: string }[]
++  canEdit: boolean
++  onAdd: () => void
++  onDelete: (id: string) => void
++  addLabel?: string
++}) {
++  return (
++    <div className="bg-card rounded-2xl border border-border p-5 flex flex-col gap-3">
++      <div className="flex items-center justify-between">
++        <h3 className="text-sm font-bold text-foreground">{titre}</h3>
++        {canEdit && (
++          <button onClick={onAdd} className="px-3 py-1.5 rounded-lg border border-border text-xs font-bold hover:bg-muted">
++            {addLabel ?? "+ Ajouter"}
++          </button>
++        )}
++      </div>
++      {items.length === 0 ? (
++        <p className="text-xs text-muted-foreground">{vide}</p>
++      ) : (
++        <div className="flex flex-col gap-1">
++          {items.map(i => (
++            <div key={i.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/40">
++              <div className="min-w-0">
++                <p className="text-sm font-semibold text-foreground truncate">{i.principal}</p>
++                <p className="text-[11px] text-muted-foreground truncate">{i.secondaire}</p>
++              </div>
++              {canEdit && (
++                <button onClick={() => onDelete(i.id)}
++                  className="px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-red-600 shrink-0">
++                  Supprimer
++                </button>
++              )}
++            </div>
++          ))}
++        </div>
++      )}
++    </div>
++  )
++}
+diff --git a/artifacts/freshlink/src/components/backoffice/BackOfficeLayout.tsx b/artifacts/freshlink/src/components/backoffice/BackOfficeLayout.tsx
+index 2143248..d6caf30 100644
+--- a/artifacts/freshlink/src/components/backoffice/BackOfficeLayout.tsx
++++ b/artifacts/freshlink/src/components/backoffice/BackOfficeLayout.tsx
+@@ -124,6 +124,7 @@ const BOIntelligencePrix     = React.lazy(() => import("./BOIntelligencePrix"))
+ const BOConcurrence          = React.lazy(() => import("./BOConcurrence"))
+ const BOPricingConcurrence   = React.lazy(() => import("./BOPricingConcurrence"))
+ const BOCoutLivraison        = React.lazy(() => import("./BOCoutLivraison"))
++const BOCoutPrevendeur       = React.lazy(() => import("./BOCoutPrevendeur"))
+ const BOBonLivraison         = React.lazy(() => import("./BOBonLivraison"))
+ const BOHRDocuments          = React.lazy(() => import("./BOHRDocuments"))
+ const BOLoyalty              = React.lazy(() => import("./BOLoyalty"))
+@@ -175,7 +176,7 @@ export type Tab =
+   | "camera_perms" | "cutoffs"
+   | "depots"
+   | "rh_productivite" | "rh_comptabilite"
+-  | "intelligence_prix" | "concurrence" | "cout_livraison" | "bon_livraison" | "hr_documents"
++  | "intelligence_prix" | "concurrence" | "cout_livraison" | "cout_prevendeur" | "bon_livraison" | "hr_documents"
+   | "loyalty" | "performance_incentives" | "template_editor"
+   | "investissement" | "sourcing" | "pricing" | "pricing_concurrent" | "finance_cdg"
+   | "demandes_comptes" | "web_integration" | "journal_activite"
+@@ -357,6 +358,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
+       { id: "retour",       label: "Retours",              labelAr: "المرتجعات",        permKey: "canViewLogistique", icon: <Icon d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /> },
+       { id: "trip_charges", label: "Coût Trajet",          labelAr: "تكلفة المسار",     permKey: "canViewLogistique", icon: <Icon d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 11h.01M12 11h.01M15 11h.01M12 7h.01M15 7h.01M9 7H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M7 7V5a2 2 0 012-2h8a2 2 0 012 2v2" /> },
+       { id: "cout_livraison", label: "Coût Livraison",     labelAr: "تكلفة التوصيل",    permKey: "canViewLogistique", icon: <Icon d="M3 3v18h18M9 17V9m4 8V5m4 12v-6" /> },
++      { id: "cout_prevendeur", label: "Coût Prévendeur",   labelAr: "تكلفة البائع",     permKey: "canViewLogistique", icon: <Icon d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /> },
+       { id: "gps_tracker",  label: "GPS Livreurs",         labelAr: "تتبع GPS",         icon: (
+         <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+@@ -462,7 +464,7 @@ const NAV_GROUP_DEF: { label: string; labelAr: string; ids: string[] }[] = [
+   { label: "Prix, Marge & Concurrence",   labelAr: "الأسعار والهامش والمنافسة", ids: ["pricing", "pricing_concurrent", "category_pricing", "echelons_client", "moteur_commercial", "intelligence_prix", "concurrence"] },
+   { label: "Marketing & E-commerce",      labelAr: "التسويق والمتجر الإلكتروني", ids: ["marketplace", "promo_codes", "loyalty", "gifts_v3", "loterie", "shop_analytics"] },
+   { label: "Clients & Comptes Web",       labelAr: "الزبائن والحسابات",    ids: ["comptes_externes", "demandes_comptes"] },
+-  { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "gps_tracker"] },
++  { label: "Logistique & Transport",      labelAr: "اللوجستيك والنقل",     ids: ["dispatch", "preparation", "bon_livraison", "retour", "trip_charges", "cout_livraison", "cout_prevendeur", "gps_tracker"] },
+   // Cash & BL et Caisse Acheteur remontent devant Fiscalite : ce sont des
+   // encaissements/decaissements quotidiens (vente au comptant + achats
+   // payes cash), contrairement a la fiscalite/controle de gestion qui sont
+@@ -552,6 +554,7 @@ const PANELS: Record<Tab, (u: User, nav: (tab: Tab) => void) => React.ReactNode>
+   concurrence: (u) => <BOConcurrence user={u} />,
+   pricing_concurrent: (u) => <BOPricingConcurrence user={u} />,
+   cout_livraison: (_u) => <BOCoutLivraison />,
++  cout_prevendeur: (u) => <BOCoutPrevendeur user={u} />,
+   bon_livraison:     (u) => <BOBonLivraison user={u} />,
+   hr_documents:          (u) => <BOHRDocuments user={u} />,
+   loyalty:               (u) => <BOLoyalty user={u} />,
+diff --git a/artifacts/freshlink/src/lib/businessDay.ts b/artifacts/freshlink/src/lib/businessDay.ts
+new file mode 100644
+index 0000000..12a2920
+--- /dev/null
++++ b/artifacts/freshlink/src/lib/businessDay.ts
+@@ -0,0 +1,234 @@
++"use client"
++
++// ═══════════════════════════════════════════════════════════════════════════
++//  Journée Opérationnelle (Business Day)
++//
++//  Une journée opérationnelle est un intervalle SEMI-OUVERT [début, fin) qui
++//  ne coïncide pas avec la date calendaire : la prise de commande démarre à
++//  J-1 14:00 et se termine à J 04:00, mais tout ce qui tombe dedans doit être
++//  imputé à la date comptable J.
++//
++//  Deux invariants qui justifient la forme du code ci-dessous :
++//
++//  1. SEMI-OUVERT. Avec des bornes fermées des deux côtés, un enregistrement
++//     pile à 04:00 appartiendrait à la fois à J et à J+1 : il serait compté
++//     deux fois dans le CA ET deux fois dans les coûts. Le semi-ouvert garantit
++//     une partition stricte de l'axe du temps.
++//
++//  2. HEURE LOCALE. Toutes les bornes sont construites via Date(y, m, d, h, min).
++//     Jamais toISOString() : celui-ci rend la date UTC et décale d'un jour selon
++//     l'heure — bug déjà corrigé à répétition dans ce projet.
++//
++//  Le profil PREVENTE lit sa configuration dans "fl_commande_cutoff_config",
++//  la même clé que store.getCommandeCutoffConfig(). C'est volontaire : il ne
++//  doit exister qu'UNE définition du cycle de commande. Ce projet a déjà connu
++//  deux copies du cutoff codées en dur à 14h, désynchronisées de la config —
++//  changer le cutoff n'avait alors aucun effet sur une partie des écrans.
++// ═══════════════════════════════════════════════════════════════════════════
++
++export type PolitiqueHorsPlage = "RATTACHER_SUIVANT" | "RATTACHER_PRECEDENT" | "REJETER"
++
++export interface BusinessDayProfile {
++  id: string
++  libelle: string
++  heureDebut: string          // "14:00"
++  debutJourOffset: number     // -1 = la veille (J-1), 0 = le jour J
++  heureFin: string            // "04:00"
++  finJourOffset: number       // 0 = le jour J, 1 = le lendemain
++  politiqueHorsPlage: PolitiqueHorsPlage
++  typesEntite: string[]
++}
++
++export const BUSINESS_DAY_LS_KEY = "fl_business_day_profiles"
++const CUTOFF_LS_KEY = "fl_commande_cutoff_config"
++
++export const DEFAULT_PROFILES: BusinessDayProfile[] = [
++  {
++    id: "PREVENTE", libelle: "Prévente",
++    heureDebut: "14:00", debutJourOffset: -1,
++    heureFin: "04:00", finJourOffset: 0,
++    politiqueHorsPlage: "RATTACHER_SUIVANT",
++    typesEntite: ["commande", "visite", "trajet_prevente", "depense_prevente"],
++  },
++  {
++    id: "LIVRAISON", libelle: "Livraison",
++    heureDebut: "04:00", debutJourOffset: 0,
++    heureFin: "14:00", finJourOffset: 0,
++    politiqueHorsPlage: "RATTACHER_SUIVANT",
++    typesEntite: ["trip", "bon_livraison", "retour"],
++  },
++  {
++    id: "ACHAT", libelle: "Achat",
++    heureDebut: "22:00", debutJourOffset: -1,
++    heureFin: "10:00", finJourOffset: 0,
++    politiqueHorsPlage: "RATTACHER_SUIVANT",
++    typesEntite: ["bon_achat", "reception"],
++  },
++  {
++    id: "DEFAUT", libelle: "Journée calendaire",
++    heureDebut: "00:00", debutJourOffset: 0,
++    heureFin: "00:00", finJourOffset: 1,
++    politiqueHorsPlage: "RATTACHER_SUIVANT",
++    typesEntite: [],
++  },
++]
++
++function readLS<T>(key: string, fallback: T): T {
++  if (typeof window === "undefined") return fallback
++  try {
++    const raw = localStorage.getItem(key)
++    return raw ? JSON.parse(raw) as T : fallback
++  } catch { return fallback }
++}
++
++export function getBusinessDayProfiles(): BusinessDayProfile[] {
++  const stored = readLS<BusinessDayProfile[]>(BUSINESS_DAY_LS_KEY, [])
++  const base = stored.length > 0 ? stored : DEFAULT_PROFILES
++  // PREVENTE reste asservi à la config cutoff partagée avec store.ts : une
++  // seule source de vérité pour le cycle de commande, quel que soit l'écran
++  // qui l'a modifiée.
++  const cutoff = readLS<{ heureDebut?: string; heureFin?: string }>(CUTOFF_LS_KEY, {})
++  return base.map(p => p.id === "PREVENTE"
++    ? { ...p, heureDebut: cutoff.heureDebut || p.heureDebut, heureFin: cutoff.heureFin || p.heureFin }
++    : p)
++}
++
++export function saveBusinessDayProfiles(profiles: BusinessDayProfile[]): void {
++  if (typeof window === "undefined") return
++  localStorage.setItem(BUSINESS_DAY_LS_KEY, JSON.stringify(profiles))
++  // Répercute PREVENTE sur la clé cutoff partagée, sinon les écrans qui lisent
++  // store.getCommandeCutoffConfig() garderaient l'ancienne valeur.
++  const prevente = profiles.find(p => p.id === "PREVENTE")
++  if (prevente) {
++    localStorage.setItem(CUTOFF_LS_KEY, JSON.stringify({
++      heureDebut: prevente.heureDebut, heureFin: prevente.heureFin,
++    }))
++  }
++}
++
++export function getProfile(id: string): BusinessDayProfile {
++  const all = getBusinessDayProfiles()
++  return all.find(p => p.id === id)
++    ?? all.find(p => p.id === "DEFAUT")
++    ?? DEFAULT_PROFILES[DEFAULT_PROFILES.length - 1]
++}
++
++/** Profil applicable à un type d'entité ("commande", "visite"…), DEFAUT sinon. */
++export function profileForEntity(typeEntite: string): BusinessDayProfile {
++  const all = getBusinessDayProfiles()
++  return all.find(p => p.typesEntite.includes(typeEntite))
++    ?? all.find(p => p.id === "DEFAUT")
++    ?? DEFAULT_PROFILES[DEFAULT_PROFILES.length - 1]
++}
++
++// ─── Manipulation de dates locales ──────────────────────────────────────────
++
++function parseHM(hm: string): [number, number] {
++  const [h, m] = hm.split(":").map(Number)
++  return [Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0]
++}
++
++export function ymd(d: Date): string {
++  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
++}
++
++/**
++ * Instant local à partir d'une date comptable + décalage de jours + heure.
++ * Passer par le constructeur Date plutôt que par une arithmétique en
++ * millisecondes garde correctes les journées de 23 h / 25 h (heure légale).
++ */
++function at(dateStr: string, dayOffset: number, hm: string): Date | null {
++  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr)
++  if (!m) return null
++  const [h, min] = parseHM(hm)
++  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + dayOffset, h, min, 0, 0)
++}
++
++/** Bornes [début, fin) de la journée opérationnelle `dateStr` pour ce profil. */
++export function businessDayBounds(dateStr: string, profileId: string): { start: Date; end: Date } | null {
++  const p = getProfile(profileId)
++  const start = at(dateStr, p.debutJourOffset, p.heureDebut)
++  const end = at(dateStr, p.finJourOffset, p.heureFin)
++  if (!start || !end) return null
++  return { start, end }
++}
++
++function contains(dateStr: string, profileId: string, t: Date): boolean {
++  const b = businessDayBounds(dateStr, profileId)
++  if (!b) return false
++  return t.getTime() >= b.start.getTime() && t.getTime() < b.end.getTime()   // semi-ouvert
++}
++
++function shiftDays(dateStr: string, n: number): string {
++  const d = at(dateStr, n, "12:00")   // midi : insensible aux sauts d'heure légale
++  return d ? ymd(d) : dateStr
++}
++
++export interface BusinessDayResolution {
++  date: string
++  horsPlage: boolean
++  rejete: boolean
++}
++
++/**
++ * Date comptable d'un horodatage pour un profil donné.
++ *
++ * Quand l'instant tombe dans un TROU de couverture (avec 14:00→04:00, la plage
++ * 04:00→14:00 n'appartient à aucune journée), on n'invente rien en silence :
++ * la politique du profil décide, et `horsPlage` remonte l'information pour le
++ * rapport de contrôle. Un enregistrement ne doit JAMAIS pouvoir disparaître de
++ * tous les rapports faute de rattachement.
++ */
++export function resolveBusinessDay(ts: string | Date, profileId: string): BusinessDayResolution {
++  const t = ts instanceof Date ? ts : new Date(ts)
++  if (Number.isNaN(t.getTime())) return { date: "", horsPlage: true, rejete: false }
++
++  const base = ymd(t)
++  // La journée contenant l'instant est forcément J-1, J ou J+1 : les offsets
++  // supportés ne dépassent pas un jour de part et d'autre.
++  for (const cand of [base, shiftDays(base, 1), shiftDays(base, -1)]) {
++    if (contains(cand, profileId, t)) return { date: cand, horsPlage: false, rejete: false }
++  }
++
++  const p = getProfile(profileId)
++  if (p.politiqueHorsPlage === "REJETER") return { date: "", horsPlage: true, rejete: true }
++
++  if (p.politiqueHorsPlage === "RATTACHER_PRECEDENT") {
++    for (const cand of [base, shiftDays(base, -1), shiftDays(base, -2)]) {
++      const b = businessDayBounds(cand, profileId)
++      if (b && b.end.getTime() <= t.getTime()) return { date: cand, horsPlage: true, rejete: false }
++    }
++    return { date: base, horsPlage: true, rejete: false }
++  }
++
++  // RATTACHER_SUIVANT (défaut) : prochaine journée qui s'ouvre.
++  for (const cand of [base, shiftDays(base, 1), shiftDays(base, 2)]) {
++    const b = businessDayBounds(cand, profileId)
++    if (b && b.start.getTime() > t.getTime()) return { date: cand, horsPlage: true, rejete: false }
++  }
++  return { date: base, horsPlage: true, rejete: false }
++}
++
++/** Date comptable seule, pour les appels qui n'ont pas besoin du diagnostic. */
++export function businessDayOf(ts: string | Date, profileId: string): string {
++  return resolveBusinessDay(ts, profileId).date
++}
++
++/** Date opérationnelle courante d'un profil. */
++export function currentBusinessDay(profileId: string): string {
++  return businessDayOf(new Date(), profileId)
++}
++
++/**
++ * Heures NON couvertes par le profil sur 24 h. Sert l'avertissement de l'écran
++ * de configuration : une fenêtre 14:00→04:00 laisse 10 h de trou, et il vaut
++ * mieux que l'utilisateur le voie avant de valider qu'après.
++ */
++export function heuresNonCouvertes(p: BusinessDayProfile): number {
++  const [hd, md] = parseHM(p.heureDebut)
++  const [hf, mf] = parseHM(p.heureFin)
++  const debutMin = (p.debutJourOffset * 24 * 60) + hd * 60 + md
++  const finMin = (p.finJourOffset * 24 * 60) + hf * 60 + mf
++  const couvert = Math.max(0, finMin - debutMin)
++  return Math.max(0, 24 * 60 - couvert) / 60
++}
+diff --git a/artifacts/freshlink/src/lib/coutPrevendeur.ts b/artifacts/freshlink/src/lib/coutPrevendeur.ts
+new file mode 100644
+index 0000000..b800c50
+--- /dev/null
++++ b/artifacts/freshlink/src/lib/coutPrevendeur.ts
+@@ -0,0 +1,593 @@
++"use client"
++
++// ═══════════════════════════════════════════════════════════════════════════
++//  Coût Prévendeur & Coût par Trajet
++//
++//  Coût_trajet = C_fixe + C_transport + C_charges + C_freelance
++//
++//  Les tables vivent en localStorage (comme fl_intel_prix côté Concurrence) et
++//  sont déclarées dans les 3 allowlists de synchronisation (autoSync
++//  SYNCED_KEYS, db.ts ERP_TABLE_MAP, api-server ALLOWED_TABLES). Une table
++//  absente d'UNE seule des trois reste silencieusement locale à l'appareil qui
++//  l'a créée — c'est exactement le bug qui faisait « disparaître la liste des
++//  transporteurs » d'un navigateur à l'autre.
++// ═══════════════════════════════════════════════════════════════════════════
++
++import { resolveBusinessDay } from "@/lib/businessDay"
++import { store, type Commande, type Visite } from "@/lib/store"
++
++// ─── Modèle ────────────────────────────────────────────────────────────────
++
++export type TypeContrat = "SALARIE" | "FREELANCE" | "PRESTATAIRE"
++export type BaseRepartition = "DUREE" | "FREQUENCE" | "FORFAIT_JOUR"
++export type ModeDetention = "PROPRIETE" | "LOCATION" | "PERSONNEL"
++export type ModeCumulPaliers = "PROGRESSIF" | "ATTEINT"
++export type StatutTrajet = "PLANIFIE" | "EN_COURS" | "CLOTURE" | "ANNULE"
++
++export type AssietteVariable =
++  | "CA" | "TONNAGE" | "NB_CLIENTS_VISITES" | "NB_COMMANDES"
++  | "TAUX_CONVERSION" | "NB_NOUVEAUX_CLIENTS"
++
++// Assiettes qui sont des RATIOS et non des volumes. Un barème progressif
++// découperait un pourcentage « par tranches », ce qui n'a aucun sens métier :
++// pour elles le moteur force le mode ATTEINT (cf. calculerVariable).
++const ASSIETTES_RATIO: AssietteVariable[] = ["TAUX_CONVERSION"]
++
++export interface GrilleSalariale {
++  id: string
++  libelle: string
++  salaireBrutMensuel: number
++  tauxChargesPatronales: number      // 0.20 = 20 %
++  primePanierJour: number
++  forfaitTelecomMois: number
++  amortissementMaterielMois: number
++  joursTravaillesMois: number
++  heuresParJour: number
++  baseRepartition: BaseRepartition
++  valideDu: string
++  valideAu?: string
++}
++
++export interface Vehicule {
++  id: string
++  immatriculation: string
++  modeDetention: ModeDetention
++  coutAcquisition?: number
++  dureeAmortissementMois?: number
++  loyerMensuel?: number
++  indemniteKm?: number
++  consoL100km: number
++  prixCarburantLitre: number
++  assuranceMois: number
++  entretienMois: number
++  kmMoyensMois: number
++  actif: boolean
++}
++
++export interface PalierFreelance {
++  id: string
++  assiette: AssietteVariable
++  seuilMin: number
++  seuilMax?: number
++  typeCalcul: "POURCENTAGE" | "MONTANT_UNITAIRE" | "FORFAIT"
++  valeur: number
++}
++
++export interface RegleFreelance {
++  id: string
++  libelle: string
++  forfaitParTournee: number
++  forfaitParJour: number
++  modeCumulPaliers: ModeCumulPaliers
++  plafondVariable?: number
++  plancherGaranti: number
++  paliers: PalierFreelance[]
++  valideDu: string
++  valideAu?: string
++}
++
++export interface PrevendeurCout {
++  id: string
++  userId?: string
++  nom: string
++  typeContrat: TypeContrat
++  secteurDefaut?: string
++  grilleSalarialeId?: string
++  regleFreelanceId?: string
++  vehiculeId?: string
++  actif: boolean
++}
++
++export interface TrajetPrevente {
++  id: string
++  numero: string
++  prevendeurId: string
++  prevendeurNom: string
++  vehiculeId?: string
++  secteur?: string
++  dateOperationnelle: string
++  debutReel: string
++  finReelle?: string
++  kmDebut?: number
++  kmFin?: number
++  statut: StatutTrajet
++  motifAnnulation?: string
++  // Snapshot figé à la clôture — jamais recalculé ensuite (cf. cloturerTrajet)
++  coutFixeSalarial?: number
++  coutTransport?: number
++  coutCharges?: number
++  coutFreelanceFixe?: number
++  coutFreelanceVar?: number
++  coutTotal?: number
++  caGenere?: number
++  margeBrute?: number
++  nbClientsVisites?: number
++  nbCommandes?: number
++  tonnage?: number
++  clotureLe?: string
++  clotureesPar?: string
++  anomalies?: string[]
++  parametresSnapshot?: Record<string, unknown>
++}
++
++// ─── Persistance ────────────────────────────────────────────────────────────
++
++export const LS_GRILLES     = "fl_cp_grilles"
++export const LS_VEHICULES   = "fl_cp_vehicules"
++export const LS_REGLES      = "fl_cp_regles_freelance"
++export const LS_PREVENDEURS = "fl_cp_prevendeurs"
++export const LS_TRAJETS     = "fl_cp_trajets"
++
++function get<T>(key: string): T[] {
++  if (typeof window === "undefined") return []
++  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) as T[] : [] } catch { return [] }
++}
++function set<T>(key: string, v: T[]): void {
++  if (typeof window === "undefined") return
++  localStorage.setItem(key, JSON.stringify(v))
++}
++
++export const getGrilles      = () => get<GrilleSalariale>(LS_GRILLES)
++export const saveGrilles     = (v: GrilleSalariale[]) => set(LS_GRILLES, v)
++export const getVehicules    = () => get<Vehicule>(LS_VEHICULES)
++export const saveVehicules   = (v: Vehicule[]) => set(LS_VEHICULES, v)
++export const getRegles       = () => get<RegleFreelance>(LS_REGLES)
++export const saveRegles      = (v: RegleFreelance[]) => set(LS_REGLES, v)
++export const getPrevendeurs  = () => get<PrevendeurCout>(LS_PREVENDEURS)
++export const savePrevendeurs = (v: PrevendeurCout[]) => set(LS_PREVENDEURS, v)
++export const getTrajets      = () => get<TrajetPrevente>(LS_TRAJETS)
++export const saveTrajets     = (v: TrajetPrevente[]) => set(LS_TRAJETS, v)
++
++export function genCoutId(prefix: string): string {
++  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
++}
++
++/**
++ * Version d'un paramètre en vigueur à une date donnée — et non la version
++ * courante. Sans cela, une augmentation de salaire en mars réécrirait
++ * rétroactivement le coût de janvier et fausserait toute comparaison historique.
++ */
++function versionA<T extends { valideDu: string; valideAu?: string }>(items: T[], date: string): T | undefined {
++  return items
++    .filter(i => i.valideDu <= date && (!i.valideAu || i.valideAu >= date))
++    .sort((a, b) => b.valideDu.localeCompare(a.valideDu))[0]
++}
++
++// ─── Métriques d'un trajet ──────────────────────────────────────────────────
++
++export interface MetriquesTrajet {
++  ca: number
++  margeBrute: number
++  tonnage: number
++  nbClientsVisites: number
++  nbCommandes: number
++  tauxConversion: number | null      // null = non évaluable (0 visite)
++  nbNouveauxClients: number
++}
++
++/**
++ * Agrège les métriques sur la DATE OPÉRATIONNELLE figée du trajet, pas sur la
++ * date calendaire : une tournée démarrée à 14:02 appartient déjà à la journée
++ * du lendemain, et ses commandes doivent suivre.
++ */
++export function metriquesTrajet(trajet: TrajetPrevente): MetriquesTrajet {
++  const cmds = store.getCommandes().filter((c: Commande) =>
++    c.statut !== "refuse" &&
++    c.commercialId === trajet.prevendeurId &&
++    resolveBusinessDay(c.createdAt ?? `${c.date}T12:00:00`, "PREVENTE").date === trajet.dateOperationnelle
++  )
++  const visites = store.getVisites().filter((v: Visite) =>
++    v.prevendeurId === trajet.prevendeurId &&
++    resolveBusinessDay(`${v.date}T12:00:00`, "PREVENTE").date === trajet.dateOperationnelle
++  )
++
++  const articles = store.getArticles()
++  let ca = 0, cout = 0, tonnage = 0
++  for (const c of cmds) {
++    for (const l of c.lignes) {
++      ca += l.quantite * l.prixVente
++      tonnage += l.quantite
++      const art = articles.find(a => a.id === l.articleId)
++      cout += l.quantite * (art?.prixAchat ?? 0)
++    }
++  }
++
++  const nbClientsVisites = new Set(visites.map(v => v.clientId)).size
++  // 0/0 n'est pas 0 % mais INDÉFINI. Renvoyer 0 pénaliserait à tort un
++  // prévendeur dont la tournée a été annulée pour une raison externe.
++  const tauxConversion = visites.length > 0
++    ? (visites.filter(v => v.resultat === "commande").length / visites.length) * 100
++    : null
++
++  return {
++    ca,
++    margeBrute: ca - cout,
++    tonnage,
++    nbClientsVisites,
++    nbCommandes: cmds.length,
++    tauxConversion,
++    nbNouveauxClients: 0,
++  }
++}
++
++// ─── Part variable freelance ────────────────────────────────────────────────
++
++function valeurAssiette(a: AssietteVariable, m: MetriquesTrajet): number | null {
++  switch (a) {
++    case "CA":                  return m.ca
++    case "TONNAGE":             return m.tonnage
++    case "NB_CLIENTS_VISITES":  return m.nbClientsVisites
++    case "NB_COMMANDES":        return m.nbCommandes
++    case "NB_NOUVEAUX_CLIENTS": return m.nbNouveauxClients
++    case "TAUX_CONVERSION":     return m.tauxConversion   // peut être null
++  }
++}
++
++function appliquer(p: PalierFreelance, base: number): number {
++  switch (p.typeCalcul) {
++    case "POURCENTAGE":      return base * p.valeur / 100
++    case "MONTANT_UNITAIRE": return base * p.valeur
++    case "FORFAIT":          return p.valeur
++  }
++}
++
++export interface ResultatVariable {
++  montant: number
++  plafonne: boolean
++  assiettesNonEvaluables: AssietteVariable[]
++}
++
++export function calculerVariable(regle: RegleFreelance, m: MetriquesTrajet): ResultatVariable {
++  let total = 0
++  const nonEvaluables: AssietteVariable[] = []
++  const assiettes = [...new Set(regle.paliers.map(p => p.assiette))]
++
++  for (const a of assiettes) {
++    const valeur = valeurAssiette(a, m)
++    if (valeur === null) { nonEvaluables.push(a); continue }
++
++    const paliers = regle.paliers
++      .filter(p => p.assiette === a)
++      .sort((x, y) => x.seuilMin - y.seuilMin)
++
++    // Un ratio ne se découpe pas en tranches : mode ATTEINT forcé.
++    const mode = ASSIETTES_RATIO.includes(a) ? "ATTEINT" : regle.modeCumulPaliers
++
++    if (mode === "ATTEINT") {
++      const atteint = [...paliers].reverse().find(p => valeur >= p.seuilMin)
++      if (atteint) total += appliquer(atteint, valeur)
++    } else {
++      for (const p of paliers) {
++        const borneHaute = Math.min(valeur, p.seuilMax ?? Number.POSITIVE_INFINITY)
++        const tranche = Math.max(0, borneHaute - p.seuilMin)
++        if (tranche > 0) total += appliquer(p, tranche)
++      }
++    }
++  }
++
++  let plafonne = false
++  if (regle.plafondVariable != null && total > regle.plafondVariable) {
++    total = regle.plafondVariable
++    plafonne = true
++  }
++  return { montant: total, plafonne, assiettesNonEvaluables: nonEvaluables }
++}
++
++// ─── Moteur de calcul ───────────────────────────────────────────────────────
++
++export interface DetailCout {
++  fixeSalarial: number
++  transport: number
++  charges: number
++  freelanceFixe: number
++  freelanceVariable: number
++  total: number
++  anomalies: string[]
++  dureeHeures: number
++  km: number
++  snapshot: Record<string, unknown>
++}
++
++export interface ContexteCalcul {
++  /** Nombre de trajets non annulés du prévendeur sur la même date opérationnelle. */
++  nbTrajetsDuJour: number
++  /** Km médian du secteur, utilisé en repli quand le relevé est aberrant. */
++  kmMedianSecteur?: number
++}
++
++const SEUIL_KM_ABERRANT = 500
++
++export function calculerCoutTrajet(
++  trajet: TrajetPrevente,
++  metriques: MetriquesTrajet,
++  ctx: ContexteCalcul,
++): DetailCout {
++  const anomalies: string[] = []
++  const date = trajet.dateOperationnelle
++  const prevendeur = getPrevendeurs().find(p => p.id === trajet.prevendeurId)
++
++  // ── Durée ────────────────────────────────────────────────────────────────
++  let dureeHeures = 0
++  let dureeInvalide = false
++  if (trajet.finReelle) {
++    const ms = new Date(trajet.finReelle).getTime() - new Date(trajet.debutReel).getTime()
++    if (Number.isFinite(ms) && ms > 0) dureeHeures = ms / 3_600_000
++    else dureeInvalide = true
++  } else dureeInvalide = true
++  if (dureeInvalide) anomalies.push("Durée invalide ou trajet non clôturé — répartition forfaitaire appliquée")
++
++  // ── Kilométrage ──────────────────────────────────────────────────────────
++  let km = 0
++  if (trajet.kmDebut != null && trajet.kmFin != null) {
++    const brut = trajet.kmFin - trajet.kmDebut
++    if (brut < 0) {
++      // Ne pas retenir 0 : cela minorerait silencieusement le coût transport.
++      km = ctx.kmMedianSecteur ?? 0
++      anomalies.push("Compteur incohérent (km fin < km début) — km médian du secteur retenu")
++    } else if (brut > SEUIL_KM_ABERRANT) {
++      km = ctx.kmMedianSecteur ?? SEUIL_KM_ABERRANT
++      anomalies.push(`Kilométrage aberrant (${brut} km) — valeur de repli retenue`)
++    } else km = brut
++  } else if (trajet.vehiculeId) {
++    km = ctx.kmMedianSecteur ?? 0
++    anomalies.push("Relevé kilométrique absent — km médian du secteur retenu")
++  }
++
++  // ── Coûts fixes salariaux ────────────────────────────────────────────────
++  let fixeSalarial = 0
++  const grilles = getGrilles().filter(g => !prevendeur?.grilleSalarialeId || g.id === prevendeur.grilleSalarialeId)
++  const grille = versionA(grilles, date)
++  let coutJour = 0
++  if (grille && prevendeur?.typeContrat === "SALARIE") {
++    coutJour = (grille.salaireBrutMensuel * (1 + grille.tauxChargesPatronales)) / Math.max(1, grille.joursTravaillesMois)
++    const base = dureeInvalide ? "FORFAIT_JOUR" : grille.baseRepartition
++    if (base === "DUREE") {
++      fixeSalarial = (coutJour / Math.max(0.5, grille.heuresParJour)) * dureeHeures
++    } else if (base === "FREQUENCE") {
++      fixeSalarial = coutJour / Math.max(1, ctx.nbTrajetsDuJour)
++    } else {
++      fixeSalarial = coutJour
++    }
++  } else if (!grille && prevendeur?.typeContrat === "SALARIE") {
++    anomalies.push("Aucune grille salariale en vigueur à cette date — coût fixe non calculé")
++  }
++
++  // ── Coûts de transport ───────────────────────────────────────────────────
++  let transport = 0
++  const vehicule = getVehicules().find(v => v.id === (trajet.vehiculeId ?? prevendeur?.vehiculeId))
++  if (vehicule) {
++    if (vehicule.modeDetention === "PERSONNEL") {
++      // Ni amortissement ni loyer : le véhicule n'appartient pas à l'entreprise.
++      transport = km * (vehicule.indemniteKm ?? 0)
++    } else {
++      const carburant = (km * vehicule.consoL100km / 100) * vehicule.prixCarburantLitre
++      const amort = vehicule.modeDetention === "PROPRIETE" && vehicule.dureeAmortissementMois
++        ? (vehicule.coutAcquisition ?? 0) / vehicule.dureeAmortissementMois
++        : 0
++      const loyer = vehicule.modeDetention === "LOCATION" ? (vehicule.loyerMensuel ?? 0) : 0
++      const fixeMensuel = amort + loyer + vehicule.assuranceMois + vehicule.entretienMois
++      transport = carburant + fixeMensuel * (km / Math.max(1, vehicule.kmMoyensMois))
++    }
++  }
++
++  // ── Charges & frais généraux ─────────────────────────────────────────────
++  // Les charges patronales sont DÉJÀ dans fixeSalarial via tauxChargesPatronales.
++  // Les recompter ici est l'erreur de double comptage la plus fréquente.
++  let charges = 0
++  if (grille && prevendeur?.typeContrat === "SALARIE") {
++    charges = grille.primePanierJour
++      + (grille.forfaitTelecomMois + grille.amortissementMaterielMois) / Math.max(1, grille.joursTravaillesMois)
++  }
++
++  // ── Rémunération freelance ───────────────────────────────────────────────
++  let freelanceFixe = 0
++  let freelanceVariable = 0
++  const estExterne = prevendeur?.typeContrat === "FREELANCE" || prevendeur?.typeContrat === "PRESTATAIRE"
++  if (estExterne && prevendeur?.regleFreelanceId) {
++    const regles = getRegles().filter(r => r.id === prevendeur.regleFreelanceId)
++    const regle = versionA(regles, date)
++    if (regle) {
++      freelanceFixe = regle.forfaitParTournee + regle.forfaitParJour / Math.max(1, ctx.nbTrajetsDuJour)
++      const v = calculerVariable(regle, metriques)
++      freelanceVariable = v.montant
++      if (v.plafonne) anomalies.push(`Plafond de part variable atteint (${regle.plafondVariable} DH)`)
++      for (const a of v.assiettesNonEvaluables) {
++        anomalies.push(`Assiette « ${a} » non évaluable (dénominateur nul) — non rémunérée`)
++      }
++      // Le plancher porte sur le TOTAL fixe + variable, pas sur la part variable seule.
++      const sousTotal = freelanceFixe + freelanceVariable
++      if (regle.plancherGaranti > 0 && sousTotal < regle.plancherGaranti) {
++        freelanceFixe += regle.plancherGaranti - sousTotal
++        anomalies.push(`Plancher garanti appliqué (${regle.plancherGaranti} DH)`)
++      }
++    } else {
++      anomalies.push("Aucune règle freelance en vigueur à cette date — part variable non calculée")
++    }
++  }
++
++  const total = fixeSalarial + transport + charges + freelanceFixe + freelanceVariable
++
++  return {
++    fixeSalarial, transport, charges, freelanceFixe, freelanceVariable, total,
++    anomalies, dureeHeures, km,
++    snapshot: {
++      grilleId: grille?.id, grilleLibelle: grille?.libelle, coutJour,
++      vehiculeId: vehicule?.id, prixCarburant: vehicule?.prixCarburantLitre,
++      nbTrajetsDuJour: ctx.nbTrajetsDuJour, calculeLe: new Date().toISOString(),
++    },
++  }
++}
++
++/** Nombre de trajets non annulés d'un prévendeur sur une date opérationnelle. */
++export function nbTrajetsDuJour(prevendeurId: string, date: string): number {
++  return getTrajets().filter(t =>
++    t.prevendeurId === prevendeurId && t.dateOperationnelle === date && t.statut !== "ANNULE"
++  ).length || 1
++}
++
++/**
++ * Clôture un trajet : calcule puis FIGE les montants. Après clôture les valeurs
++ * sont immuables — une correction passe par une régularisation, jamais par une
++ * réécriture, sans quoi l'ERP et la comptabilité ne se rapprochent plus.
++ */
++export function cloturerTrajet(trajetId: string, parUtilisateur: string): TrajetPrevente | null {
++  const trajets = getTrajets()
++  const idx = trajets.findIndex(t => t.id === trajetId)
++  if (idx < 0) return null
++  const t = trajets[idx]
++
++  const m = metriquesTrajet(t)
++  const d = calculerCoutTrajet(t, m, { nbTrajetsDuJour: nbTrajetsDuJour(t.prevendeurId, t.dateOperationnelle) })
++
++  const clos: TrajetPrevente = {
++    ...t,
++    statut: "CLOTURE",
++    finReelle: t.finReelle ?? new Date().toISOString(),
++    coutFixeSalarial: d.fixeSalarial,
++    coutTransport: d.transport,
++    coutCharges: d.charges,
++    coutFreelanceFixe: d.freelanceFixe,
++    coutFreelanceVar: d.freelanceVariable,
++    coutTotal: d.total,
++    caGenere: m.ca,
++    margeBrute: m.margeBrute,
++    nbClientsVisites: m.nbClientsVisites,
++    nbCommandes: m.nbCommandes,
++    tonnage: m.tonnage,
++    clotureLe: new Date().toISOString(),
++    clotureesPar: parUtilisateur,
++    anomalies: d.anomalies,
++    parametresSnapshot: d.snapshot,
++  }
++  trajets[idx] = clos
++  saveTrajets(trajets)
++  return clos
++}
++
++/**
++ * Reventilation de fin de journée pour la base FREQUENCE : le nombre de trajets
++ * n'est connu avec certitude qu'une fois la journée terminée. Sans ce passage,
++ * le premier trajet clôturé porterait 100 % du coût journalier et les suivants 0.
++ * C'est la SEULE réécriture autorisée après clôture, bornée à la journée.
++ */
++export function reventilerJournee(date: string): number {
++  const trajets = getTrajets()
++  const concernes = trajets.filter(t => t.dateOperationnelle === date && t.statut === "CLOTURE")
++  let modifies = 0
++  for (const t of concernes) {
++    const m = metriquesTrajet(t)
++    const d = calculerCoutTrajet(t, m, { nbTrajetsDuJour: nbTrajetsDuJour(t.prevendeurId, date) })
++    if (Math.abs((t.coutTotal ?? 0) - d.total) > 0.005) {
++      Object.assign(t, {
++        coutFixeSalarial: d.fixeSalarial, coutTransport: d.transport, coutCharges: d.charges,
++        coutFreelanceFixe: d.freelanceFixe, coutFreelanceVar: d.freelanceVariable,
++        coutTotal: d.total, anomalies: d.anomalies, parametresSnapshot: d.snapshot,
++      })
++      modifies++
++    }
++  }
++  if (modifies > 0) saveTrajets(trajets)
++  return modifies
++}
++
++function joursCalendaires(d1: string, d2: string): number {
++  const a = new Date(`${d1}T12:00:00`), b = new Date(`${d2}T12:00:00`)
++  const n = Math.round((b.getTime() - a.getTime()) / 86_400_000) + 1
++  return Number.isFinite(n) && n > 0 ? n : 0
++}
++
++/**
++ * Coûts non ventilés d'un salarié : jours payés sans aucune tournée (congés,
++ * formation, jour creux). Les ignorer sous-estimerait le coût réel du
++ * prévendeur. N'existe pas pour un freelance, qui ne coûte rien sans tournée.
++ */
++export function coutsNonVentiles(prevendeurId: string, dateDebut: string, dateFin: string): number {
++  const p = getPrevendeurs().find(x => x.id === prevendeurId)
++  if (!p || p.typeContrat !== "SALARIE") return 0
++  const grille = versionA(getGrilles().filter(g => g.id === p.grilleSalarialeId), dateFin)
++  if (!grille) return 0
++
++  const joursAvecTrajet = new Set(
++    getTrajets()
++      .filter(t => t.prevendeurId === prevendeurId && t.statut !== "ANNULE"
++        && t.dateOperationnelle >= dateDebut && t.dateOperationnelle <= dateFin)
++      .map(t => t.dateOperationnelle)
++  ).size
++
++  const coutJour = (grille.salaireBrutMensuel * (1 + grille.tauxChargesPatronales)) / Math.max(1, grille.joursTravaillesMois)
++  // Borné au nombre de jours ouvrés du mois : un intervalle plus long que le
++  // mois ne doit pas produire un coût non ventilé supérieur au salaire.
++  const joursPayes = Math.min(grille.joursTravaillesMois, joursCalendaires(dateDebut, dateFin))
++  return Math.max(0, joursPayes - joursAvecTrajet) * coutJour
++}
++
++// ─── Agrégation par prévendeur ──────────────────────────────────────────────
++
++export interface LignePrevendeur {
++  prevendeurId: string
++  nom: string
++  typeContrat: TypeContrat
++  nbTrajets: number
++  fixeSalarial: number
++  transport: number
++  charges: number
++  freelance: number
++  total: number
++  ca: number
++  margeBrute: number
++  nbClientsVisites: number
++  anomalies: number
++}
++
++export function agregerParPrevendeur(dateDebut: string, dateFin: string): LignePrevendeur[] {
++  const trajets = getTrajets().filter(t =>
++    t.dateOperationnelle >= dateDebut && t.dateOperationnelle <= dateFin && t.statut === "CLOTURE"
++  )
++  const prevendeurs = getPrevendeurs()
++  const map = new Map<string, LignePrevendeur>()
++
++  for (const t of trajets) {
++    const p = prevendeurs.find(x => x.id === t.prevendeurId)
++    if (!map.has(t.prevendeurId)) {
++      map.set(t.prevendeurId, {
++        prevendeurId: t.prevendeurId, nom: t.prevendeurNom,
++        typeContrat: p?.typeContrat ?? "SALARIE",
++        nbTrajets: 0, fixeSalarial: 0, transport: 0, charges: 0, freelance: 0,
++        total: 0, ca: 0, margeBrute: 0, nbClientsVisites: 0, anomalies: 0,
++      })
++    }
++    const l = map.get(t.prevendeurId)!
++    l.nbTrajets++
++    l.fixeSalarial += t.coutFixeSalarial ?? 0
++    l.transport    += t.coutTransport ?? 0
++    l.charges      += t.coutCharges ?? 0
++    l.freelance    += (t.coutFreelanceFixe ?? 0) + (t.coutFreelanceVar ?? 0)
++    l.total        += t.coutTotal ?? 0
++    l.ca           += t.caGenere ?? 0
++    l.margeBrute   += t.margeBrute ?? 0
++    l.nbClientsVisites += t.nbClientsVisites ?? 0
++    l.anomalies    += (t.anomalies?.length ?? 0)
++  }
++
++  return [...map.values()].sort((a, b) => b.total - a.total)
++}
+diff --git a/artifacts/freshlink/src/lib/supabase/autoSync.ts b/artifacts/freshlink/src/lib/supabase/autoSync.ts
+index 70fb2db..53e38e9 100644
+--- a/artifacts/freshlink/src/lib/supabase/autoSync.ts
++++ b/artifacts/freshlink/src/lib/supabase/autoSync.ts
+@@ -32,6 +32,11 @@ const SYNCED_KEYS = new Set<string>([
+   // dès qu'on change de navigateur/appareil (ex: liste des transporteurs qui
+   // "disparaît" — elle n'a jamais existé que sur l'appareil qui l'a créée).
+   "fl_transferts", "fl_transport_companies",
++  // Module Cout Prevendeur/Trajet. Comme pour les tables ci-dessus, une table
++  // absente d'UNE des trois allowlists (ici / db.ts ERP_TABLE_MAP / api-server
++  // ALLOWED_TABLES) reste 100% locale a l'appareil, sans aucune erreur visible.
++  "fl_cp_grilles", "fl_cp_vehicules", "fl_cp_regles_freelance",
++  "fl_cp_prevendeurs", "fl_cp_trajets",
+ ])
+ 
+ // La clé localStorage ne correspond pas toujours 1:1 au nom de la table
+@@ -53,6 +58,7 @@ const TABLE_NAME_OVERRIDE: Record<string, string> = { fl_caisse: "fl_caisse_entr
+ const CONFIG_KEYS = new Set<string>([
+   "fl_process_config", "fl_workflow_config", "fl_alert_config", "fl_email_config", "fl_fiscal_config",
+   "fl_company", "fl_loyalty_config", "fl_group_names", "fl_mobile_tabs_visibility",
++  "fl_business_day_profiles",
+ ])
+ 
+ type Row = { id: string; [k: string]: unknown }
+diff --git a/artifacts/freshlink/src/lib/supabase/db.ts b/artifacts/freshlink/src/lib/supabase/db.ts
+index 882f47b..6a8d079 100644
+--- a/artifacts/freshlink/src/lib/supabase/db.ts
++++ b/artifacts/freshlink/src/lib/supabase/db.ts
+@@ -16,6 +16,7 @@
+ // ============================================================
+ 
+ import { store } from "@/lib/store"
++import * as cp from "@/lib/coutPrevendeur"
+ import { suppressAutoSync } from "./autoSync"
+ import type {
+   User, Client, Article, Fournisseur, Livreur, MotifRetour,
+@@ -498,6 +499,14 @@ export async function syncFromSupabase(): Promise<{ ok: boolean; tables: string[
+   } catch { /* pas de marqueur → garde anti-perte normal */ }
+ 
+   const ERP_TABLE_MAP: [string, (items: unknown[]) => void, () => unknown[]][] = [
++    // Module Cout Prevendeur/Trajet — sens Supabase -> localStorage (3e et
++    // derniere allowlist : sans cette entree les donnees remonteraient bien
++    // vers Supabase mais ne redescendraient jamais sur un autre appareil).
++    ["fl_cp_grilles",          (d) => cp.saveGrilles(d as cp.GrilleSalariale[]),   () => cp.getGrilles()],
++    ["fl_cp_vehicules",        (d) => cp.saveVehicules(d as cp.Vehicule[]),        () => cp.getVehicules()],
++    ["fl_cp_regles_freelance", (d) => cp.saveRegles(d as cp.RegleFreelance[]),     () => cp.getRegles()],
++    ["fl_cp_prevendeurs",      (d) => cp.savePrevendeurs(d as cp.PrevendeurCout[]),() => cp.getPrevendeurs()],
++    ["fl_cp_trajets",          (d) => cp.saveTrajets(d as cp.TrajetPrevente[]),    () => cp.getTrajets()],
+     ["fl_users",            (d) => store.saveUsers(d as User[]),                  () => store.getUsers()],
+     ["fl_clients",          (d) => store.saveClients(d as Client[]),              () => store.getClients()],
+     ["fl_articles",         (d) => store.saveArticles(d as Article[]),            () => store.getArticles()],
+-- 
+2.43.0
+
