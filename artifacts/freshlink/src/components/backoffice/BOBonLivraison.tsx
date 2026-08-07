@@ -1637,6 +1637,12 @@ export default function BOBonLivraison({ user }: { user: User }) {
                   ))}
                 </div>
               )}
+              <label className="flex items-center gap-2 col-span-2 cursor-pointer">
+                <input type="checkbox" checked={printOpts.showTruckIcon !== false}
+                  onChange={e => savePrintOpts({ ...printOpts, showTruckIcon: e.target.checked })}
+                  className="w-4 h-4 accent-amber-500" />
+                <span className="text-xs font-bold text-amber-800">🚚 Afficher l&apos;icône camion (Livreur/Transporteur)</span>
+              </label>
             </div>
             <p className="text-[10px] text-amber-600 mt-2">Ce choix s&apos;applique à l&apos;impression et au téléchargement (BL ou Facture, avec ou sans identifiants légaux).</p>
           </div>
@@ -1728,6 +1734,16 @@ export default function BOBonLivraison({ user }: { user: User }) {
                 <p className="text-sm text-blue-700 mt-1">Sélectionnez plusieurs BL et imprimez-les d'un coup (groupé par livreur, secteur, ou manuellement)</p>
               </div>
               <div className="flex gap-2 items-center">
+                <button
+                  onClick={() => savePrintOpts({ ...printOpts, showTruckIcon: printOpts.showTruckIcon === false })}
+                  title={printOpts.showTruckIcon !== false ? "Masquer l'icône camion (tableau + impression)" : "Afficher l'icône camion (tableau + impression)"}
+                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full shadow-sm transition-colors ${
+                    printOpts.showTruckIcon !== false
+                      ? "bg-blue-600 text-white hover:bg-blue-700"
+                      : "bg-white text-blue-400 border border-blue-200 hover:bg-blue-50"
+                  }`}>
+                  🚚 {printOpts.showTruckIcon !== false ? "Icône visible" : "Icône masquée"}
+                </button>
                 <span className="text-xs font-bold text-blue-700 bg-white px-3 py-1.5 rounded-full shadow-sm">{selectedPrint.size} sélectionné{selectedPrint.size !== 1 ? "s" : ""}</span>
                 <span className="text-xs font-bold text-white bg-blue-600 px-3 py-1.5 rounded-full">{displayed.length} disponible</span>
               </div>
@@ -1992,7 +2008,10 @@ export default function BOBonLivraison({ user }: { user: User }) {
                       <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
                         {new Date(bl.date).toLocaleDateString("fr-FR")}
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{bl.livreurNom ?? "—"}</td>
+                      <td className="px-4 py-3 text-xs text-slate-600">
+                        {printOpts.showTruckIcon !== false && <span title="Livreur/Transporteur" className="mr-1">🚚</span>}
+                        {bl.livreurNom ?? "—"}
+                      </td>
                       <td className="px-4 py-3 text-xs text-slate-500 text-center font-semibold">{bl.lignes.length}</td>
                       <td className="px-4 py-3 font-bold text-slate-800 whitespace-nowrap text-sm">
                         {bl.totalTTC.toFixed(2)} DH

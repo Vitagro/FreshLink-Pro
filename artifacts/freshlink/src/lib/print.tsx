@@ -651,6 +651,7 @@ export interface PrintBLOpts {
   showICE?:            boolean            // afficher l'ICE (défaut: true si showLegal)
   showIF?:             boolean            // afficher l'IF (défaut: true si showLegal)
   showRC?:             boolean            // afficher le RC (défaut: true si showLegal)
+  showTruckIcon?:      boolean            // afficher l'icône camion à côté du Livreur (défaut: true)
 }
 
 interface BOBLLigne {
@@ -715,6 +716,7 @@ function buildBLHtml(bl: BOBonLivraison, opts: PrintBLOpts, company?: CompanyCon
   const sICE = showLegal && opts.showICE !== false
   const sIF  = showLegal && opts.showIF  !== false
   const sRC  = showLegal && opts.showRC  !== false
+  const showTruck  = opts.showTruckIcon !== false           // défaut: afficher l'icône camion
   const isFacture  = opts.docType === "facture"
   const docLabel   = isFacture ? "Facture" : "Bon de Livraison"
   // Ligne d'identifiants légaux société — selon les cases ICE / IF / RC
@@ -762,7 +764,7 @@ ${!isFacture ? watermarkHtml(cfg) : ""}
     <div class="ic-title">الشحن / الإرسال<br/>Expédition</div>
     <div class="ic-val">${companyNom}</div>
     <div class="ic-sub">تاريخ / Date: ${dateStr}</div>
-    <div class="ic-sub">السائق / Livreur: ${bl.livreurNom ?? "—"}</div>
+    <div class="ic-sub">${showTruck ? "🚚 " : ""}السائق / Livreur: ${bl.livreurNom ?? "—"}</div>
   </div>
 </div>
 <table>
