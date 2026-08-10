@@ -127,6 +127,7 @@ export default function MobileChargesAcheteur({ user }: Props) {
       existing[idx].charges.push(newCharge)
     } else {
       existing.push({
+        id:         form.bonAchatId.trim(),
         clientId:   `cli_${form.clientNom.trim().toLowerCase().replace(/\s+/g, "_")}`,
         clientNom:  form.clientNom.trim(),
         bonAchatId: form.bonAchatId.trim(),

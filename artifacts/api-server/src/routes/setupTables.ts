@@ -31,6 +31,7 @@ const EXPECTED_TABLES = [
   "fl_reglements_cv",
   "fl_group_names",
   "fl_mobile_tabs_visibility",
+  "fl_charges_client_acheteur", "fl_trip_charges",
 ];
 
 function projectRef(): string {

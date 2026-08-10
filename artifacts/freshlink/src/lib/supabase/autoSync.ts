@@ -37,6 +37,9 @@ const SYNCED_KEYS = new Set<string>([
   // ALLOWED_TABLES) reste 100% locale a l'appareil, sans aucune erreur visible.
   "fl_cp_grilles", "fl_cp_vehicules", "fl_cp_regles_freelance",
   "fl_cp_prevendeurs", "fl_cp_trajets",
+  // Meme bug, trouvees par audit des ecrans mobile (Charges Acheteur) et
+  // BO (Cout Livraison) : jamais dans aucune des 3 allowlists.
+  "fl_charges_client_acheteur", "fl_trip_charges",
 ])
 
 // La clé localStorage ne correspond pas toujours 1:1 au nom de la table

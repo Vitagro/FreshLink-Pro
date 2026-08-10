@@ -24,7 +24,8 @@ import type {
   Trip, BonLivraison, Retour, BonPreparation,
   TransfertStock, Message, Notice, CaisseEntry,
   LoyaltyTransaction, PrimeNouveauClient, CaisseEtrangere,
-  DemandeAchat, NonAchatSignalement, TransportCompany,
+  DemandeAchat, NonAchatSignalement, TransportCompany, ReglementCV,
+  ChargeClientAcheteur, TripCharge,
 } from "@/lib/store"
 
 // ── Helpers JSONB ─────────────────────────────────────────────────────────────
@@ -538,6 +539,16 @@ export async function syncFromSupabase(): Promise<{ ok: boolean; tables: string[
     ["fl_non_achats",    (d) => store.saveNonAchatSignalements(d as NonAchatSignalement[]), () => store.getNonAchatSignalements()],
     ["fl_transferts_stock",     (d) => store.saveTransferts(d as TransfertStock[]),         () => store.getTransferts()],
     ["fl_transport_companies",  (d) => store.saveTransportCompanies(d as TransportCompany[]), () => store.getTransportCompanies()],
+    // Jamais synchronisé avant (même bug) — présent dans autoSync.ts
+    // SYNCED_KEYS et cote api-server ALLOWED_TABLES (donc bien poussé vers
+    // Supabase), mais absent de cette 3e allowlist : les règlements
+    // chèques/virements (BOChequesVirements) montaient bien mais ne
+    // redescendaient jamais sur un autre appareil.
+    ["fl_reglements_cv",  (d) => store.saveReglementsCV(d as ReglementCV[]),  () => store.getReglementsCV()],
+    // Meme bug, trouvees par audit des ecrans mobile (Charges Acheteur) et
+    // BO (Cout Livraison) : jamais dans aucune des 3 allowlists.
+    ["fl_charges_client_acheteur", (d) => store.saveChargesClient(d as ChargeClientAcheteur[]), () => store.getChargesClient()],
+    ["fl_trip_charges",            (d) => store.saveTripCharges(d as TripCharge[]),             () => store.getTripCharges()],
   ]
 
   // Requêtes parallèles — toutes les tables en même temps (x10 plus rapide)

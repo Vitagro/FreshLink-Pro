@@ -4326,7 +4326,23 @@ export const store = {
   saveSeuilAlerte: (c: SeuilAlerteConfig) => setLS("fl_seuil_alerte", c),
 
   // --- Charge clients (acheteur) ---
-  getChargesClient: (): ChargeClientAcheteur[] => getLS("fl_charges_client_acheteur", []),
+  // Jamais synchronisé avant (même bug que fl_reglements_cv/fl_trip_charges :
+  // absent des 3 allowlists) — 100% local à l'appareil de l'acheteur mobile,
+  // perdu au vidage cache / invisible sur un autre appareil. Migration : les
+  // enregistrements créés avant l'ajout du champ id sont réparés à la volée
+  // avec bonAchatId (déjà la clé naturelle unique) et réécrits, ce qui les
+  // fait remonter vers Supabase au prochain write-through.
+  getChargesClient: (): ChargeClientAcheteur[] => {
+    const arr = getLS<ChargeClientAcheteur[]>("fl_charges_client_acheteur", [])
+    let migrated = false
+    const withIds = arr.map(c => {
+      if (c.id) return c
+      migrated = true
+      return { ...c, id: c.bonAchatId }
+    })
+    if (migrated) setLS("fl_charges_client_acheteur", withIds)
+    return withIds
+  },
   saveChargesClient: (c: ChargeClientAcheteur[]) => setLS("fl_charges_client_acheteur", c),
 
   // --- Trip charges (logistique) ---
@@ -4595,6 +4611,7 @@ export const CHARGE_TYPE_LABELS: Record<ChargeTypeAcheteur, string> = {
 }
 
 export interface ChargeClientAcheteur {
+  id: string   // = bonAchatId (clé naturelle unique — un seul enregistrement par bon d'achat)
   clientId: string
   clientNom: string
   bonAchatId: string
