@@ -205,6 +205,20 @@ export default function MobilePreparation({ user }: Props) {
     setClientViewId(null)
   }
 
+  // Reaffectation depuis le terrain — preparateurNom doit rester synchro avec
+  // preparateurId : la liste de balisage imprimee (BOBonPreparation) affiche
+  // preparateurNom et le considere "non assigne" des que l'un des deux manque.
+  // Persiste sur la liste COMPLETE (pas le sous-ensemble deja filtre par
+  // forMe), sinon les bons des autres preparateurs seraient effaces.
+  const handleAssignPreparateur = (bonId: string, preparateurId: string) => {
+    const preparateur = store.getUsers().find(u => u.id === preparateurId)
+    const all = store.getBonsPreparation().map(b =>
+      b.id === bonId ? { ...b, preparateurId: preparateurId || undefined, preparateurNom: preparateur?.name } : b
+    )
+    store.saveBonsPreparation(all)
+    refresh()
+  }
+
   const validateLigne = (articleId: string) => {
     if (!activeBon) return
     const arr = store.getBonsPreparation()
@@ -800,29 +814,45 @@ export default function MobilePreparation({ user }: Props) {
             const total = bon.lignes.length
             const progress = total > 0 ? Math.round((validated / total) * 100) : 0
             return (
-              <button key={bon.id} onClick={() => openBon(bon)}
+              <div key={bon.id}
                 className="bg-card rounded-2xl border border-border p-4 text-left hover:shadow-sm transition-shadow w-full">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="font-bold text-foreground">{bon.nom}</p>
+                <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                  <button onClick={() => openBon(bon)} className="flex-1 text-left hover:opacity-70">
+                    <p className="font-bold text-foreground">{bon.nom}</p>
+                  </button>
                   <StatusBadge s={bon.statut} />
+                  <select
+                    onClick={e => e.stopPropagation()}
+                    onChange={e => handleAssignPreparateur(bon.id, e.target.value)}
+                    value={bon.preparateurId ?? ""}
+                    className="px-2 py-1 text-xs border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-blue-500/30">
+                    <option value="">Non assigné</option>
+                    {store.getUsers()
+                      .filter(u => u.role === "preparateur" || u.role === "magasinier")
+                      .map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                  </select>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">
                   {bon.date} — {total} articles — {bon.lignes.reduce((s, l) => s + l.qteCommandee, 0).toFixed(1)} kg
                 </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all"
-                      style={{
-                        width: `${progress}%`,
-                        background: progress === 100 ? "oklch(0.50 0.18 155)" : "oklch(0.60 0.16 195)"
-                      }} />
+                <button onClick={() => openBon(bon)} className="w-full text-left">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${progress}%`,
+                          background: progress === 100 ? "oklch(0.50 0.18 155)" : "oklch(0.60 0.16 195)"
+                        }} />
+                    </div>
+                    <span className="text-xs font-bold text-foreground shrink-0">{progress}%</span>
                   </div>
-                  <span className="text-xs font-bold text-foreground shrink-0">{progress}%</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  {validated}/{total} articles validés
-                </p>
-              </button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    {validated}/{total} articles validés
+                  </p>
+                </button>
+              </div>
             )
           })}
         </div>
