@@ -1,6 +1,6 @@
 "use client"
 
-// Rapport analytics boutique (shop.vita-core.org) + configuration de
+// Rapport analytics boutique (shop.vita-agro.com) + configuration de
 // l'affichage public du compteur. Lit /api/ext/shop-stats.
 import { useState, useEffect, useCallback } from "react"
 import { BarChart3, Eye, MousePointerClick, MapPin, FileText, RefreshCw, Save, Globe } from "lucide-react"
@@ -66,7 +66,7 @@ export default function BOShopAnalytics() {
           <h2 className="text-base font-bold text-foreground flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" /> Compteur Boutique
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Visites, clics, pages les plus vues et régions — shop.vita-core.org</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Visites, clics, pages les plus vues et régions — shop.vita-agro.com</p>
         </div>
         <div className="flex items-center gap-2">
           <select value={days} onChange={e => setDays(Number(e.target.value))}

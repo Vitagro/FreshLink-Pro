@@ -830,7 +830,7 @@ export default function BOMarketplace({ user }: Props) {
                 <h2 className="text-2xl font-black text-white tracking-tight">Marketplace & Catalogue Web</h2>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-100 text-[10px] font-bold uppercase tracking-wider">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                  Live · shop.vita-core.org
+                  Live · shop.vita-agro.com
                 </span>
               </div>
               <p className="text-sm text-emerald-50/80 mt-1.5 max-w-xl leading-relaxed">

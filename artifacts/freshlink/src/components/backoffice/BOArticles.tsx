@@ -1098,7 +1098,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
         <button
           onClick={syncAllArticlesToSupabase}
           disabled={syncingAll}
-          title={`Publie les ${articles.length} articles ERP sur le site web shop.vita-core.org`}
+          title={`Publie les ${articles.length} articles ERP sur le site web shop.vita-agro.com`}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold border-2 transition-all disabled:opacity-60 shadow-sm ${syncAllDone ? "border-emerald-500 bg-emerald-500 text-white" : "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"}`}>
           {syncingAll
             ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />Publication...</>

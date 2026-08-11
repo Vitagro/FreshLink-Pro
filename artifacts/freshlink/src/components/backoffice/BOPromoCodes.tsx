@@ -89,7 +89,7 @@ export default function BOPromoCodes({ user }: { user: User }) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-base font-bold text-foreground flex items-center gap-2"><Ticket className="w-4 h-4 text-primary" /> Codes Promo</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Codes utilisables au paiement sur la boutique (shop.vita-core.org).</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Codes utilisables au paiement sur la boutique (shop.vita-agro.com).</p>
         </div>
         <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/70"><RefreshCw className="w-3.5 h-3.5" /> Actualiser</button>
       </div>

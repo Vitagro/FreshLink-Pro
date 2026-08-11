@@ -6,7 +6,7 @@ import type { Request, Response, NextFunction } from "express";
 // Comportement par défaut : INCHANGÉ (reflète l'origine de la requête) afin de ne
 // rien casser côté shop. Pour DURCIR, définir ALLOWED_ORIGINS dans l'environnement
 // (liste CSV), p.ex. :
-//   ALLOWED_ORIGINS="https://shop.vita-core.org,https://erp.vita-core.org"
+//   ALLOWED_ORIGINS="https://shop.vita-agro.com,https://erp.vita-agro.com"
 // Dès lors, seules ces origines sont acceptées sur les routes qui utilisent
 // `corsMiddleware({ public: false })`. Les routes publiques (catalogue) passent
 // `public: true` et restent ouvertes à tous.
