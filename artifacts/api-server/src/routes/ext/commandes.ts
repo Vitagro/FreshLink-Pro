@@ -87,21 +87,36 @@ async function injectToLogistique(
 // nulle part (le endpoint /ext/promo ne fait que VALIDER, il est aussi
 // appelé à chaque frappe côté client pendant la saisie du code). On
 // n'incrémente donc qu'ici, une fois la commande effectivement enregistrée.
+//
+// Lecture-puis-écriture en boucle avec verrou optimiste (filtre updated_at
+// dans le PATCH + Prefer: return=representation) : sans ça, deux commandes
+// simultanées sur le même code lisent le même usageCount et écrivent la
+// même valeur incrémentée une seule fois au lieu de deux — un code à
+// usageMax=1 pourrait alors être utilisé deux fois. Sur conflit (0 ligne
+// affectée = quelqu'un d'autre a écrit entre-temps), on relit et retente.
 async function consumePromoCode(sbUrl: string, sbKey: string, code: string): Promise<void> {
-  try {
-    const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
-    const r = await fetch(`${sbUrl}/rest/v1/fl_coupons?id=eq.${encodeURIComponent(code)}&select=payload`, { headers });
-    if (!r.ok) return;
-    const rows = await r.json() as { payload?: Record<string, unknown> }[];
-    const current = rows[0]?.payload;
-    if (!current) return;
-    const usageCount = (Number(current.usageCount) || 0) + 1;
-    await fetch(`${sbUrl}/rest/v1/fl_coupons?id=eq.${encodeURIComponent(code)}`, {
-      method: "PATCH",
-      headers: { ...headers, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ payload: { ...current, usageCount } }),
-    });
-  } catch { /* consommation best-effort — la commande reste enregistrée */ }
+  const headers = { apikey: sbKey, Authorization: `Bearer ${sbKey}` };
+  const idFilter = `id=eq.${encodeURIComponent(code)}`;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const r = await fetch(`${sbUrl}/rest/v1/fl_coupons?${idFilter}&select=payload,updated_at`, { headers });
+      if (!r.ok) return;
+      const rows = await r.json() as { payload?: Record<string, unknown>; updated_at?: string }[];
+      const row = rows[0];
+      if (!row?.payload) return;
+      const usageCount = (Number(row.payload.usageCount) || 0) + 1;
+      const staleFilter = row.updated_at ? `&updated_at=eq.${encodeURIComponent(row.updated_at)}` : "";
+      const patch = await fetch(`${sbUrl}/rest/v1/fl_coupons?${idFilter}${staleFilter}`, {
+        method: "PATCH",
+        headers: { ...headers, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({ payload: { ...row.payload, usageCount }, updated_at: new Date().toISOString() }),
+      });
+      if (!patch.ok) return;
+      const updated = await patch.json().catch(() => []) as unknown[];
+      if (updated.length > 0) return; // succès
+      // 0 ligne affectée → conflit concurrent, on relit et retente
+    } catch { return; /* consommation best-effort — la commande reste enregistrée */ }
+  }
 }
 
 // ── Alerte email équipe (+ confirmation client) — Fire-and-forget ───────────
