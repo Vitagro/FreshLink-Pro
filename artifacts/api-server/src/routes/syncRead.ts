@@ -41,6 +41,9 @@ const ALLOWED_TABLES = new Set([
   // Module Cout Prevendeur/Trajet
   "fl_cp_grilles", "fl_cp_vehicules", "fl_cp_regles_freelance",
   "fl_cp_prevendeurs", "fl_cp_trajets", "fl_business_day_profiles",
+  // Meme bug, trouvees par audit des ecrans mobile (Charges Acheteur) et
+  // BO (Cout Livraison) : jamais dans aucune des 3 allowlists.
+  "fl_charges_client_acheteur", "fl_trip_charges",
 ]);
 
 router.get("/", async (req: Request, res: Response) => {
