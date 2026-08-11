@@ -398,7 +398,7 @@ export default function PortailFournisseur({ user, onLogout }: Props) {
       {/* Header */}
       <header className="bg-sidebar text-sidebar-foreground px-4 py-3 flex items-center justify-between sticky top-0 z-40 shadow-md">
         <div className="flex items-center gap-3">
-          <a href="https://shop.vita-core.org/" target="_blank" rel="noopener noreferrer"
+          <a href="https://shop.vita-agro.com/" target="_blank" rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-sidebar-border text-[10px] font-semibold text-sidebar-foreground/70 hover:text-white hover:bg-sidebar-accent transition-colors">
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />

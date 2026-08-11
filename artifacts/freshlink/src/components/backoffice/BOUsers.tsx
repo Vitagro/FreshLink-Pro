@@ -1838,7 +1838,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                   className="px-3 py-2 rounded-xl border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
                   autoComplete="new-password"
                 />
-                <p className="text-[11px] text-muted-foreground">Utilisé pour se connecter sur shop.vita-core.org et le back-office</p>
+                <p className="text-[11px] text-muted-foreground">Utilisé pour se connecter sur shop.vita-agro.com et le back-office</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-foreground">📱 Mot de passe Mobile (optionnel)</label>

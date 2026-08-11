@@ -226,10 +226,10 @@ function MainApp() {
             <p className="text-base font-bold text-slate-800">Bonjour {user.name} !</p>
             <p className="text-sm text-slate-500 mt-2">Votre espace commande est sur notre site web.</p>
           </div>
-          <a href="https://shop.vita-core.org"
+          <a href="https://shop.vita-agro.com"
             className="w-full py-2.5 rounded-xl text-sm font-bold text-white text-center"
             style={{ background: "linear-gradient(135deg,#1a4f2a,#2d7a46)" }}>
-            Ouvrir shop.vita-core.org →
+            Ouvrir shop.vita-agro.com →
           </a>
           <button onClick={handleLogout}
             className="w-full py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">

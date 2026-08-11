@@ -331,7 +331,7 @@ export default function BODemandesComptes({ user }: Props) {
       const waMsg = encodeURIComponent(
         `Bonjour ${approveForm.nom} 👋\n\n✅ Votre compte Vita Fresh a été créé !\n\n` +
         `🔑 Connexion :\n• Email : ${approveForm.email}\n• Mot de passe : ${approveForm.password}\n\n` +
-        `🌐 https://vitafresh.vita-core.org\n\n— Vita Fresh 🍃`)
+        `🌐 https://shop.vita-agro.com\n\n— Vita Fresh 🍃`)
       setTimeout(() => window.open(`https://wa.me/${phone}?text=${waMsg}`, "_blank"), 400)
     }
     setShowApprove(false); setSelected(null)

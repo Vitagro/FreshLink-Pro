@@ -989,7 +989,7 @@ function KpiCard({ label, labelAr, value, accent, icon }: { label: string; label
 
 function ParrainageTab({ clientId, referrals }: { clientId: string; referrals: { total: number; converted: number } }) {
   const code = `VITA-${(clientId || "000000").slice(-6).toUpperCase()}`
-  const shareUrl = `https://shop.vita-core.org/?parrain=${encodeURIComponent(code)}`
+  const shareUrl = `https://shop.vita-agro.com/?parrain=${encodeURIComponent(code)}`
   const [copied, setCopied] = useState(false)
 
   const copy = async () => {
