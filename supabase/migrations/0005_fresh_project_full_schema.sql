@@ -52,7 +52,9 @@ BEGIN
     -- Primes / RH / commercial (best-effort, référencées côté frontend) ------
     'fl_regles_bonus', 'fl_grilles_salaire', 'fl_fiche_payroll',
     'fl_driver_bonus_config', 'fl_driver_bonus_records',
-    'fl_shareholder_distributions', 'fl_perf_commercial'
+    'fl_shareholder_distributions', 'fl_perf_commercial',
+    -- Audit cross-device sync (jamais dans aucune des 3 allowlists avant) -----
+    'fl_trip_charges', 'fl_charges_client_acheteur'
   ])
   LOOP
     EXECUTE format(
