@@ -485,6 +485,12 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
     const all = store.getArticles().map(a => selectedArticleIds.has(a.id) ? { ...a, actif: true } : a)
     store.saveArticles(all)
     setArticles(all)
+    // Pousser immédiatement vers Supabase — sans ça, la réactivation reste locale
+    // tant que l'utilisateur ne clique pas séparément "Publier sur le site", et le
+    // catalogue en ligne (v_marketplace_catalogue exige actif=true) reste bloqué.
+    import("@/lib/supabase/db").then(db => {
+      all.filter(a => selectedArticleIds.has(a.id)).forEach(a => { try { db.upsertArticle(a) } catch { /* offline */ } })
+    }).catch(() => {})
     setSelectedArticleIds(new Set())
   }
 
