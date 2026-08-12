@@ -99,6 +99,19 @@ const MODELES: Record<ModeleType, { label: string; labelAr: string; cibles: Cibl
   custom:             { label: "Message libre",      labelAr: "رسالة مخصصة",   cibles: ["clients", "fournisseurs", "equipe"] },
 }
 
+// Chaîne + groupes communautaires officiels Vita Fresh — accès rapide équipe.
+interface Communaute { id: string; label: string; labelAr: string; desc: string; url: string; icon: string }
+const COMMUNAUTES: Communaute[] = [
+  { id: "channel",     label: "Chaîne Vita Fresh",              labelAr: "قناة فيتا فريش",           desc: "Chaîne officielle de diffusion (annonces, actualités)", url: "https://whatsapp.com/channel/0029Vb8F1Yk0gcfBrER9uO3B", icon: "📣" },
+  { id: "particulier", label: "Commandes Particuliers",         labelAr: "طلبيات الأفراد",            desc: "Groupe client — commandes des particuliers",             url: "https://chat.whatsapp.com/CwBMV7tVZRg7PvnGWTolb5",      icon: "🛒" },
+  { id: "chr",         label: "Commandes CHR / Horeca",         labelAr: "طلبيات الفنادق والمطاعم",   desc: "Groupe client — hôtels, restaurants, cafés",              url: "https://chat.whatsapp.com/JwBgjvcvzus3mcfwkBpahi",      icon: "🍽️" },
+  { id: "marchand",    label: "Commandes Marchands",            labelAr: "طلبيات التجار",             desc: "Groupe client — détaillants et superettes",               url: "https://chat.whatsapp.com/CmZIjLf00uk4oOAGVgtzO6",      icon: "🏪" },
+  { id: "sav",         label: "Service Client & Réclamations",  labelAr: "خدمة الزبائن والشكاوى",     desc: "Groupe client — support, suivi commande, réclamations",  url: "https://chat.whatsapp.com/Iu57nM6zLbz5p42FIt707H",      icon: "🎧" },
+  { id: "prix_vente",  label: "Prix de vente",                  labelAr: "أثمنة البيع",               desc: "Groupe interne — annonces de changement de prix de vente", url: "https://chat.whatsapp.com/Izfj0BytNmWHtbk6cOX7sb",    icon: "🏷️" },
+  { id: "prix_achat",  label: "Hausse prix d'achat",            labelAr: "ارتفاع أثمنة الشراء",       desc: "Groupe interne — alertes hausse des prix d'achat fournisseur", url: "https://chat.whatsapp.com/LSEACEUJ6jcIMg2FcoEGuq",  icon: "📈" },
+  { id: "rupture",     label: "Produits manquants / ruptures",  labelAr: "نقص المنتجات",              desc: "Groupe interne — produits non achetés / en rupture",     url: "https://chat.whatsapp.com/ENnYQLwDg5fHd712CMII36",      icon: "⚠️" },
+]
+
 interface MsgLog {
   id: string
   date: string
@@ -112,7 +125,7 @@ interface MsgLog {
 
 export default function BOWhatsApp({ user }: Props) {
   const [cible, setCible] = useState<Cible>("clients")
-  const [onglet, setOnglet] = useState<"envoyer" | "historique">("envoyer")
+  const [onglet, setOnglet] = useState<"envoyer" | "historique" | "communautes">("envoyer")
   const [clients, setClients] = useState<Client[]>([])
   const [fournisseurs, setFournisseurs] = useState(store.getFournisseurs())
   const [equipe, setEquipe] = useState<User[]>([])
@@ -255,7 +268,7 @@ export default function BOWhatsApp({ user }: Props) {
 
         {/* Onglets */}
         <div className="flex gap-1 bg-muted p-1 rounded-xl">
-          {([["envoyer", "Envoyer"], ["historique", "Historique"]] as const).map(([k, l]) => (
+          {([["envoyer", "Envoyer"], ["communautes", "Communautés"], ["historique", "Historique"]] as const).map(([k, l]) => (
             <button key={k} onClick={() => setOnglet(k)}
               className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${onglet === k ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
               {l}
@@ -547,6 +560,37 @@ export default function BOWhatsApp({ user }: Props) {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Communautés — chaîne + groupes officiels Vita Fresh */}
+      {onglet === "communautes" && (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Chaîne et groupes WhatsApp officiels Vita Fresh — accès rapide pour toute l&apos;équipe.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {COMMUNAUTES.map(c => (
+              <div key={c.id} className="flex flex-col gap-2 p-4 rounded-2xl border border-border bg-card">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{c.icon}</span>
+                  <div className="min-w-0">
+                    <p className="font-bold text-foreground text-sm truncate">{c.label}</p>
+                    <p className="text-[10px] text-muted-foreground truncate" dir="rtl">{c.labelAr}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed flex-1">{c.desc}</p>
+                <a href={c.url} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-white text-xs font-bold hover:opacity-90 transition-opacity"
+                  style={{ background: "#25D366" }}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Ouvrir
+                </a>
+              </div>
+            ))}
           </div>
         </div>
       )}
