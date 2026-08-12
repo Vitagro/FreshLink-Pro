@@ -97,6 +97,14 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   const [syncAllDone, setSyncAllDone] = useState(false)
   const [reloadingFromSb, setReloadingFromSb] = useState(false)
   const [familleTick, setFamilleTick] = useState(0)   // force re-render après ajout d'une famille
+  // Bulk stock + prix (sélection) — pour compléter en masse les articles publiés
+  // sans stock web ni prix (cf. computeWebPV/stockWeb côté catalogue.ts : sans ces
+  // champs, l'article reste "out_of_stock" / 0 DH même si actif+marketplaceActif=true)
+  const [showBulkStockPrice, setShowBulkStockPrice] = useState(false)
+  const [bulkStock, setBulkStock] = useState("")
+  const [bulkPrixAchat, setBulkPrixAchat] = useState("")
+  const [bulkPvMethode, setBulkPvMethode] = useState<Article["pvMethode"]>("manuel")
+  const [bulkPvValeur, setBulkPvValeur] = useState("")
 
   // Toutes les familles (prédéfinies + perso + utilisées) pour les listes déroulantes
   const familleOptions = (() => { void familleTick; return getAllFamilles(articles.map(a => a.famille)) })()
@@ -491,6 +499,37 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
     import("@/lib/supabase/db").then(db => {
       all.filter(a => selectedArticleIds.has(a.id)).forEach(a => { try { db.upsertArticle(a) } catch { /* offline */ } })
     }).catch(() => {})
+    setSelectedArticleIds(new Set())
+  }
+
+  // Applique en masse stock web + prix à la sélection — comble le trou laissé par
+  // une réactivation/publication sans stock web (marketplaceStock) ni prix (prixAchat
+  // + pvMethode/pvValeur ou segments) : ces champs vides font que le catalogue calcule
+  // statut="out_of_stock" et prix=0 même pour un article actif + publié.
+  const applyBulkStockPrice = () => {
+    if (selectedArticleIds.size === 0) return
+    const stockVal = bulkStock.trim() === "" ? undefined : Number(bulkStock)
+    const paVal = bulkPrixAchat.trim() === "" ? undefined : Number(bulkPrixAchat)
+    const pvVal = bulkPvValeur.trim() === "" ? undefined : Number(bulkPvValeur)
+    if (stockVal === undefined && paVal === undefined && pvVal === undefined) return
+    const all = store.getArticles().map(a => {
+      if (!selectedArticleIds.has(a.id)) return a
+      const updated: Article = { ...a }
+      if (stockVal !== undefined) {
+        ;(updated as unknown as Record<string, unknown>).marketplaceStock = stockVal
+        ;(updated as unknown as Record<string, unknown>).marketplaceStatut = stockVal > 0 ? "disponible" : "out_of_stock"
+      }
+      if (paVal !== undefined) updated.prixAchat = paVal
+      if (pvVal !== undefined) { updated.pvMethode = bulkPvMethode; updated.pvValeur = pvVal }
+      return updated
+    })
+    store.saveArticles(all)
+    setArticles(all)
+    import("@/lib/supabase/db").then(db => {
+      all.filter(a => selectedArticleIds.has(a.id)).forEach(a => { try { db.upsertArticle(a) } catch { /* offline */ } })
+    }).catch(() => {})
+    setShowBulkStockPrice(false)
+    setBulkStock(""); setBulkPrixAchat(""); setBulkPvValeur("")
     setSelectedArticleIds(new Set())
   }
 
@@ -1052,6 +1091,12 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
             Réactiver la sélection
           </button>
+          <button onClick={() => setShowBulkStockPrice(v => !v)}
+            title="Renseigner en masse le stock web et/ou le prix des articles sélectionnés (nécessaire pour qu'ils apparaissent disponibles avec un prix sur la boutique)"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${showBulkStockPrice ? "text-white bg-amber-700" : "text-white bg-amber-600 hover:bg-amber-700"}`}>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3v-3m-3 3v-3m9-4V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2h14a2 2 0 002-2z" /></svg>
+            Stock + Prix (sélection)
+          </button>
           {/* Réassignation famille en masse */}
           <div className="flex items-center gap-1">
             <select defaultValue="" onChange={e => { bulkReassignFamille(e.target.value); e.target.value = "" }}
@@ -1067,6 +1112,52 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
           <button onClick={() => setSelectedArticleIds(new Set())} className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-300 hover:bg-blue-100 transition-colors">
             Deselectionner tout
           </button>
+        </div>
+      )}
+
+      {/* Panneau stock + prix en masse (sélection) */}
+      {selectedArticleIds.size > 0 && showBulkStockPrice && (
+        <div className="flex flex-col gap-3 px-4 py-3.5 rounded-xl bg-amber-50 border border-amber-200 text-sm">
+          <p className="text-xs font-semibold text-amber-900">
+            Renseigner le stock web et/ou le prix pour {selectedArticleIds.size} article(s) sélectionné(s). Laissez un champ vide pour ne pas le modifier.
+          </p>
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold text-amber-900">
+              Stock web alloué
+              <input type="number" min={0} value={bulkStock} onChange={e => setBulkStock(e.target.value)}
+                placeholder="ex: 50"
+                className="w-28 px-2.5 py-2 rounded-lg border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-amber-900">
+              Prix d'achat (DH)
+              <input type="number" min={0} step={0.01} value={bulkPrixAchat} onChange={e => setBulkPrixAchat(e.target.value)}
+                placeholder="ex: 4"
+                className="w-28 px-2.5 py-2 rounded-lg border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-amber-900">
+              Méthode PV
+              <select value={bulkPvMethode} onChange={e => setBulkPvMethode(e.target.value as Article["pvMethode"])}
+                className="px-2.5 py-2 rounded-lg border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400">
+                <option value="manuel">PV manuel (DH)</option>
+                <option value="pourcentage">Marge %</option>
+                <option value="montant">Ajout DH</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-semibold text-amber-900">
+              {bulkPvMethode === "pourcentage" ? "Marge %" : bulkPvMethode === "montant" ? "Ajout DH" : "PV manuel (DH)"}
+              <input type="number" min={0} step={0.01} value={bulkPvValeur} onChange={e => setBulkPvValeur(e.target.value)}
+                placeholder={bulkPvMethode === "pourcentage" ? "ex: 60" : "ex: 6"}
+                className="w-28 px-2.5 py-2 rounded-lg border border-amber-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </label>
+            <button onClick={applyBulkStockPrice}
+              disabled={bulkStock.trim() === "" && bulkPrixAchat.trim() === "" && bulkPvValeur.trim() === ""}
+              className="px-4 py-2 rounded-lg text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-40 transition-colors">
+              Appliquer à la sélection
+            </button>
+          </div>
+          <p className="text-[11px] text-amber-700/80">
+            Le prix affiché sur la boutique = moyenne des prix CHR/Marchand/Particulier si renseignés, sinon PA + méthode PV ci-dessus. Le stock web pilote « Disponible » / « Rupture » sur la boutique (indépendant du stock réel).
+          </p>
         </div>
       )}
 
