@@ -261,7 +261,15 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
       }
       if (errors.length === 0) {
         setSyncAllDone(true)
-        alert(`✅ ${pushed} articles publiés sur le site web !`)
+        // marketplaceActif=true ne suffit pas : le catalogue boutique (v_marketplace_
+        // catalogue) exige aussi actif=true. Sans cet avertissement, un article publié
+        // mais toujours "Désactivé" (stock+catalogue) reste invisible sur le site sans
+        // qu'aucun message ne le signale — exactement le bug qui causait "231 publiés,
+        // 0 visibles sur la boutique".
+        const hiddenDespiteActif = all.filter(x => x.payload.marketplaceActif === true && (x.payload as Record<string, unknown>).actif === false).length
+        alert(`✅ ${pushed} articles publiés sur le site web !` + (hiddenDespiteActif > 0
+          ? `\n\n⚠️ ${hiddenDespiteActif} d'entre eux resteront INVISIBLES sur la boutique : ils sont encore "Désactivé" (stock + catalogue). Sélectionnez-les et cliquez "Réactiver la sélection" pour qu'ils apparaissent réellement.`
+          : ""))
         setTimeout(() => setSyncAllDone(false), 5000)
       } else {
         alert(`⚠️ ${pushed} publiés, ${errors.length} erreurs :\n${errors.slice(0, 3).join("\n")}`)
@@ -466,6 +474,18 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
     reloadCaissesEtr()
     const updated = store.getCaissesEtrangeres().find(c => c.id === id)
     if (updated) upsertCaisseEtrangere(updated).catch(e => console.error("[BOArticles] sync caisse etrangere error:", e))
+  }
+
+  // Réactive en masse les articles sélectionnés (actif=true) — nécessaire en plus de
+  // "Publier sur le site" : le catalogue marketplace (v_marketplace_catalogue) exige
+  // marketplaceActif ET actif à true. Publier un article désactivé (stock+catalogue)
+  // sans le réactiver le laisse invisible sur la boutique malgré le message de succès.
+  const handleReactivateSelected = () => {
+    if (selectedArticleIds.size === 0) return
+    const all = store.getArticles().map(a => selectedArticleIds.has(a.id) ? { ...a, actif: true } : a)
+    store.saveArticles(all)
+    setArticles(all)
+    setSelectedArticleIds(new Set())
   }
 
   // Réassigne en masse les articles sélectionnés à une famille (refonte d'assignation)
@@ -1020,6 +1040,12 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
               <button onClick={() => setConfirmResetDefect(false)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">Annuler</button>
             </div>
           )}
+          <button onClick={handleReactivateSelected}
+            title="Réactiver (nécessaire pour apparaître sur le catalogue boutique, en plus de la publication)"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 transition-colors">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            Réactiver la sélection
+          </button>
           {/* Réassignation famille en masse */}
           <div className="flex items-center gap-1">
             <select defaultValue="" onChange={e => { bulkReassignFamille(e.target.value); e.target.value = "" }}
