@@ -1309,7 +1309,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
             const overduePct = plafond > 0 ? Math.round((solde / plafond) * 100) : 0
             const isOverdue = ageMs !== null && delaiMs !== Infinity && ageMs > delaiMs && solde > 0
             const isOverPlafond = plafond > 0 && solde > plafond
-            return { client: c, solde, plafond, delai, overduePct, isOverdue, isOverPlafond, lastBLDate, ageMs }
+            return { client: c, solde, unpaid: unpaidOf(c), plafond, delai, overduePct, isOverdue, isOverPlafond, lastBLDate, ageMs }
           })
           .sort((a, b) => {
             if (b.isOverPlafond !== a.isOverPlafond) return a.isOverPlafond ? -1 : 1
@@ -1338,6 +1338,7 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
           const newSolde = Math.max(0, (allClients[idx].creditSolde ?? 0) - Number(creditPaiMontant))
           allClients[idx] = { ...allClients[idx], creditSolde: newSolde }
           store.saveClients(allClients)
+          import("@/lib/supabase/db").then(db => { try { db.upsertClient(allClients[idx]) } catch { /* offline */ } }).catch(() => {})
           // Also register a caisse entry
           const entry = {
             id: store.genId(),
@@ -1363,10 +1364,17 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
           if (!hasPermission(actor.role, "gerer_recouvrement")) { logAction(actor, "gerer_recouvrement", "denied", { type: "credit_reset_masse" }); return }
           logAction(actor, "gerer_recouvrement", "success", { type: "credit_reset_masse", label: `${creditClients.length} client(s)` })
           const allClients = store.getClients()
-          const updated = allClients.map(c => (c.creditSolde ?? 0) !== 0 ? { ...c, creditSolde: 0 } : c)
+          const touchedIds = new Set(allClients.filter(c => (c.creditSolde ?? 0) !== 0).map(c => c.id))
+          const updated = allClients.map(c => touchedIds.has(c.id) ? { ...c, creditSolde: 0 } : c)
           store.saveClients(updated)
           refresh()
           setConfirmResetCredit(false)
+          // Pousser vers Supabase — sans ça la remise a 0 reste locale a ce navigateur
+          // et un prochain sync depuis Supabase (autre appareil, autre onglet) ecrase
+          // le reset avec l'ancien solde jamais synchronise.
+          import("@/lib/supabase/db").then(db => {
+            updated.filter(c => touchedIds.has(c.id)).forEach(c => { try { db.upsertClient(c) } catch { /* offline */ } })
+          }).catch(() => {})
         }
 
         return (
@@ -1404,13 +1412,16 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
               <div className="flex items-center gap-2 flex-wrap">
                 {!confirmResetCredit ? (
                   <button onClick={() => setConfirmResetCredit(true)}
+                    title="Remet a 0 le solde credit ajuste manuellement — les factures marquees Impayee ne sont pas affectees"
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors">
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-                    Remise a 0 — Credit clients
+                    Remise a 0 — Solde credit ajuste
                   </button>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-red-700">Remettre le credit de TOUS les clients a 0 ?</span>
+                    <span className="text-xs font-bold text-red-700">
+                      Remettre le solde credit ajuste de TOUS les clients a 0 ? Les factures impayees ne seront PAS effacees — reglez-les via l&apos;onglet Factures.
+                    </span>
                     <button onClick={handleResetAllCredit} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-red-600 hover:bg-red-700">Oui, remettre</button>
                     <button onClick={() => setConfirmResetCredit(false)} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-border hover:bg-muted">Annuler</button>
                   </div>
@@ -1516,6 +1527,12 @@ export default function BOFinance({ user }: { user: { id: string; name: string; 
                         </td>
                         <td className={`px-4 py-3 font-bold whitespace-nowrap ${c.isOverPlafond ? "text-red-700" : c.isOverdue ? "text-orange-700" : "text-foreground"}`}>
                           {fmt(c.solde)} DH
+                          {c.unpaid > 0 && (
+                            <p className="text-[10px] font-normal text-muted-foreground"
+                              title="Montant des factures marquees Impayee — non affecte par Remise a 0, doit etre regle via l'onglet Factures">
+                              dont {fmt(c.unpaid)} DH factures impayees
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                           {c.plafond > 0 ? `${fmt(c.plafond)} DH` : <span className="italic text-xs">Non defini</span>}
