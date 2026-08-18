@@ -47,6 +47,28 @@ Tout est dans `index.html` :
 - **Couleurs** : variables CSS dans `:root` (`--ink`, `--brand`, `--accent`, `--paper`…).
 - **Contact** : l'adresse e-mail apparaît dans le bloc `.contact-actions` et dans le JSON-LD.
 
+## Dépôts GitHub dédiés
+
+Chaque site peut vivre dans son propre dépôt, selon la convention déjà en place sur le compte
+[Vitagro](https://github.com/Vitagro) :
+
+| Dossier source | Dépôt GitHub |
+|---|---|
+| `sites/vita-agro/` | [`Vitagro/vita-agro-site`](https://github.com/Vitagro/vita-agro-site) |
+| `sites/vita-fresh/` | [`Vitagro/vita-fresh-site`](https://github.com/Vitagro/vita-fresh-site) |
+| `sites/vita-tech/` | [`Vitagro/vita-tech-site`](https://github.com/Vitagro/vita-tech-site) |
+| `sites/vita-logi/` | `Vitagro/vita-logi-site` *(à créer)* |
+| `sites/vita-trad/` | `Vitagro/vita-trad-site` *(à créer)* |
+| `sites/vita-stores/` | `Vitagro/vita-stores-site` *(à créer)* |
+
+Le script [`scripts/publish-site-repos.sh`](../scripts/publish-site-repos.sh) crée le dépôt
+(si la CLI `gh` est authentifiée) puis y pousse le contenu du dossier :
+
+```bash
+./scripts/publish-site-repos.sh                 # les trois nouveaux sites
+./scripts/publish-site-repos.sh vita-logi       # un seul site
+```
+
 ## Déploiement
 
 Voir [`docs/DEPLOIEMENT-HOSTINGER.md`](../docs/DEPLOIEMENT-HOSTINGER.md).
