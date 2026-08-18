@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://trad.vita-agro.com/sitemap.xml
