@@ -23,9 +23,36 @@ sites/<filiale>/
 └── sitemap.xml
 ```
 
+## Structure d'une page filiale
+
+Les sites `vita-logi`, `vita-trad` et `vita-stores` partagent la même trame, pensée pour un
+lecteur investisseur autant que pour un client :
+
+1. **Bandeau groupe** — rattachement au holding et accès direct aux cinq filiales.
+2. **Hero** — positionnement, promesse, accès à l'espace investisseurs.
+3. **Chiffres clés** — engagements de service (branchables sur l'ERP, voir plus bas).
+4. **Activités** — trois métiers détaillés.
+5. **Méthode / processus** — quatre étapes documentées.
+6. **Marché & catalyseurs** — fragmentation actuelle, Had Soualem 2028, Coupe du Monde 2030.
+7. **Thèse d'investissement** — intégration verticale, ERP propriétaire, base rentable, catalyseurs datés.
+8. **Feuille de route** — quatre jalons avec statut.
+9. **Espace investisseurs** — deux tours de financement du holding, emplois des fonds, demande de dossier.
+10. **Le groupe** — les cinq filiales, avec lien vers chaque site.
+11. **Contact** et pied de page complet.
+
+## Chiffres live depuis l'ERP FreshLink
+
+Chaque page embarque un connecteur ERP en lecture seule. Il est **actif sur Vita Fresh**
+(`https://erp.vita-agro.com/api/ext/public-stats`) et **prêt mais désactivé** sur les autres
+sites — il suffit d'y renseigner `ERP.url`. En cas d'ERP injoignable, la page conserve ses
+valeurs statiques sans afficher d'erreur.
+
+Contrat d'API, exigences CORS et procédure d'activation :
+[`docs/INTEGRATION-ERP-SITES.md`](../docs/INTEGRATION-ERP-SITES.md).
+
 ## Caractéristiques communes
 
-- **Bilingue FR / EN** — bascule dans la barre de navigation, choix mémorisé dans le navigateur (`localStorage`).
+- **Bilingue FR / EN** — bascule dans la barre de navigation, choix mémorisé dans le navigateur (`localStorage`). Le français est la langue par défaut des sites filiales.
 - **Responsive** — desktop, tablette, mobile (menu burger sous 640 px).
 - **Identité de groupe** — même typographie (Fraunces / Inter Tight / IBM Plex Mono), même structure,
   palette propre à chaque filiale.
