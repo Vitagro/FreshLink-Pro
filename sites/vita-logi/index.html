@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vita Logi — Prestation logistique & solutions transport · Vita Agro Capital</title>
+<meta name="description" content="Vita Logi, filiale logistique du groupe Vita Agro Capital : transport sous température dirigée, entreposage et optimisation des tournées au Maroc, pilotés par l'ERP FreshLink.">
+<meta name="robots" content="index,follow">
+<meta name="theme-color" content="#0D1B24">
+<meta property="og:site_name" content="Vita Agro Capital">
+<meta property="og:title" content="Vita Logi — Prestation logistique & solutions transport · Vita Agro Capital">
+<meta property="og:description" content="Vita Logi, filiale logistique du groupe Vita Agro Capital : transport sous température dirigée, entreposage et optimisation des tournées au Maroc, pilotés par l'ERP FreshLink.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_MA"><meta property="og:locale:alternate" content="en_US">
+<meta property="og:url" content="https://logi.vita-agro.com/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://logi.vita-agro.com/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='50' fill='%230D1B24'/%3E%3Ctext x='50' y='69' font-family='Georgia,serif' font-size='54' font-weight='700' fill='%23F2A03D' text-anchor='middle'%3EL%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Inter+Tight:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Organization","name":"Vita Logi","alternateName":"Vita Logi — Logistics services & transport solutions","url":"https://logi.vita-agro.com","email":"vitalogi@vita-agro.com","description":"Vita Logi, filiale logistique du groupe Vita Agro Capital : transport sous température dirigée, entreposage et optimisation des tournées au Maroc, pilotés par l'ERP FreshLink.","parentOrganization":{"@type":"Organization","name":"Vita Agro Capital","url":"https://vita-agro.com"},"address":{"@type":"PostalAddress","addressLocality":"Casablanca","addressCountry":"MA"},"areaServed":"MA","sameAs":["https://fresh.vita-agro.com","https://tech.vita-agro.com","https://trad.vita-agro.com","https://stores.vita-agro.com","https://vita-agro.com"]}
+</script>
+<style>
+:root{--ink:#0D1B24;--ink-2:#0A151C;--brand:#155E75;--brand-2:#0E7490;--accent:#F2A03D;--accent-soft:#F7C67E;--paper:#F4F6F7;--paper-2:#E8EDF0;--white:#fff;--line:rgba(0,0,0,.12);--line-2:rgba(255,255,255,.14);--line-accent:rgba(242,160,61,.4);--shadow:0 1px 0 rgba(0,0,0,.04),0 24px 50px -30px rgba(0,0,0,.45);--maxw:1200px}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:120px}
+body{font-family:"Inter Tight",system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+h1,h2,h3,h4{font-family:"Fraunces",Georgia,serif;font-weight:600;line-height:1.06;letter-spacing:-.015em}
+a{color:inherit;text-decoration:none}
+.eyebrow{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--brand-2)}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.skip{position:absolute;left:-9999px}.skip:focus{left:12px;top:12px;z-index:200;background:var(--accent);color:#10161a;padding:10px 16px;border-radius:8px;font-weight:600}
+
+/* ---------- group strip ---------- */
+.gstrip{background:var(--ink);color:rgba(255,255,255,.72);font-size:12.5px}
+.gstrip-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:42px;flex-wrap:nowrap;overflow:hidden}
+.gstrip .holding{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.gstrip .holding b{color:var(--accent-soft);font-weight:500}
+.gstrip .dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+.gstrip nav{display:flex;gap:18px;white-space:nowrap}
+.gstrip nav a{opacity:.66;transition:opacity .2s,color .2s}
+.gstrip nav a:hover{opacity:1;color:var(--accent-soft)}
+.gstrip nav a.self{opacity:1;color:#fff;font-weight:600}
+
+/* ---------- nav ---------- */
+header.nav{position:sticky;top:0;z-index:60;background:rgba(244,246,247,.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.nav-in{display:flex;align-items:center;justify-content:space-between;height:74px;gap:16px}
+.brand{display:flex;align-items:center;gap:12px}
+.brand img{width:40px;height:40px;object-fit:contain;background:#fff;border-radius:10px;padding:3px;border:1px solid var(--line)}
+.brand .bt{font-family:"Fraunces",serif;font-weight:600;font-size:19px;line-height:1.1}
+.brand .bs{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.55;display:block;margin-top:2px}
+.nav-right{display:flex;align-items:center;gap:20px}
+.nav-links{display:flex;gap:22px;align-items:center}
+.nav-links a{font-size:14px;opacity:.7;transition:opacity .2s}.nav-links a:hover{opacity:1}
+.lang{display:flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;font-family:"IBM Plex Mono",monospace;font-size:11.5px}
+.lang button{border:0;background:transparent;padding:6px 11px;cursor:pointer;color:var(--ink);opacity:.55;font-family:inherit}
+.lang button.on{background:var(--brand);color:#fff;opacity:1}
+.nav-cta{font-weight:600;font-size:14px;background:var(--brand);color:#fff;padding:10px 18px;border-radius:999px;transition:background .2s,transform .2s;white-space:nowrap}
+.nav-cta:hover{background:var(--ink);transform:translateY(-1px)}
+.burger{display:none;background:none;border:0;cursor:pointer;padding:6px}
+.burger span{display:block;width:22px;height:2px;background:var(--ink);margin:5px 0}
+
+/* ---------- hero ---------- */
+.hero{position:relative;background:var(--ink);color:#fff;overflow:hidden}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(1100px 500px at 80% -12%,rgba(242,160,61,.17),transparent 62%),radial-gradient(900px 620px at 4% 118%,rgba(14,116,144,.36),transparent 58%)}
+.hero::after{content:"";position:absolute;inset:0;opacity:.5;background-image:linear-gradient(var(--line-2) 1px,transparent 1px),linear-gradient(90deg,var(--line-2) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(700px 380px at 72% 22%,#000,transparent 75%)}
+.hero-in{position:relative;z-index:1;padding:92px 0 76px;display:grid;grid-template-columns:1.16fr .84fr;gap:52px;align-items:center}
+.hero .eyebrow{color:var(--accent-soft)}
+.hero h1{font-size:clamp(40px,5.6vw,72px);margin:20px 0 0;color:#fff}
+.hero h1 em{font-style:italic;color:var(--accent);font-weight:500}
+.hero p.lead{margin-top:24px;font-size:18px;max-width:52ch;color:rgba(255,255,255,.82)}
+.motto{margin-top:24px;display:flex;gap:10px 24px;flex-wrap:wrap;font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-soft)}
+.motto span{display:flex;align-items:center;gap:9px}
+.motto span::before{content:"";width:5px;height:5px;background:var(--accent);border-radius:50%}
+.hero-actions{margin-top:32px;display:flex;gap:12px;flex-wrap:wrap}
+.btn-gold{background:var(--accent);color:#10161a;font-weight:700;font-size:15px;padding:13px 24px;border-radius:999px;transition:transform .2s,box-shadow .2s;border:0;cursor:pointer;display:inline-block}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 16px 32px -14px rgba(242,160,61,.4)}
+.btn-ghost{border:1px solid rgba(255,255,255,.35);color:#fff;font-weight:600;font-size:15px;padding:13px 22px;border-radius:999px;transition:border-color .2s,background .2s;display:inline-block}
+.btn-ghost:hover{border-color:var(--accent);background:rgba(255,255,255,.07)}
+.btn-dark{background:var(--brand);color:#fff;font-weight:600;font-size:15px;padding:13px 22px;border-radius:999px;display:inline-block;transition:background .2s,transform .2s}
+.btn-dark:hover{background:var(--ink);transform:translateY(-1px)}
+.hero-logo{justify-self:end;background:#fff;border-radius:24px;padding:34px;max-width:330px;width:100%;box-shadow:0 34px 64px -32px rgba(0,0,0,.6)}
+.hero-logo img{width:100%;height:auto;display:block}
+
+/* ---------- ticker ---------- */
+.ticker{position:relative;z-index:1;border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);background:rgba(0,0,0,.22);overflow:hidden}
+.ticker-row{display:flex;gap:48px;padding:14px 0;white-space:nowrap;animation:scroll 38s linear infinite;width:max-content}
+.ticker-row span{font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.11em;color:rgba(255,255,255,.6);text-transform:uppercase}
+.ticker-row b{color:var(--accent-soft);font-weight:500}
+@keyframes scroll{to{transform:translateX(-50%)}}
+
+/* ---------- sections ---------- */
+section{padding:92px 0}
+.alt{background:var(--paper-2)}
+.dark{background:var(--ink);color:#fff}
+.dark h2,.dark h3{color:#fff}
+.dark .sec-head p{color:rgba(255,255,255,.72)}
+.dark .eyebrow{color:var(--accent-soft)}
+.sec-head{max-width:760px;margin-bottom:48px}
+.sec-head h2{font-size:clamp(29px,3.9vw,45px);margin-top:14px}
+.sec-head p{margin-top:16px;font-size:17.5px;opacity:.74;max-width:64ch}
+
+/* ---------- kpi ---------- */
+.kpi-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.live-badge{display:inline-flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.12em;text-transform:uppercase;border:1px solid var(--line-accent);color:var(--brand-2);border-radius:999px;padding:5px 12px}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--brand-2);box-shadow:0 0 0 0 rgba(242,160,61,.4);animation:pulse 2.4s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 9px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--white)}
+.kpi{padding:30px 24px;border-right:1px solid var(--line)}
+.kpi:last-child{border-right:0}
+.kpi .num{font-family:"Fraunces",serif;font-size:clamp(28px,3.1vw,42px);font-weight:600;color:var(--brand)}
+.kpi .lab{margin-top:8px;font-size:14px;opacity:.68}
+.kpi .sub{margin-top:3px;font-size:12px;color:var(--brand-2);font-family:"IBM Plex Mono",monospace}
+
+/* ---------- cards ---------- */
+.seg-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.seg{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:28px;transition:transform .25s,box-shadow .25s,border-color .25s}
+.seg:hover{transform:translateY(-4px);box-shadow:var(--shadow);border-color:var(--line-accent)}
+.seg .ic{width:48px;height:48px;border-radius:13px;background:var(--paper-2);display:flex;align-items:center;justify-content:center;color:var(--brand)}
+.seg h3{font-size:21px;margin-top:18px}
+.seg p{margin-top:9px;font-size:14.5px;opacity:.72}
+.seg ul{margin-top:14px;list-style:none;font-size:14px;opacity:.78}
+.seg li{margin-top:7px;padding-left:18px;position:relative}
+.seg li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--accent)}
+
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.step{border:1px solid var(--line);border-top:3px solid var(--accent);border-radius:14px;padding:24px;background:var(--white)}
+.step .sk{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--brand-2);letter-spacing:.1em}
+.step h3{font-size:18.5px;margin:9px 0 6px}
+.step p{font-size:14px;opacity:.72}
+
+.mkt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.mkt{background:var(--white);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:14px;padding:28px}
+.mkt .yr{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.14em;color:var(--brand-2)}
+.mkt h3{font-size:22px;margin:10px 0 9px}
+.mkt p{font-size:14.5px;opacity:.74}
+
+.thesis-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.th{border:1px solid var(--line-2);border-radius:16px;padding:28px;background:rgba(255,255,255,.03);display:flex;gap:20px}
+.th .tn{font-family:"Fraunces",serif;font-size:34px;color:var(--accent);line-height:1;flex:0 0 auto;opacity:.9}
+.th h3{font-size:20px;margin-bottom:8px}
+.th p{font-size:14.5px;color:rgba(255,255,255,.74)}
+
+.road{position:relative;display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:8px}
+.road::before{content:"";position:absolute;left:0;right:0;top:13px;height:1px;background:var(--line)}
+.rd{position:relative;padding-top:38px}
+.rd::before{content:"";position:absolute;left:0;top:7px;width:14px;height:14px;border-radius:50%;background:var(--paper);border:2px solid var(--accent)}
+.rd.done::before{background:var(--accent)}
+.rd .ry{font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.12em;color:var(--brand-2)}
+.rd h3{font-size:18px;margin:8px 0 6px}
+.rd p{font-size:14px;opacity:.72}
+.rd .rs{margin-top:10px;display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:var(--paper-2);border:1px solid var(--line)}
+
+/* ---------- investors ---------- */
+.inv-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+.inv-card{border:1px solid var(--line-2);border-radius:18px;padding:30px;background:rgba(255,255,255,.03)}
+.inv-card.hot{background:linear-gradient(158deg,#155E75,var(--ink));border-color:transparent}
+.inv-card .it{font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.inv-card .ia{font-family:"Fraunces",serif;font-size:clamp(26px,3.2vw,38px);font-weight:600;margin-top:10px;color:#fff}
+.inv-card .id{margin-top:8px;font-size:14.5px;color:rgba(255,255,255,.72)}
+.alloc{margin-top:22px;display:grid;gap:11px}
+.alloc-row{display:flex;align-items:center;gap:12px;font-size:13.5px;color:rgba(255,255,255,.85)}
+.alloc-bar{height:7px;border-radius:99px;background:var(--accent);flex:0 0 auto}
+.alloc-row .apct{margin-left:auto;font-family:"IBM Plex Mono",monospace;color:var(--accent-soft)}
+.inv-note{margin-top:18px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--accent-soft)}
+.inv-list{margin-top:18px;list-style:none;font-size:14.5px;color:rgba(255,255,255,.8)}
+.inv-list li{margin-top:9px;padding-left:20px;position:relative}
+.inv-list li::before{content:"";position:absolute;left:0;top:8px;width:7px;height:7px;border-radius:2px;background:var(--accent)}
+.inv-actions{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap}
+
+/* ---------- group ---------- */
+.grp-lead{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:center;margin-bottom:40px}
+.grp-lead p{font-size:16.5px;opacity:.76}
+.grp-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.gcard{background:var(--white);border:1px solid var(--line);border-radius:16px;padding:22px;transition:transform .25s,border-color .25s,box-shadow .25s;display:flex;flex-direction:column;min-height:100%}
+.gcard:hover{transform:translateY(-4px);border-color:var(--line-accent);box-shadow:var(--shadow)}
+.gcard.self{border-color:var(--accent);background:var(--paper-2)}
+.gcard .gn{font-family:"Fraunces",serif;font-size:18px;font-weight:600}
+.gcard .gt{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--brand-2);margin-top:6px}
+.gcard .gd{font-size:13.5px;opacity:.72;margin-top:11px;flex:1}
+.gcard .gl{margin-top:14px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--brand);font-weight:500}
+
+/* ---------- contact / footer ---------- */
+.contact{background:var(--ink-2);color:#fff;text-align:center}
+.contact h2{font-size:clamp(30px,4.3vw,52px);color:#fff}
+.contact h2 em{color:var(--accent);font-style:italic;font-weight:500}
+.contact p{margin-top:16px;color:rgba(255,255,255,.75);font-size:17.5px;max-width:62ch;margin-left:auto;margin-right:auto}
+.contact-actions{margin-top:32px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.contact-meta{margin-top:42px;display:flex;gap:12px 36px;justify-content:center;flex-wrap:wrap;font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:rgba(255,255,255,.6)}
+.contact-meta a:hover{color:var(--accent-soft)}
+footer{background:#08131A;color:rgba(255,255,255,.55);padding:44px 0;font-size:13px}
+.foot-in{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:28px}
+.foot-in h4{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-soft);font-weight:500;margin-bottom:12px}
+.foot-in a{display:block;opacity:.7;margin-top:7px;transition:opacity .2s,color .2s}
+.foot-in a:hover{opacity:1;color:var(--accent-soft)}
+.foot-legal{line-height:1.7}
+.foot-legal b{color:#fff;font-weight:600;font-family:"Fraunces",serif;font-size:16px}
+.foot-bottom{margin-top:32px;padding-top:20px;border-top:1px solid rgba(255,255,255,.1);display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-family:"IBM Plex Mono",monospace;font-size:11.5px;opacity:.6}
+
+.reveal{opacity:0;transform:translateY(22px);transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+
+@media(max-width:1080px){.grp-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:960px){
+ .gstrip nav{display:none}
+ .hero-in{grid-template-columns:1fr;gap:34px}.hero-logo{justify-self:start;max-width:230px}
+ .seg-grid,.mkt-grid,.thesis-grid,.inv-grid,.grp-lead{grid-template-columns:1fr}
+ .kpi-grid,.steps,.road{grid-template-columns:1fr 1fr}
+ .road::before{display:none}
+ .foot-in{grid-template-columns:1fr 1fr}
+}
+@media(max-width:640px){
+ .nav-links{display:none}.burger{display:block}
+ .nav-links.open{display:flex;position:absolute;top:74px;left:0;right:0;flex-direction:column;background:var(--paper);padding:18px 28px;gap:16px;border-bottom:1px solid var(--line)}
+ section{padding:62px 0}
+ .kpi-grid,.steps,.road,.grp-grid,.foot-in{grid-template-columns:1fr}
+ .kpi{border-right:0;border-bottom:1px solid var(--line)}
+ .brand .bs{display:none}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}}
+@media print{.gstrip,header.nav,.ticker,.hero::after{display:none}body{background:#fff;color:#000}section{padding:24px 0;break-inside:avoid}.dark,.contact,footer{background:#fff!important;color:#000!important}.dark h2,.dark h3,.contact h2{color:#000!important}}
+</style>
+</head>
+<body>
+<a class="skip" href="#main" data-i18n="skip"></a>
+
+<div class="gstrip"><div class="wrap gstrip-in">
+  <a class="holding" href="https://vita-agro.com"><span class="dot"></span><span data-i18n="strip_by"></span> <b>Vita Agro Capital</b></a>
+  <nav aria-label="Groupe"><a href="https://fresh.vita-agro.com">Vita Fresh</a><a href="https://tech.vita-agro.com">Vita Tech</a><a class="self" href="#top">Vita Logi</a><a href="https://trad.vita-agro.com">Vita Trad</a><a href="https://stores.vita-agro.com">Vita Stores</a><a href="https://vita-agro.com" style="color:var(--accent-soft);opacity:1">vita-agro.com ↗</a></nav>
+</div></div>
+
+<header class="nav"><div class="wrap nav-in">
+  <a class="brand" href="#top"><img src="data:image/webp;base64,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" alt="Vita Logi"><span class="bt">Vita Logi<span class="bs" data-i18n="brand_sub"></span></span></a>
+  <div class="nav-right">
+    <nav class="nav-links" id="navlinks">
+      <a href="#activites" data-i18n="nav_offer"></a>
+      <a href="#marche" data-i18n="nav_market"></a>
+      <a href="#modele" data-i18n="nav_model"></a>
+      <a href="#feuille-de-route" data-i18n="nav_road"></a>
+      <a href="#groupe" data-i18n="nav_group"></a>
+    </nav>
+    <div class="lang"><button data-lang="fr">FR</button><button data-lang="en">EN</button></div>
+    <a href="#investisseurs" class="nav-cta" data-i18n="nav_cta"></a>
+    <button class="burger" id="burger" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
+  </div>
+</div></header>
+
+<main id="main">
+<section class="hero" id="top">
+  <div class="wrap hero-in">
+    <div>
+      <span class="eyebrow" data-i18n="hero_eyebrow"></span>
+      <h1 id="heroTitle"></h1>
+      <p class="lead" data-i18n="hero_lead"></p>
+      <div class="motto"><span data-i18n="motto1"></span><span data-i18n="motto2"></span><span data-i18n="motto3"></span></div>
+      <div class="hero-actions">
+        <a href="#investisseurs" class="btn-gold" data-i18n="hero_cta1"></a>
+        <a href="#activites" class="btn-ghost" data-i18n="hero_cta2"></a>
+      </div>
+    </div>
+    <div class="hero-logo reveal"><img src="data:image/webp;base64,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" alt="Vita Logi"></div>
+  </div>
+  <div class="ticker"><div class="ticker-row" id="tickerRow"></div></div>
+</section>
+
+<section class="alt" id="chiffres">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="kpi_eyebrow"></span>
+      <h2 data-i18n="kpi_h"></h2>
+      <p data-i18n="kpi_p"></p>
+    </div>
+    <div class="kpi-head reveal" id="kpiHead" hidden>
+      <span class="live-badge"><span class="live-dot"></span><span id="liveLabel">FreshLink ERP</span></span>
+      <span class="mono" id="liveStamp" style="font-size:12px;opacity:.6"></span>
+    </div>
+    <div class="kpi-grid reveal" id="kpiGrid"></div>
+  </div>
+</section>
+
+<section id="activites">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="seg_eyebrow"></span>
+      <h2 data-i18n="seg_h"></h2>
+      <p data-i18n="seg_p"></p>
+    </div>
+    <div class="seg-grid reveal" id="segGrid"></div>
+  </div>
+</section>
+
+<section class="alt" id="process">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="step_eyebrow"></span>
+      <h2 data-i18n="step_h"></h2>
+      <p data-i18n="step_p"></p>
+    </div>
+    <div class="steps reveal" id="stepGrid"></div>
+  </div>
+</section>
+
+<section id="marche">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="mkt_eyebrow"></span>
+      <h2 data-i18n="mkt_h"></h2>
+      <p data-i18n="mkt_p"></p>
+    </div>
+    <div class="mkt-grid reveal" id="mktGrid"></div>
+  </div>
+</section>
+
+<section class="dark" id="modele">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="th_eyebrow"></span>
+      <h2 data-i18n="th_h"></h2>
+      <p data-i18n="th_p"></p>
+    </div>
+    <div class="thesis-grid reveal" id="thGrid"></div>
+  </div>
+</section>
+
+<section class="alt" id="feuille-de-route">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="road_eyebrow"></span>
+      <h2 data-i18n="road_h"></h2>
+      <p data-i18n="road_p"></p>
+    </div>
+    <div class="road reveal" id="roadGrid"></div>
+  </div>
+</section>
+
+<section class="dark" id="investisseurs">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="inv_eyebrow"></span>
+      <h2 data-i18n="inv_h"></h2>
+      <p data-i18n="inv_p"></p>
+    </div>
+    <div class="inv-grid reveal">
+      <div class="inv-card hot">
+        <div class="it" data-i18n="inv_r1_label"></div>
+        <div class="ia">500 000 MAD</div>
+        <div class="id" data-i18n="inv_r1_desc"></div>
+        <div class="alloc" id="allocGrid"></div>
+        <div class="inv-note" data-i18n="inv_r1_note"></div>
+      </div>
+      <div class="inv-card">
+        <div class="it" data-i18n="inv_r2_label"></div>
+        <div class="ia">5 000 000 MAD</div>
+        <div class="id" data-i18n="inv_r2_desc"></div>
+        <ul class="inv-list" id="invList"></ul>
+        <div class="inv-note" data-i18n="inv_r2_note"></div>
+      </div>
+    </div>
+    <div class="inv-actions reveal">
+      <a class="btn-gold" href="mailto:vitalogi@vita-agro.com?subject=Vita%20Logi%20%E2%80%94%20demande%20de%20dossier%20investisseur" data-i18n="inv_cta1"></a>
+      <a class="btn-ghost" href="https://vita-agro.com#financement" data-i18n="inv_cta2"></a>
+    </div>
+  </div>
+</section>
+
+<section id="groupe">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="eyebrow" data-i18n="grp_eyebrow"></span>
+      <h2 data-i18n="grp_h"></h2>
+      <p data-i18n="grp_p"></p>
+    </div>
+    <div class="grp-grid reveal" id="grpGrid"></div>
+    <div class="inv-actions reveal" style="margin-top:28px">
+      <a class="btn-dark" href="https://vita-agro.com" data-i18n="grp_cta"></a>
+    </div>
+  </div>
+</section>
+
+<section class="contact" id="contact">
+  <div class="wrap">
+    <span class="eyebrow" data-i18n="contact_eyebrow"></span>
+    <h2 id="contactTitle"></h2>
+    <p data-i18n="contact_p"></p>
+    <div class="contact-actions">
+      <a class="btn-gold" href="mailto:vitalogi@vita-agro.com">vitalogi@vita-agro.com</a>
+      <a class="btn-ghost" href="https://vita-agro.com" data-i18n="contact_group"></a>
+    </div>
+    <div class="contact-meta">
+      <a href="https://vita-agro.com">vita-agro.com</a>
+      <span>Vita Logi · <span data-i18n="foot_city"></span></span>
+    </div>
+  </div>
+</section>
+</main>
+
+<footer><div class="wrap">
+  <div class="foot-in">
+    <div class="foot-legal">
+      <b>Vita Logi</b><br>
+      <span data-i18n="foot_by"></span> <a href="https://vita-agro.com" style="display:inline;color:var(--accent-soft);opacity:1">Vita Agro Capital</a><br>
+      <span data-i18n="foot_city"></span><br>
+      <a href="mailto:vitalogi@vita-agro.com" style="display:inline">vitalogi@vita-agro.com</a>
+    </div>
+    <div>
+      <h4 data-i18n="foot_nav"></h4>
+      <a href="#activites" data-i18n="nav_offer"></a>
+      <a href="#marche" data-i18n="nav_market"></a>
+      <a href="#feuille-de-route" data-i18n="nav_road"></a>
+      <a href="#investisseurs" data-i18n="nav_cta"></a>
+    </div>
+    <div>
+      <h4 data-i18n="foot_group"></h4>
+      <a href="https://fresh.vita-agro.com">Vita Fresh</a>
+      <a href="https://tech.vita-agro.com">Vita Tech</a>
+      <a href="#top">Vita Logi ·</a>
+      <a href="https://trad.vita-agro.com">Vita Trad</a>
+      <a href="https://stores.vita-agro.com">Vita Stores</a>
+      <a href="https://vita-agro.com">Vita Agro Capital ↗</a>
+    </div>
+  </div>
+  <div class="foot-bottom">
+    <span>© <span id="year"></span> Vita Logi — <span data-i18n="foot_rights"></span></span>
+    <span data-i18n="foot_tag"></span>
+  </div>
+</div></footer>
+
+<script>
+const T={
+ "fr": {
+  "strip_by": "Une filiale du groupe",
+  "skip": "Aller au contenu",
+  "nav_offer": "Activités",
+  "nav_market": "Marché",
+  "nav_model": "Modèle",
+  "nav_road": "Feuille de route",
+  "nav_group": "Le groupe",
+  "nav_cta": "Espace investisseurs",
+  "mkt_eyebrow": "Marché & catalyseurs",
+  "mkt_h": "Un marché en recomposition, avec deux échéances datées.",
+  "mkt_p": "La distribution alimentaire marocaine entre dans un cycle de transformation. Deux échéances structurent notre plan de marche : le transfert du marché de gros de Casablanca et la Coupe du Monde 2030.",
+  "m1y": "Aujourd’hui",
+  "m1h": "Une chaîne fragmentée",
+  "m1p": "Entre le producteur et l’assiette, les intermédiaires s’empilent, les pertes s’accumulent et les prix décrochent de la réalité du champ. Un opérateur intégré et outillé capte cette valeur perdue.",
+  "m2y": "2028",
+  "m2h": "Had Soualem",
+  "m2p": "La relocalisation du marché de gros de Casablanca redessine l’économie de la distribution : nouvelles distances, nouveaux flux, nouveaux équilibres. Le groupe est structuré pour transformer ce bouleversement en avantage.",
+  "m3y": "2030",
+  "m3h": "Coupe du Monde",
+  "m3p": "Explosion attendue des volumes CHR et du tourisme, avec des exigences de régularité et de traçabilité inédites. Le groupe se prépare à servir cette demande sur toute la chaîne, de la distribution au retail.",
+  "th_eyebrow": "Thèse d’investissement",
+  "th_h": "Pourquoi ce modèle tient.",
+  "th_p": "Quatre fondamentaux communs à toutes les filiales du groupe Vita Agro Capital.",
+  "t1h": "Intégration verticale",
+  "t1p": "Sourcing, logistique, distribution et retail sont dans la même maison. Chaque filiale est cliente et fournisseur des autres : la marge reste dans le groupe et la qualité se contrôle de bout en bout.",
+  "t2h": "Un actif technologique propriétaire",
+  "t2p": "FreshLink Pro, notre ERP à intelligence artificielle, pilote commandes, stocks, tournées et traçabilité. C’est un actif du groupe, réutilisable par chaque filiale et commercialisable en SaaS.",
+  "t3h": "Une base d’activité rentable",
+  "t3p": "Le cœur de métier — la distribution de produits frais — opère déjà et finance sa croissance. Le capital extérieur accélère un modèle qui tourne, il ne finance pas une hypothèse.",
+  "t4h": "Des catalyseurs datés",
+  "t4p": "Had Soualem 2028 et la Coupe du Monde 2030 ne sont pas des paris : ce sont des échéances connues. La feuille de route du groupe est calée dessus.",
+  "road_eyebrow": "Feuille de route",
+  "road_p": "Un déploiement par étapes, chacune conditionnée par la précédente. Le détail chiffré figure dans le dossier investisseur.",
+  "inv_eyebrow": "Espace investisseurs",
+  "inv_h": "Investir dans une chaîne, pas dans une promesse.",
+  "inv_p": "Le financement est structuré au niveau du holding Vita Agro Capital et alloué aux filiales selon la feuille de route. Deux tours, séquencés par la preuve.",
+  "inv_r1_label": "Tour 1 · en cours",
+  "inv_r1_desc": "Non dilutif · Halal-first — au niveau du holding Vita Agro Capital.",
+  "inv_r1_note": "Modalités et affectation détaillées dans le dossier investisseur.",
+  "inv_r2_label": "Tour 2 · T+18 mois",
+  "inv_r2_desc": "Equity · déclenché après six mois de rentabilité prouvée.",
+  "inv_r2_note": "Modèle financier disponible sous NDA.",
+  "inv_cta1": "Demander le dossier investisseur",
+  "inv_cta2": "Voir le plan de financement du groupe ↗",
+  "grp_eyebrow": "Le groupe",
+  "grp_h": "Cinq filiales, une seule chaîne de valeur.",
+  "grp_p": "Vita Agro Capital est une holding agri-tech marocaine basée à Casablanca. Chaque filiale couvre un maillon, et travaille avec les autres sur la même infrastructure technologique.",
+  "grp_cta": "Découvrir Vita Agro Capital ↗",
+  "g_visit": "Visiter le site",
+  "g_here": "Vous êtes ici",
+  "g_fresh_t": "Distribution · Fruits & Légumes",
+  "g_fresh_d": "Approvisionnement des particuliers, du CHR et des commerçants en fruits, légumes et herbes fraîches.",
+  "g_tech_t": "Solutions IT & Innovation",
+  "g_tech_d": "Éditeur de FreshLink Pro, l’ERP propriétaire du groupe, proposé en SaaS aux acteurs de la supply chain.",
+  "g_logi_t": "Transport & Logistique",
+  "g_logi_d": "Transport sous température dirigée, entreposage et optimisation des tournées du groupe.",
+  "g_trad_t": "Import · Export · Négoce",
+  "g_trad_d": "Sourcing, import et export de produits agroalimentaires entre le Maroc et les marchés internationaux.",
+  "g_stores_t": "Réseau de magasins",
+  "g_stores_d": "Chaîne de magasins de proximité approvisionnée chaque matin par Vita Fresh.",
+  "contact_group": "Découvrir le groupe",
+  "foot_by": "une filiale de",
+  "foot_city": "Casablanca, Maroc",
+  "foot_nav": "Navigation",
+  "foot_group": "Le groupe",
+  "foot_rights": "Tous droits réservés.",
+  "doc_title": "Vita Logi — Prestation logistique & solutions transport · Vita Agro Capital",
+  "brand_sub": "Transport & Logistique",
+  "hero_eyebrow": "Prestation logistique & solutions transport · Casablanca",
+  "hero_title": "La logistique du frais,|tenue comme|un engagement.",
+  "hero_lead": "Vita Logi est le bras logistique du groupe Vita Agro Capital : transport sous température dirigée, entreposage et optimisation des tournées. Chaque enlèvement, chaque kilomètre et chaque livraison sont tracés dans l’ERP FreshLink — parce qu’en produits périssables, la fiabilité se prouve, elle ne se promet pas.",
+  "motto1": "Température maîtrisée",
+  "motto2": "Tournées optimisées",
+  "motto3": "Preuve de livraison",
+  "hero_cta1": "Espace investisseurs",
+  "hero_cta2": "Voir nos prestations",
+  "ticker": "Filiale du groupe|Vita Agro Capital||Piloté par|FreshLink ERP||Chaîne du froid|0–4°C||Had Soualem|2028||Coupe du Monde|2030",
+  "kpi_eyebrow": "Nos standards",
+  "kpi_h": "Des engagements mesurés, pas des slogans.",
+  "kpi_p": "Ce que nos clients attendent à chaque enlèvement, et ce que nous vérifions à chaque livraison.",
+  "seg_eyebrow": "Nos prestations",
+  "seg_h": "Trois métiers, une seule chaîne maîtrisée.",
+  "seg_p": "Du camion frigorifique à la tournée séquencée, nous prenons en charge l’intégralité du flux physique de vos produits.",
+  "s1h": "Transport & distribution",
+  "s1p": "Livraison urbaine et interurbaine, en température dirigée ou en sec, avec preuve de livraison numérique.",
+  "s1l": "Frigorifique 0–4°C et ambiant|Messagerie et lots complets|Tournées quotidiennes CHR & commerces|Preuve de livraison horodatée",
+  "s2h": "Entreposage & cross-dock",
+  "s2p": "Réception, stockage, préparation de commandes et cross-docking, avec un inventaire suivi à l’unité.",
+  "s2l": "Stockage froid positif et sec|Préparation de commandes|Cross-dock rapide|Inventaire permanent",
+  "s3h": "Optimisation des tournées",
+  "s3p": "Planification, séquencement et suivi des véhicules pour réduire le coût par point livré.",
+  "s3l": "Plan de tournée automatisé|Suivi des véhicules|Coût par trajet et par client|Reporting mensuel de performance",
+  "step_eyebrow": "Notre méthode",
+  "step_h": "Quatre étapes, zéro zone d’ombre.",
+  "step_p": "Un processus outillé et documenté : vous savez toujours où en est votre marchandise, et ce qu’elle a coûté à déplacer.",
+  "p1k": "01 · Cadrage",
+  "p1h": "Analyse du besoin",
+  "p1p": "Volumes, températures, fréquences, points de livraison : nous chiffrons sur des données, pas au feeling.",
+  "p2k": "02 · Enlèvement",
+  "p2h": "Prise en charge",
+  "p2p": "Contrôle qualité et quantité au chargement, saisie immédiate dans FreshLink.",
+  "p3k": "03 · Transport",
+  "p3h": "Tournée optimisée",
+  "p3p": "Séquencement des points, suivi du véhicule et alerte dès qu’un aléa survient sur le parcours.",
+  "p4k": "04 · Livraison",
+  "p4h": "Preuve & reporting",
+  "p4p": "Signature numérique, photo, horodatage — puis reporting consolidé du coût au trajet chaque mois.",
+  "road_h": "Du service interne au prestataire de référence.",
+  "inv_r1_items": "Renforcement de la capacité de transport sous froid|Outillage du pilotage des tournées|Fonds de roulement opérationnel",
+  "inv_r2_items": "Extension de la flotte et des plateformes|Ouverture commerciale hors groupe|Dispositif logistique Had Soualem|Capacité dimensionnée pour 2030",
+  "contact_eyebrow": "Parlons de vos flux",
+  "contact_title": "Transport, stockage|ou investissement :|écrivons-nous.",
+  "contact_p": "Clients comme investisseurs, la même exigence de clarté : décrivez votre besoin, nous répondons avec des chiffres et un calendrier.",
+  "foot_tag": "Transport · Entreposage · Tournées"
+ },
+ "en": {
+  "strip_by": "A subsidiary of",
+  "skip": "Skip to content",
+  "nav_offer": "Activities",
+  "nav_market": "Market",
+  "nav_model": "Model",
+  "nav_road": "Roadmap",
+  "nav_group": "The group",
+  "nav_cta": "Investor relations",
+  "mkt_eyebrow": "Market & catalysts",
+  "mkt_h": "A market being redrawn, against two dated deadlines.",
+  "mkt_p": "Moroccan food distribution is entering a transformation cycle. Two deadlines structure our plan: the relocation of Casablanca's wholesale market and the 2030 World Cup.",
+  "m1y": "Today",
+  "m1h": "A fragmented chain",
+  "m1p": "Between grower and plate, intermediaries stack up, losses accumulate and prices drift away from field reality. An integrated, tooled operator captures that lost value.",
+  "m2y": "2028",
+  "m2h": "Had Soualem",
+  "m2p": "Relocating Casablanca's wholesale market redraws distribution economics: new distances, new flows, new balances. The group is built to turn that shift into an advantage.",
+  "m3y": "2030",
+  "m3h": "World Cup",
+  "m3p": "An expected surge in HORECA volumes and tourism, with unprecedented demands on consistency and traceability. The group is preparing to serve it across the whole chain, from distribution to retail.",
+  "th_eyebrow": "Investment thesis",
+  "th_h": "Why this model holds.",
+  "th_p": "Four fundamentals shared by every subsidiary of the Vita Agro Capital group.",
+  "t1h": "Vertical integration",
+  "t1p": "Sourcing, logistics, distribution and retail sit in the same house. Each subsidiary is a client and a supplier of the others: margin stays inside the group and quality is controlled end to end.",
+  "t2h": "A proprietary technology asset",
+  "t2p": "FreshLink Pro, our AI-powered ERP, drives orders, stock, routing and traceability. It is a group asset, reusable by every subsidiary and sellable as SaaS.",
+  "t3h": "A profitable operating base",
+  "t3p": "The core business — fresh produce distribution — already runs and funds its own growth. Outside capital accelerates a working model rather than funding a hypothesis.",
+  "t4h": "Dated catalysts",
+  "t4p": "Had Soualem 2028 and the 2030 World Cup are not bets: they are known deadlines. The group's roadmap is set against them.",
+  "road_eyebrow": "Roadmap",
+  "road_p": "A staged rollout, each step conditioned by the previous one. Detailed figures are in the investor dossier.",
+  "inv_eyebrow": "Investor relations",
+  "inv_h": "Invest in a chain, not in a promise.",
+  "inv_p": "Funding is structured at Vita Agro Capital holding level and allocated to subsidiaries along the roadmap. Two rounds, sequenced by evidence.",
+  "inv_r1_label": "Round 1 · open",
+  "inv_r1_desc": "Non-dilutive · Halal-first — at Vita Agro Capital holding level.",
+  "inv_r1_note": "Terms and allocation detailed in the investor dossier.",
+  "inv_r2_label": "Round 2 · T+18 months",
+  "inv_r2_desc": "Equity · triggered after six months of proven profitability.",
+  "inv_r2_note": "Financial model available under NDA.",
+  "inv_cta1": "Request the investor dossier",
+  "inv_cta2": "See the group funding plan ↗",
+  "grp_eyebrow": "The group",
+  "grp_h": "Five subsidiaries, one value chain.",
+  "grp_p": "Vita Agro Capital is a Moroccan agri-tech holding based in Casablanca. Each subsidiary covers one link of the chain and works with the others on the same technology backbone.",
+  "grp_cta": "Discover Vita Agro Capital ↗",
+  "g_visit": "Visit site",
+  "g_here": "You are here",
+  "g_fresh_t": "Distribution · Fruit & Vegetables",
+  "g_fresh_d": "Supplying households, HORECA and merchants with fresh fruit, vegetables and herbs.",
+  "g_tech_t": "IT Solutions & Innovation",
+  "g_tech_d": "Publisher of FreshLink Pro, the group's proprietary ERP, offered as SaaS to supply-chain players.",
+  "g_logi_t": "Transport & Logistics",
+  "g_logi_d": "Temperature-controlled transport, warehousing and route optimisation for the group.",
+  "g_trad_t": "Import · Export · Trading",
+  "g_trad_d": "Sourcing, import and export of agri-food products between Morocco and international markets.",
+  "g_stores_t": "Store network",
+  "g_stores_d": "A neighbourhood store chain restocked every morning by Vita Fresh.",
+  "contact_group": "Discover the group",
+  "foot_by": "a subsidiary of",
+  "foot_city": "Casablanca, Morocco",
+  "foot_nav": "Navigation",
+  "foot_group": "The group",
+  "foot_rights": "All rights reserved.",
+  "doc_title": "Vita Logi — Logistics services & transport solutions · Vita Agro Capital",
+  "brand_sub": "Transport & Logistics",
+  "hero_eyebrow": "Logistics services & transport solutions · Casablanca",
+  "hero_title": "Fresh logistics,|held to|a commitment.",
+  "hero_lead": "Vita Logi is the logistics arm of the Vita Agro Capital group: temperature-controlled transport, warehousing and route optimisation. Every pickup, kilometre and delivery is traced in the FreshLink ERP — because with perishables, reliability is proven, not promised.",
+  "motto1": "Controlled temperature",
+  "motto2": "Optimised routes",
+  "motto3": "Proof of delivery",
+  "hero_cta1": "Investor relations",
+  "hero_cta2": "See our services",
+  "ticker": "Subsidiary of|Vita Agro Capital||Powered by|FreshLink ERP||Cold chain|0–4°C||Had Soualem|2028||World Cup|2030",
+  "kpi_eyebrow": "Our standards",
+  "kpi_h": "Measured commitments, not slogans.",
+  "kpi_p": "What our clients expect at every pickup, and what we verify at every delivery.",
+  "seg_eyebrow": "Our services",
+  "seg_h": "Three disciplines, one controlled chain.",
+  "seg_p": "From the refrigerated truck to the sequenced round, we handle the entire physical flow of your products.",
+  "s1h": "Transport & distribution",
+  "s1p": "Urban and intercity delivery, temperature-controlled or dry, with digital proof of delivery.",
+  "s1l": "Refrigerated 0–4°C and ambient|Groupage and full loads|Daily HORECA & retail rounds|Timestamped proof of delivery",
+  "s2h": "Warehousing & cross-docking",
+  "s2p": "Receiving, storage, order picking and cross-docking, with unit-level inventory tracking.",
+  "s2l": "Chilled and dry storage|Order preparation|Fast cross-docking|Permanent inventory",
+  "s3h": "Route optimisation",
+  "s3p": "Planning, sequencing and vehicle tracking to cut the cost per delivery point.",
+  "s3l": "Automated route planning|Vehicle tracking|Cost per trip and per client|Monthly performance reporting",
+  "step_eyebrow": "Our method",
+  "step_h": "Four steps, no blind spots.",
+  "step_p": "A tooled, documented process: you always know where your goods are — and what moving them cost.",
+  "p1k": "01 · Scoping",
+  "p1h": "Needs analysis",
+  "p1p": "Volumes, temperatures, frequencies, delivery points: we quote on data, not on gut feel.",
+  "p2k": "02 · Pickup",
+  "p2h": "Taking charge",
+  "p2p": "Quality and quantity control at loading, recorded straight into FreshLink.",
+  "p3k": "03 · Transport",
+  "p3h": "Optimised round",
+  "p3p": "Stop sequencing, vehicle tracking and an alert the moment something goes off-plan.",
+  "p4k": "04 · Delivery",
+  "p4h": "Proof & reporting",
+  "p4p": "Digital signature, photo, timestamp — then consolidated per-trip cost reporting every month.",
+  "road_h": "From in-house service to reference logistics provider.",
+  "inv_r1_items": "Reinforced refrigerated transport capacity|Tooling for route management|Operating working capital",
+  "inv_r2_items": "Fleet and platform expansion|Commercial opening beyond the group|Had Soualem logistics setup|Capacity sized for 2030",
+  "contact_eyebrow": "Let's talk logistics",
+  "contact_title": "Transport, storage|or investment:|let us talk.",
+  "contact_p": "Clients and investors alike get the same clarity: describe your need, we answer with figures and a timeline.",
+  "foot_tag": "Transport · Warehousing · Routing"
+ }
+};
+const ICONS=["<path d=\"M1 3h15v13H1zM16 8h4l3 3v5h-7z\"/><circle cx=\"5.5\" cy=\"18.5\" r=\"2.5\"/><circle cx=\"18.5\" cy=\"18.5\" r=\"2.5\"/>","<path d=\"M3 21V9l9-6 9 6v12\"/><path d=\"M7 21v-8h10v8\"/><path d=\"M7 17h10\"/>","<circle cx=\"5\" cy=\"19\" r=\"2\"/><circle cx=\"19\" cy=\"5\" r=\"2\"/><path d=\"M5 17V9a4 4 0 014-4h2M19 7v8a4 4 0 01-4 4h-2\"/>"];
+const KPIS=[{"id":"coverage","num":"24/7","lab_fr":"Coordination des tournées","lab_en":"Route coordination","sub_fr":"pilotage FreshLink","sub_en":"FreshLink-driven"},{"id":"cold","num":"0–4°C","lab_fr":"Chaîne du froid maîtrisée","lab_en":"Controlled cold chain","sub_fr":"du quai au client","sub_en":"dock to customer"},{"id":"lead","num":"J+0","lab_fr":"Livraison Grand Casablanca","lab_en":"Greater Casablanca delivery","sub_fr":"commandes du matin","sub_en":"morning orders"},{"id":"trace","num":"100%","lab_fr":"Expéditions tracées","lab_en":"Traced shipments","sub_fr":"horodatage & preuve","sub_en":"timestamp & proof"}];
+const ROAD=[{"year":"2026","done":true,"h_fr":"Flotte opérationnelle","h_en":"Fleet in operation","p_fr":"Les tournées quotidiennes de Vita Fresh tournent sur nos véhicules et notre process, sous pilotage FreshLink.","p_en":"Vita Fresh daily rounds run on our vehicles and our process, driven by FreshLink.","s_fr":"En cours","s_en":"Under way"},{"year":"2027","done":false,"h_fr":"Ouverture aux tiers","h_en":"Opening to third parties","p_fr":"Commercialisation de la capacité de transport et d’entreposage auprès de clients hors groupe.","p_en":"Selling transport and warehousing capacity to clients outside the group.","s_fr":"Planifié","s_en":"Planned"},{"year":"2028","done":false,"h_fr":"Dispositif Had Soualem","h_en":"Had Soualem setup","p_fr":"Réorganisation des flux et des plateformes autour du nouveau marché de gros de Casablanca.","p_en":"Reorganising flows and platforms around the new Casablanca wholesale market.","s_fr":"Cap","s_en":"Milestone"},{"year":"2030","done":false,"h_fr":"Montée en charge","h_en":"Scale-up","p_fr":"Capacité dimensionnée pour les volumes CHR et touristiques de la Coupe du Monde.","p_en":"Capacity sized for World Cup HORECA and tourism volumes.","s_fr":"Cap","s_en":"Milestone"}];
+const ALLOC=[];
+const FILIALES=[{"id":"fresh","name":"Vita Fresh","url":"https://fresh.vita-agro.com"},{"id":"tech","name":"Vita Tech","url":"https://tech.vita-agro.com"},{"id":"logi","name":"Vita Logi","url":"https://logi.vita-agro.com"},{"id":"trad","name":"Vita Trad","url":"https://trad.vita-agro.com"},{"id":"stores","name":"Vita Stores","url":"https://stores.vita-agro.com"}];
+const SELF="logi";
+/* --- Connecteur ERP (FreshLink) — desactive tant que ERP.url est vide -------
+   Contrat attendu : GET -> {"kpis":{"<id>":"<valeur>",...},"updated_at":"ISO-8601"}
+   Les <id> correspondent aux champs id du tableau KPIS ci-dessus.            */
+const ERP={"url":"","timeoutMs":6000};
+
+const esc=s=>String(s).replace(/[&<>"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+const STORE_KEY="vlogi_lang";
+let lang=(()=>{try{return localStorage.getItem(STORE_KEY)||'fr';}catch(e){return 'fr';}})();
+let live=null;
+
+function setTitle(id,str){const el=document.getElementById(id);const p=str.split('|');el.innerHTML=p.length===3?`${esc(p[0])}<br><em>${esc(p[1])}</em> ${esc(p[2])}`:p.map(esc).join('<br>');}
+
+function apply(){
+ const t=T[lang];
+ document.documentElement.lang=lang;
+ document.title=t.doc_title;
+ document.querySelectorAll('[data-i18n]').forEach(el=>{const k=el.getAttribute('data-i18n');if(t[k]!=null)el.textContent=t[k];});
+ document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
+ setTitle('heroTitle',t.hero_title);setTitle('contactTitle',t.contact_title);
+ renderTicker(t);renderKpis();renderSegs(t);renderSteps(t);renderMkt(t);renderThesis(t);renderRoad();renderInv(t);renderGroup(t);
+ document.getElementById('year').textContent=new Date().getFullYear();
+}
+function renderTicker(t){
+ const items=t.ticker.split('||');
+ document.getElementById('tickerRow').innerHTML=items.concat(items).map(x=>{const p=x.split('|');return `<span>${esc(p[0])} <b>${esc(p[1]||'')}</b></span>`;}).join('');
+}
+function renderKpis(){
+ document.getElementById('kpiGrid').innerHTML=KPIS.map(k=>{
+  const v=(live&&live[k.id]!=null)?String(live[k.id]):k.num;
+  const sub=(live&&live[k.id]!=null)?(lang==='fr'?'live · ERP FreshLink':'live · FreshLink ERP'):k['sub_'+lang];
+  return `<div class="kpi"><div class="num">${esc(v)}</div><div class="lab">${esc(k['lab_'+lang])}</div><div class="sub">${esc(sub)}</div></div>`;
+ }).join('');
+}
+function renderSegs(t){
+ document.getElementById('segGrid').innerHTML=ICONS.map((ic,i)=>{
+  const n=i+1;const items=(t['s'+n+'l']||'').split('|').filter(Boolean);
+  return `<div class="seg"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ic}</svg></div><h3>${esc(t['s'+n+'h'])}</h3><p>${esc(t['s'+n+'p'])}</p><ul>${items.map(x=>'<li>'+esc(x)+'</li>').join('')}</ul></div>`;
+ }).join('');
+}
+function renderSteps(t){
+ document.getElementById('stepGrid').innerHTML=[1,2,3,4].map(i=>`<div class="step"><div class="sk">${esc(t['p'+i+'k'])}</div><h3>${esc(t['p'+i+'h'])}</h3><p>${esc(t['p'+i+'p'])}</p></div>`).join('');
+}
+function renderMkt(t){
+ document.getElementById('mktGrid').innerHTML=[1,2,3].map(i=>`<div class="mkt"><div class="yr">${esc(t['m'+i+'y'])}</div><h3>${esc(t['m'+i+'h'])}</h3><p>${esc(t['m'+i+'p'])}</p></div>`).join('');
+}
+function renderThesis(t){
+ document.getElementById('thGrid').innerHTML=[1,2,3,4].map(i=>`<div class="th"><div class="tn">0${i}</div><div><h3>${esc(t['t'+i+'h'])}</h3><p>${esc(t['t'+i+'p'])}</p></div></div>`).join('');
+}
+function renderRoad(){
+ document.getElementById('roadGrid').innerHTML=ROAD.map(r=>`<div class="rd${r.done?' done':''}"><div class="ry">${esc(r.year)}</div><h3>${esc(r['h_'+lang])}</h3><p>${esc(r['p_'+lang])}</p><span class="rs">${esc(r['s_'+lang])}</span></div>`).join('');
+}
+function renderInv(t){
+ document.getElementById('allocGrid').innerHTML=ALLOC.length
+  ? ALLOC.map(a=>`<div class="alloc-row"><span class="alloc-bar" style="width:${Math.round(a.pct*1.6)}px"></span><span>${esc(a['lab_'+lang])}</span><span class="apct">${a.pct}%</span></div>`).join('')
+  : '<ul class="inv-list">'+(t.inv_r1_items||'').split('|').filter(Boolean).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>';
+ document.getElementById('invList').innerHTML=(t.inv_r2_items||'').split('|').filter(Boolean).map(x=>'<li>'+esc(x)+'</li>').join('');
+}
+function renderGroup(t){
+ document.getElementById('grpGrid').innerHTML=FILIALES.map(f=>{
+  const self=f.id===SELF;
+  const href=self?'#top':f.url;
+  return `<a class="gcard${self?' self':''}" href="${href}"><span class="gn">${esc(f.name)}</span><span class="gt">${esc(t['g_'+f.id+'_t'])}</span><span class="gd">${esc(t['g_'+f.id+'_d'])}</span><span class="gl">${self?esc(t.g_here):esc(t.g_visit)+' ↗'}</span></a>`;
+ }).join('');
+}
+/* ---- ERP : synchronisation des chiffres cles (optionnelle) ---- */
+async function syncErp(){
+ if(!ERP||!ERP.url)return;
+ const head=document.getElementById('kpiHead'),stamp=document.getElementById('liveStamp');
+ try{
+  const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),(ERP.timeoutMs||6000));
+  const res=await fetch(ERP.url,{headers:{'Accept':'application/json'},signal:ctl.signal,cache:'no-store'});
+  clearTimeout(to);
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const d=await res.json();
+  if(!d||!d.kpis)throw new Error('payload');
+  live=d.kpis;renderKpis();
+  head.hidden=false;
+  if(d.updated_at){const dt=new Date(d.updated_at);if(!isNaN(dt))stamp.textContent=(lang==='fr'?'maj ':'updated ')+dt.toLocaleString(lang==='fr'?'fr-MA':'en-GB');}
+ }catch(e){ /* l'ERP est injoignable : on garde les valeurs statiques, sans message d'erreur */ }
+}
+document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>{lang=b.dataset.lang;try{localStorage.setItem(STORE_KEY,lang);}catch(e){}apply();}));
+const burger=document.getElementById('burger'),links=document.getElementById('navlinks');
+burger&&burger.addEventListener('click',()=>{const o=links.classList.toggle('open');burger.setAttribute('aria-expanded',String(o));});
+links&&links.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{links.classList.remove('open');burger.setAttribute('aria-expanded','false');}));
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}}),{threshold:.1});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+apply();
+syncErp();
+</script>
+</body>
+</html>

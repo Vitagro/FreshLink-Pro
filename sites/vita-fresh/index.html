@@ -47,6 +47,7 @@ section{padding:90px 0}
 .sec-head p{margin-top:16px;font-size:17.5px;color:rgba(14,42,30,.72);max-width:62ch}
 .thesis{background:var(--paper-2)}
 .live-badge{display:inline-flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.08em;color:var(--moss);background:#fff;border:1px solid var(--line);border-radius:999px;padding:6px 12px;margin-left:12px;vertical-align:middle}
+.live-stamp{margin-top:10px;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--moss)}
 .live-dot{width:8px;height:8px;border-radius:50%;background:var(--leaf);animation:pulse 1.8s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
@@ -151,6 +152,7 @@ footer{background:#08160F;color:rgba(245,241,230,.55);padding:34px 0;font-size:1
       <span class="eyebrow" data-i18n="live_eyebrow"></span>
       <h2><span data-i18n="live_h"></span><span class="live-badge"><span class="live-dot"></span>FreshLink ERP</span></h2>
       <p data-i18n="live_p"></p>
+      <p class="live-stamp" id="liveStamp" hidden></p>
     </div>
     <div class="kpi-grid reveal" id="kpiGrid"></div>
   </div>
@@ -253,11 +255,13 @@ const DEFAULT={
   {id:"sectors",num:"—",lab_en:"Sectors covered",lab_fr:"Secteurs couverts",sub_en:"live · FreshLink",sub_fr:"live · FreshLink",vis:false}
  ],
  contact:{email:"vitafresh@vita-agro.com",vis_email:true},
- erpUrl:""
+ erpUrl:"https://erp.vita-agro.com/api/ext/public-stats",
+ erpAuto:true,
+ erpTimeoutMs:6000
 };
 const STORE_KEY="vf_site_v1";
 let S=load();
-function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);const b=structuredClone(DEFAULT);if(Array.isArray(d.kpis))b.kpis=d.kpis;if(d.lang)b.lang=d.lang;if(d.contact)Object.assign(b.contact,d.contact);if(d.erpUrl!=null)b.erpUrl=d.erpUrl;return b;}}catch(e){}return structuredClone(DEFAULT);}
+function load(){try{const r=localStorage.getItem(STORE_KEY);if(r){const d=JSON.parse(r);const b=structuredClone(DEFAULT);if(Array.isArray(d.kpis))b.kpis=d.kpis;if(d.lang)b.lang=d.lang;if(d.contact)Object.assign(b.contact,d.contact);if(d.erpUrl!=null)b.erpUrl=d.erpUrl;if(d.erpAuto!=null)b.erpAuto=d.erpAuto;return b;}}catch(e){}return structuredClone(DEFAULT);}
 function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify(S));}catch(e){}}
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -313,7 +317,7 @@ function buildAdmin(){
   </div>`;});
  h+=`<div class="adm-actions"><button class="adm-btn primary" id="kpiAdd">+ Add a figure</button></div></div>`;
  h+=`<div class="adm-grp"><h3>Contact</h3><div class="adm-full"><label>Email</label><input type="text" data-c="email" value="${esc(S.contact.email)}"></div><div class="adm-row"><label>Show email button</label><label class="sw"><input type="checkbox" data-c="vis_email" ${S.contact.vis_email?'checked':''}><span></span></label></div></div>`;
- h+=`<div class="adm-grp"><h3>ERP sync (FreshLink)</h3><div class="adm-note">Paste a <b>read-only JSON URL</b> exposed by FreshLink (never DB credentials). Expected: <code>{"kpis":{"clients":"128","orders":"3 450"}}</code> — matches KPIs by ID and makes them visible. Unknown IDs are created automatically.</div><input type="text" id="erpUrl" style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:8px" placeholder="https://api.freshlink…/public/kpis.json" value="${esc(S.erpUrl||'')}"><div class="adm-actions"><button class="adm-btn" id="erpFetch">Fetch from ERP</button></div><div class="adm-status" id="erpStatus"></div></div>`;
+ h+=`<div class="adm-grp"><h3>ERP sync (FreshLink)</h3><div class="adm-note">Paste a <b>read-only JSON URL</b> exposed by FreshLink (never DB credentials). Expected: <code>{"kpis":{"clients":"128","orders":"3 450"}}</code> — matches KPIs by ID and makes them visible. Unknown IDs are created automatically.</div><input type="text" id="erpUrl" style="font-family:'IBM Plex Mono',monospace;font-size:12px;margin-top:8px" placeholder="https://api.freshlink…/public/kpis.json" value="${esc(S.erpUrl||'')}"><div class="adm-row"><label>Auto-sync on page load</label><label class="sw"><input type="checkbox" id="erpAuto" ${S.erpAuto?'checked':''}><span></span></label></div><div class="adm-actions"><button class="adm-btn" id="erpFetch">Fetch from ERP</button></div><div class="adm-status" id="erpStatus"></div></div>`;
  h+=`<div class="adm-actions"><button class="adm-btn primary" id="admSave">Save</button><button class="adm-btn" id="admExport">Export JSON</button><button class="adm-btn" id="admImport">Import JSON</button><button class="adm-btn warn" id="admReset">Reset</button></div>
  <div class="adm-note">"Save" stores settings in this browser. Use Export/Import to move them or keep them after redeploys. Client-side gate — for deterrence, not vault-grade security.</div>
  <input type="file" id="admFile" accept="application/json" hidden>`;
@@ -337,8 +341,10 @@ function wire(){
  document.getElementById('admExport').onclick=()=>{const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='vita-fresh-config.json';a.click();};
  const f=document.getElementById('admFile');
  document.getElementById('admImport').onclick=()=>f.click();
- f.onchange=()=>{const x=f.files[0];if(!x)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.kpis))S.kpis=d.kpis;if(d.contact)Object.assign(S.contact,d.contact);if(d.lang)S.lang=d.lang;if(d.erpUrl!=null)S.erpUrl=d.erpUrl;save();applyI18n();buildAdmin();flash('Imported ✓');}catch(e){alert('Invalid JSON.');}};r.readAsText(x);};
+ f.onchange=()=>{const x=f.files[0];if(!x)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(Array.isArray(d.kpis))S.kpis=d.kpis;if(d.contact)Object.assign(S.contact,d.contact);if(d.lang)S.lang=d.lang;if(d.erpUrl!=null)S.erpUrl=d.erpUrl;if(d.erpAuto!=null)S.erpAuto=d.erpAuto;save();applyI18n();buildAdmin();flash('Imported ✓');}catch(e){alert('Invalid JSON.');}};r.readAsText(x);};
  document.getElementById('erpFetch').onclick=erpFetch;
+ const auto=document.getElementById('erpAuto');
+ if(auto)auto.onchange=()=>{S.erpAuto=auto.checked;save();};
 }
 function flash(m){const s=document.getElementById('erpStatus');if(s){s.textContent=m;s.style.color='var(--forest)';setTimeout(()=>{if(s)s.textContent='';},2500);}}
 async function erpFetch(){
@@ -360,6 +366,41 @@ async function erpFetch(){
  }catch(e){st.textContent='Failed: '+e.message+' (check URL / CORS).';st.style.color='#a33';}
 }
 applyI18n();
+
+/* ===== ERP FreshLink — synchronisation automatique des chiffres =====
+   Lecture seule : GET S.erpUrl -> {"kpis":{"<id>":"<valeur>"},"updated_at":"ISO-8601"}
+   Les <id> correspondent aux id des KPI ci-dessus. En cas d'echec (ERP
+   injoignable, CORS, timeout), la page conserve les valeurs statiques et
+   n'affiche aucune erreur au visiteur. */
+async function erpAutoSync(){
+ if(!S.erpAuto||!S.erpUrl)return;
+ const stamp=document.getElementById('liveStamp');
+ try{
+  const ctl=new AbortController();
+  const to=setTimeout(()=>ctl.abort(),S.erpTimeoutMs||6000);
+  const res=await fetch(S.erpUrl,{headers:{'Accept':'application/json'},signal:ctl.signal,cache:'no-store'});
+  clearTimeout(to);
+  if(!res.ok)throw new Error('HTTP '+res.status);
+  const d=await res.json();
+  if(!d||!d.kpis)throw new Error('payload');
+  let n=0;
+  for(const[id,val]of Object.entries(d.kpis)){
+   const k=S.kpis.find(x=>x.id===id);
+   if(k){k.num=String(val);k.vis=true;n++;}
+  }
+  if(!n)return;
+  renderKpis(); // volontairement sans save() : les valeurs live ne sont pas figees dans le navigateur
+  if(stamp){
+   const dt=d.updated_at?new Date(d.updated_at):new Date();
+   if(!isNaN(dt)){
+    stamp.textContent=(S.lang==='fr'?'Chiffres synchronises depuis l\'ERP FreshLink — ':'Figures synced from the FreshLink ERP — ')
+      +dt.toLocaleString(S.lang==='fr'?'fr-MA':'en-GB');
+    stamp.hidden=false;
+   }
+  }
+ }catch(e){ /* silencieux cote visiteur */ }
+}
+erpAutoSync();
 </script>
 </body>
 </html>

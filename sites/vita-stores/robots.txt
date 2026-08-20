@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://stores.vita-agro.com/sitemap.xml
