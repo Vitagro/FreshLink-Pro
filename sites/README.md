@@ -84,15 +84,15 @@ Chaque site peut vivre dans son propre dépôt, selon la convention déjà en pl
 | `sites/vita-agro/` | [`Vitagro/vita-agro-site`](https://github.com/Vitagro/vita-agro-site) |
 | `sites/vita-fresh/` | [`Vitagro/vita-fresh-site`](https://github.com/Vitagro/vita-fresh-site) |
 | `sites/vita-tech/` | [`Vitagro/vita-tech-site`](https://github.com/Vitagro/vita-tech-site) |
-| `sites/vita-logi/` | `Vitagro/vita-logi-site` *(à créer)* |
-| `sites/vita-trad/` | `Vitagro/vita-trad-site` *(à créer)* |
-| `sites/vita-stores/` | `Vitagro/vita-stores-site` *(à créer)* |
+| `sites/vita-logi/` | [`Vitagro/vita-logi-site`](https://github.com/Vitagro/vita-logi-site) |
+| `sites/vita-trad/` | [`Vitagro/vita-trad-site`](https://github.com/Vitagro/vita-trad-site) |
+| `sites/vita-stores/` | [`Vitagro/vita-stores-site`](https://github.com/Vitagro/vita-stores-site) |
 
 Le script [`scripts/publish-site-repos.sh`](../scripts/publish-site-repos.sh) crée le dépôt
 (si la CLI `gh` est authentifiée) puis y pousse le contenu du dossier :
 
 ```bash
-./scripts/publish-site-repos.sh                 # les trois nouveaux sites
+./scripts/publish-site-repos.sh                 # tous les sites publies
 ./scripts/publish-site-repos.sh vita-logi       # un seul site
 ```
 
