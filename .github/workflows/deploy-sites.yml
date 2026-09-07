@@ -1,6 +1,6 @@
 name: Deploy static sites to Hostinger
 
-# Deploys the 3 static marketing sites under sites/ to their subdomains.
+# Deploys the static marketing sites under sites/ to their subdomains.
 # Static HTML, no build step. Same Hostinger account/SSH secrets as the ERP
 # deploy (deploy.yml).
 #
@@ -26,6 +26,12 @@ env:
   REMOTE_ROOT_BASE: /home/u387018932/domains/vita-agro.com/public_html
   REMOTE_TECH_BASE: /home/u387018932/domains/tech.vita-agro.com/public_html
   REMOTE_FRESH_BASE: /home/u387018932/domains/fresh.vita-agro.com/public_html
+  # Sous-domaines des trois filiales ajoutees en 2026-08. Le deploiement les
+  # ignore tant qu'ils n'existent pas cote Hostinger (voir l'etape dediee),
+  # ce qui permet de fusionner ce workflow avant leur creation.
+  REMOTE_LOGI_BASE: /home/u387018932/domains/logi.vita-agro.com/public_html
+  REMOTE_TRAD_BASE: /home/u387018932/domains/trad.vita-agro.com/public_html
+  REMOTE_STORES_BASE: /home/u387018932/domains/stores.vita-agro.com/public_html
 
 jobs:
   deploy:
@@ -65,9 +71,48 @@ jobs:
             $SSH "[ -f '$base/index.html' ] && cp '$base/index.html' '$base/index.html.prev' || true"
             $SCP "sites/${src}/index.html" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/index.html.new"
             $SSH "mv '$base/index.html.new' '$base/index.html'"
+            # Fichiers annexes (.htaccess, robots.txt, sitemap.xml) : copies tels
+            # quels quand le dossier du site les fournit. Pas de .prev : ils sont
+            # statiques, et le rollback ne concerne que index.html.
+            for f in .htaccess robots.txt sitemap.xml; do
+              if [ -f "sites/${src}/$f" ]; then
+                $SCP "sites/${src}/$f" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/$f"
+              fi
+            done
           }
           deploy_one vita-tech "${{ env.REMOTE_TECH_BASE }}"
           deploy_one vita-fresh "${{ env.REMOTE_FRESH_BASE }}"
+
+      # ── logi / trad / stores : sous-domaines des filiales ajoutees en
+      # 2026-08. Chacun n'est deploye que si son document root existe deja sur
+      # l'hebergement — sinon l'etape le signale et passe au suivant, sans
+      # faire echouer le deploiement des sites deja en ligne. Les sites
+      # effectivement deployes sont transmis au health check via NEW_SITES. ──
+      - name: Deploy subsidiary subdomains (skipped until they exist)
+        run: |
+          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
+          deployed=""
+          deploy_sub() {
+            src="$1"; base="$2"; url="$3"; marker="$4"
+            if ! $SSH "[ -d '$base' ]"; then
+              echo "::notice::$url — document root absent ($base), sous-domaine pas encore cree : ignore."
+              return 0
+            fi
+            $SSH "[ -f '$base/default.php' ] && mv '$base/default.php' '$base/default.php.disabled' || true"
+            $SSH "[ -f '$base/index.html' ] && cp '$base/index.html' '$base/index.html.prev' || true"
+            $SCP "sites/${src}/index.html" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/index.html.new"
+            $SSH "mv '$base/index.html.new' '$base/index.html'"
+            for f in .htaccess robots.txt sitemap.xml; do
+              [ -f "sites/${src}/$f" ] && $SCP "sites/${src}/$f" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/$f"
+            done
+            deployed="${deployed}${url}|${marker};"
+            echo "$url -> deploye"
+          }
+          deploy_sub vita-logi   "${{ env.REMOTE_LOGI_BASE }}"   https://logi.vita-agro.com   "Vita Logi"
+          deploy_sub vita-trad   "${{ env.REMOTE_TRAD_BASE }}"   https://trad.vita-agro.com   "Vita Trad"
+          deploy_sub vita-stores "${{ env.REMOTE_STORES_BASE }}" https://stores.vita-agro.com "Vita Stores"
+          echo "NEW_SITES=$deployed" >> "$GITHUB_ENV"
 
       # ── vita-agro.com (root domain): only replace index.html — public_html
       # also holds the erp/ and shop/ subfolders, never move/replace the whole
@@ -113,6 +158,13 @@ jobs:
           check https://tech.vita-agro.com "Vita Tech"
           check https://fresh.vita-agro.com "Vita Fresh"
           check https://vita-agro.com/confidentialite "Politique de confidentialité"
+          # Sous-domaines des filiales : uniquement ceux que l'etape precedente
+          # a reellement deployes (NEW_SITES vide tant qu'ils n'existent pas).
+          IFS=';' read -ra entries <<< "${NEW_SITES:-}"
+          for entry in "${entries[@]}"; do
+            [ -z "$entry" ] && continue
+            check "${entry%%|*}" "${entry##*|}"
+          done
           if [ "$fail" = "1" ]; then
             echo "unhealthy=true" >> "$GITHUB_OUTPUT"
             exit 1
@@ -122,7 +174,7 @@ jobs:
         if: failure() && steps.health.outputs.unhealthy == 'true'
         run: |
           SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          for base in "${{ env.REMOTE_TECH_BASE }}" "${{ env.REMOTE_FRESH_BASE }}" "${{ env.REMOTE_ROOT_BASE }}" "${{ env.REMOTE_ROOT_BASE }}/confidentialite"; do
+          for base in "${{ env.REMOTE_TECH_BASE }}" "${{ env.REMOTE_FRESH_BASE }}" "${{ env.REMOTE_LOGI_BASE }}" "${{ env.REMOTE_TRAD_BASE }}" "${{ env.REMOTE_STORES_BASE }}" "${{ env.REMOTE_ROOT_BASE }}" "${{ env.REMOTE_ROOT_BASE }}/confidentialite"; do
             $SSH "[ -f '$base/index.html.prev' ] && mv '$base/index.html.prev' '$base/index.html' || true"
           done
           echo "::error::Deploy failed health check — rolled back index.html where a previous version existed."
