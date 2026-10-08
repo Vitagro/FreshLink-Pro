@@ -4,6 +4,7 @@ import { CATALOGUE_SEED } from "../../lib/ext/catalogueSeed.js";
 import { ERP_DEFAULT_ARTICLES } from "../../lib/ext/defaultArticles.js";
 import { getArticlePhoto } from "../../lib/ext/articlePhotos.js";
 import { darijaName } from "../../lib/ext/darijaNames.js";
+import { catalogueViewFields } from "../../lib/ext/catalogueView.js";
 import { verifyApiKey, readWebIntegrationConfig } from "../../lib/ext/webIntegration.js";
 
 const router = Router();
@@ -79,15 +80,16 @@ router.get("/", async (req: Request, res: Response) => {
       if (r.ok) {
         const data = (await r.json()) as Record<string, unknown>[];
         if (Array.isArray(data) && data.length > 0) {
-          // La vue renvoie les colonnes plates + le payload complet (camelCase). On
-          // fusionne le payload pour exposer TOUTES les options marketplace (promo,
-          // description, tags, statut, conditionnement…) — sinon elles restent
-          // enfouies dans payload et n'arrivent jamais à la boutique.
+          // Certaines versions de la vue n'exposent que des colonnes snake_case.
+          // Garder leurs prix/statuts calculés : normalizePayload attend les champs
+          // camelCase ERP et transformerait leurs absences en prix/stock zéro.
+          // La liste blanche publique reste appliquée, même si un payload existe.
           const enriched = data.map(row => {
             const p = (row.payload && typeof row.payload === "object" ? row.payload : {}) as Record<string, unknown>;
-            return normalizePayload({ ...p, ...row });
+            return { ...normalizePayload({ ...p, ...row }), ...catalogueViewFields(row) };
           });
           const articles = applyFilters(enriched, q, tag).sort(byOrdre);
+          res.setHeader("X-Source", "supabase-view");
           res.status(200).json(articles);
           return;
         }
