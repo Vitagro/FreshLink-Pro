@@ -1,3 +1,4 @@
+import { requireAdmin } from "../../lib/adminAuth.js";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import {
@@ -28,8 +29,8 @@ async function verifySupabaseToken(bearerToken: string): Promise<{ id: string; r
       headers: { apikey: SB_SRV, Authorization: `Bearer ${bearerToken}` },
     });
     if (!res.ok) return null;
-    const user = await res.json() as { id: string; email?: string; role?: string; user_metadata?: { role?: string } };
-    const role: string = user?.user_metadata?.role ?? user?.role ?? "";
+    const user = await res.json() as { id: string; email?: string; role?: string; app_metadata?: { role?: string } };
+    const role: string = user?.app_metadata?.role ?? user?.role ?? "";
     return { id: user.id, role, email: user.email ?? "" };
   } catch {
     return null;
@@ -40,6 +41,15 @@ function extractBearer(req: Request): string {
   const h = req.headers.authorization ?? "";
   return h.startsWith("Bearer ") ? h.slice(7) : "";
 }
+
+router.post("/", requireAdmin, (req: Request, res: Response) => {
+  const userId = String(res.locals.adminId);
+  res.cookie(SADMIN_COOKIE, signSadminToken(userId), {
+    httpOnly: true, secure: process.env.NODE_ENV === "production",
+    sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 * 1000,
+  });
+  res.json({ ok: true });
+});
 
 router.post("/session", async (req: Request, res: Response) => {
   const bearerToken = extractBearer(req);

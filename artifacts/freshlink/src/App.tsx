@@ -128,46 +128,16 @@ function MainApp() {
         hydrateConfigs().catch(() => {})
       })
 
-      if (["super_super_admin", "super_admin", "admin"].includes(loggedUser.role)) {
-        import("@/lib/deviceFingerprint").then(async ({ isMasterDevice }) => {
-          if (!(await isMasterDevice())) {
-            console.log("[FreshLink] Appareil NON-maître → pas de push global")
-            return
-          }
-          try {
-            const allUsers = store.getUsers()
-            if (allUsers.length > 3) {
-              const upserts = allUsers.map(u => { const { id, ...payload } = u; return { id, payload, updated_at: new Date().toISOString() } })
-              fetch("/api/sync-write", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ table: "fl_users", upserts }),
-              }).catch(() => {})
-            }
-            const allArticles = store.getArticles()
-            if (allArticles.length > 0) {
-              const upserts = allArticles.map(a => { const { id, ...payload } = a; return { id, payload, updated_at: new Date().toISOString() } })
-              fetch("/api/sync-write", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ table: "fl_articles", upserts }),
-              }).catch(() => {})
-            }
-            const allClients = store.getClients()
-            if (allClients.length > 0) {
-              const upserts = allClients.map(c => { const { id, ...payload } = c; return { id, payload, updated_at: new Date().toISOString() } })
-              fetch("/api/sync-write", {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ table: "fl_clients", upserts }),
-              }).catch(() => {})
-            }
-          } catch { /* offline OK */ }
-        }).catch(() => {})
-      }
+      // Login hydrates the current server state. Never overwrite entire tables
+      // with an old browser cache merely because an administrator signed in.
+
     } catch (e: unknown) {
       console.error("Login error:", e)
     }
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try { await fetch("/api/ext/auth", { method: "DELETE" }) } catch { /* local logout remains available offline */ }
     try { store.logout() } catch (_) {}
     setUser(null)
   }

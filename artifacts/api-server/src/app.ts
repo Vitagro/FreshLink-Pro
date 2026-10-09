@@ -61,7 +61,7 @@ app.use("/api", router);
 app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
   req.log?.error?.({ err }, "unhandled error");
   if (res.headersSent) return;
-  res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  res.status(500).json({ ok: false, error: "Erreur interne. Veuillez réessayer." });
 });
 
 export default app;

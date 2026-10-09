@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { verifyToken } from "../../lib/extToken.js";
+import { requireAdmin } from "../../lib/adminAuth.js";
 
 // ══════════════════════════════════════════════════════════════
 // POST /api/ext/revoke-sessions
@@ -75,32 +75,9 @@ async function clearRevoke(): Promise<boolean> {
   } catch { return false; }
 }
 
-router.post("/", async (req: Request, res: Response) => {
-  const body = (req.body ?? {}) as Record<string, string>;
-  const { exceptUserId, adminId } = body;
-
-  if (!adminId || !exceptUserId) {
-    res.status(400).json({ error: "adminId et exceptUserId requis." });
-    return;
-  }
-
-  // Vérifier que adminId est super_super_admin / super_admin / admin dans Supabase
-  try {
-    const r = await fetch(
-      `${SB_URL}/rest/v1/fl_users?id=eq.${encodeURIComponent(adminId)}&select=id,payload&limit=1`,
-      { headers: { apikey: SB_SRV, Authorization: `Bearer ${SB_SRV}` } }
-    );
-    if (r.ok) {
-      const rows = (await r.json()) as { id: string; payload: Record<string, unknown> }[];
-      const user = rows[0];
-      const role = String(user?.payload?.role ?? "");
-      if (!["super_super_admin", "super_admin", "admin"].includes(role)) {
-        res.status(403).json({ error: "Accès refusé — rôle insuffisant." });
-        return;
-      }
-    }
-  } catch { /* ignore lookup failure, proceed best-effort */ }
-
+router.post("/", requireAdmin, async (req: Request, res: Response) => {
+  const adminId = String(res.locals.adminId);
+  const exceptUserId = adminId;
   const revokedBy = adminId;
 
   const ok = await writeRevoke(exceptUserId, revokedBy);
@@ -112,14 +89,7 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 /** DELETE — annule la révocation (optionnel) */
-router.delete("/", async (req: Request, res: Response) => {
-  const authHeader = req.headers.authorization ?? "";
-  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  const payload = token ? verifyToken(token) : null;
-  if (!payload || !["super_super_admin"].includes(payload.role as string)) {
-    res.status(403).json({ error: "Accès refusé." });
-    return;
-  }
+router.delete("/", requireAdmin, async (req: Request, res: Response) => {
   const ok = await clearRevoke();
   res.json({ ok });
 });

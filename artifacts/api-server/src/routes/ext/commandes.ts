@@ -1,3 +1,5 @@
+import { priceOrder } from "../../lib/ext/orderPricing.js";
+import { randomUUID, createHash } from "node:crypto";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { rateLimit } from "../../lib/ext/rateLimit.js";
@@ -138,7 +140,7 @@ async function notifyOrder(commande: Record<string, unknown>): Promise<void> {
   const itemsText = formatLignesText(commande.lignes);
   const numero = String(commande.numero);
 
-  sendEmail({
+  await sendEmail({
     to: SHOP_ORDER_ALERT_EMAIL,
     subject: `🛒 Nouvelle commande ${numero} — ${commande.nom_client}`,
     text: [
@@ -161,7 +163,7 @@ async function notifyOrder(commande: Record<string, unknown>): Promise<void> {
 
   const email = commande.email as string | null | undefined;
   if (email) {
-    sendEmail({
+    await sendEmail({
       to: email,
       subject: `Confirmation de commande ${numero} — Vita Fresh`,
       text: [
@@ -223,31 +225,82 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const numero  = "WEB-" + Date.now().toString().slice(-8);
-  const total   = Number(montant_total) || (lignes as Array<{ total?: number; prixUnitaire?: number; quantite?: number }>).reduce((s, l) => s + (l.total ?? (l.prixUnitaire ?? 0) * (l.quantite ?? 0)), 0);
+  const idempotencyKey = body.idempotencyKey;
+  if (idempotencyKey != null && (typeof idempotencyKey !== "string" || !/^[a-f0-9-]{36}$/i.test(idempotencyKey))) {
+    res.status(400).json({ error: "Référence de tentative invalide." }); return;
+  }
+  const numero = "WEB-" + (idempotencyKey ?? randomUUID());
+  const requestHash = createHash("sha256").update(JSON.stringify(body)).digest("hex");
+  const orderHeaders = { apikey: SB_SERVER_KEY, Authorization: `Bearer ${SB_SERVER_KEY}` };
+  async function existingOrder() {
+    const result = await fetch(`${SB_URL}/rest/v1/fl_commandes?id=eq.${encodeURIComponent(numero)}&select=payload&limit=1`, { headers: orderHeaders });
+    if (!result.ok) throw new Error("Order lookup unavailable");
+    const rows = await result.json() as { payload?: Record<string, unknown> }[];
+    return rows[0]?.payload;
+  }
+  if (idempotencyKey) {
+    try {
+      const existing = await existingOrder();
+      if (existing) {
+        if (existing.requestHash !== requestHash) { res.status(409).json({ error: "Référence déjà utilisée pour un autre panier." }); return; }
+        res.status(200).json({ numero, statut: existing.statut, message: SUCCESS_MSG }); return;
+      }
+    } catch { res.status(503).json({ error: "Vérification de commande indisponible. Veuillez réessayer." }); return; }
+  }
+  let priced: ReturnType<typeof priceOrder>;
+  let total: number;
+  try {
+    const headers = { apikey: SB_SERVER_KEY, Authorization: `Bearer ${SB_SERVER_KEY}` };
+    const response = await fetch(`${SB_URL}/rest/v1/v_marketplace_catalogue?select=*&marketplace_actif=eq.true`, { headers });
+    if (!response.ok) { res.status(503).json({ error: "Tarifs indisponibles. Veuillez réessayer." }); return; }
+    priced = priceOrder(lignes, await response.json() as Record<string, unknown>[]);
+    const express = String(creneau ?? "").startsWith("Express");
+    let delivery = express ? Number(process.env.SHOP_EXPRESS_FEE ?? 20)
+      : priced.subtotal >= Number(process.env.SHOP_FREE_DELIVERY_THRESHOLD ?? 150) ? 0 : Number(process.env.SHOP_STANDARD_FEE ?? 15);
+    let discount = 0;
+    if (codePromo) {
+      const couponResponse = await fetch(`${SB_URL}/rest/v1/fl_coupons?id=eq.${encodeURIComponent(String(codePromo).trim().toUpperCase())}&select=payload`, { headers });
+      if (!couponResponse.ok) { res.status(503).json({ error: "Vérification du code promo indisponible." }); return; }
+      const coupons = await couponResponse.json() as { payload?: Record<string, unknown> }[];
+      const c = coupons[0]?.payload;
+      if (!c || c.actif === false || (c.expiration && new Date(String(c.expiration)).getTime() < Date.now()) ||
+          (Number(c.usageMax) > 0 && Number(c.usageCount ?? 0) >= Number(c.usageMax)) || priced.subtotal < Number(c.minCommande ?? 0)) {
+        res.status(409).json({ error: "Code promo invalide ou épuisé. Vérifiez votre panier." }); return;
+      }
+      const value = Number(c.valeur ?? 0);
+      if (!Number.isFinite(value) || value < 0) throw new Error("Remise invalide.");
+      if (c.type === "livraison_gratuite") delivery = 0;
+      else discount = c.type === "pourcentage" ? priced.subtotal * Math.min(value, 100) / 100 : Math.min(value, priced.subtotal);
+    }
+    total = Math.round(Math.max(0, priced.subtotal + delivery - discount) * 100) / 100;
+    if (!Number.isFinite(total) || Math.abs(Number(montant_total) - total) > 0.011 || !Number.isFinite(Number(montant_total))) {
+      res.status(409).json({ error: "Les tarifs ont changé. Actualisez votre panier avant de confirmer.", montant_total: total }); return;
+    }
+  } catch (error) {
+    res.status(400).json({ error: error instanceof Error ? error.message : "Panier invalide." }); return;
+  }
   const now     = new Date().toISOString();
 
   // Payload complet (format ERP)
   const payloadData = {
     numero,
+    requestHash,
     nom_client:        String(nom_client).trim(),
     telephone:         String(telephone).trim(),
     email:             email ? String(email).trim() : null,
     adresse_livraison: adresse_livraison ? String(adresse_livraison).trim() : null,
-    lignes,
+    lignes:            priced.lignes,
     montant_total:     Math.round(total * 100) / 100,
     creneau:           creneau ? String(creneau) : "Standard 24h",
     instructions:      instructions ? String(instructions) : null,
-    statut:            String(statut),
-    source:            String(source),   // "site_web"
+    statut:            priced.lignes.some(l => l.surCommande) ? "a_confirmer" : "nouveau",
+    source:            "site_web",   // "site_web"
     code_promo:        codePromo ? String(codePromo).trim().toUpperCase() : null,
     created_at:        now,
   };
 
-  // Sans Supabase configuré → succès silencieux (logué)
   if (!SB_URL || !SB_SERVER_KEY) {
-    console.warn("[commandes] Supabase non configuré — commande non persistée", { numero, nom_client, telephone });
-    res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
+    res.status(503).json({ error: "Commande non enregistrée : service indisponible. Veuillez réessayer." });
     return;
   }
 
@@ -258,78 +311,31 @@ router.post("/", async (req: Request, res: Response) => {
     Prefer:         "return=minimal",
   };
 
-  // ── Tentative 1 : fl_commandes format {id, payload} (table ERP unifiée) ───
-  // Les tables fl_* utilisent le format JSONB : { id, payload, updated_at }
   try {
-    const r = await fetch(`${SB_URL}/rest/v1/fl_commandes`, {
-      method: "POST",
-      headers: sbH,
-      body: JSON.stringify({
-        id:         numero,
-        payload:    payloadData,
-        updated_at: now,
-      }),
+    const result = await fetch(`${SB_URL}/rest/v1/fl_commandes`, {
+      method: "POST", headers: sbH,
+      body: JSON.stringify({ id: numero, payload: payloadData, updated_at: now }),
     });
-    if (r.ok) {
-      console.log("[commandes] ✅ Enregistré dans fl_commandes (JSONB):", numero);
-      void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
-      if (payloadData.code_promo) void consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo);
-      void notifyOrder(payloadData);
-      res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
-      return;
+    if (!result.ok) {
+      if (result.status === 409 && idempotencyKey) {
+        const existing = await existingOrder();
+        if (existing?.requestHash === requestHash) {
+          res.status(200).json({ numero, statut: existing.statut, message: SUCCESS_MSG }); return;
+        }
+      }
+      res.status(503).json({ error: "Commande non enregistrée. Votre panier est conservé ; veuillez réessayer." }); return;
     }
-    const errText = await r.text().catch(() => "");
-    console.warn("[commandes] fl_commandes JSONB failed:", r.status, errText);
-    // Si l'erreur est liée à un format différent (ancienne table plate), essai flat
-  } catch (e) {
-    console.warn("[commandes] fl_commandes JSONB exception:", e);
+  } catch {
+    res.status(503).json({ error: "Enregistrement non confirmé. Veuillez réessayer avec le même panier." }); return;
   }
-
-  // ── Tentative 2 : fl_commandes format plat (ancienne structure) ───────────
-  try {
-    const r = await fetch(`${SB_URL}/rest/v1/fl_commandes`, {
-      method: "POST",
-      headers: sbH,
-      body: JSON.stringify({ id: numero, ...payloadData }),
-    });
-    if (r.ok) {
-      console.log("[commandes] ✅ Enregistré dans fl_commandes (flat):", numero);
-      void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
-      if (payloadData.code_promo) void consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo);
-      void notifyOrder(payloadData);
-      res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
-      return;
-    }
-    const errText = await r.text().catch(() => "");
-    console.warn("[commandes] fl_commandes flat failed:", r.status, errText);
-  } catch (e) {
-    console.warn("[commandes] fl_commandes flat exception:", e);
-  }
-
-  // ── Tentative 3 : fl_commandes_web (table dédiée web, format plat) ────────
-  try {
-    const r = await fetch(`${SB_URL}/rest/v1/fl_commandes_web`, {
-      method: "POST",
-      headers: sbH,
-      body: JSON.stringify({ id: numero, ...payloadData }),
-    });
-    if (r.ok) {
-      console.log("[commandes] ✅ Enregistré dans fl_commandes_web:", numero);
-      void injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData);
-      if (payloadData.code_promo) void consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo);
-      void notifyOrder(payloadData);
-      res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
-      return;
-    }
-    const errText = await r.text().catch(() => "");
-    console.warn("[commandes] fl_commandes_web failed:", r.status, errText);
-  } catch (e) {
-    console.warn("[commandes] fl_commandes_web exception:", e);
-  }
-
-  // ── Toujours confirmer à l'utilisateur (commande loggée) ──────────────────
-  console.error("[commandes] TOUTES tentatives Supabase échouées — commande loggée:", { numero, nom_client, telephone, total });
-  res.status(201).json({ numero, statut: "nouveau", message: SUCCESS_MSG });
+  // These operations are awaited before the serverless response. The order is
+  // already durable, so an ancillary failure must never invite a duplicate.
+  await Promise.allSettled([
+    injectToLogistique(SB_URL, SB_SERVER_KEY, payloadData),
+    payloadData.code_promo ? consumePromoCode(SB_URL, SB_SERVER_KEY, payloadData.code_promo) : Promise.resolve(),
+    notifyOrder(payloadData),
+  ]);
+  res.status(201).json({ numero, statut: payloadData.statut, message: SUCCESS_MSG });
 });
 
 // Renvoie le numéro de téléphone associé à l'utilisateur authentifié

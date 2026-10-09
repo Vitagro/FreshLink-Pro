@@ -362,13 +362,16 @@ export default function LoginPage({ onLogin }: Props) {
       return
     }
     if (!identifier.trim() || !password.trim()) { setError("Remplissez tous les champs"); setLoading(false); return }
-    let user = store.login(identifier.trim(), password)
-    if (!user) {
-      // Cache local pas encore hydraté (compte créé/modifié depuis un autre appareil,
-      // visible dans Supabase + BO mais absent du cache localStorage de CET appareil)
-      // → un dernier essai après un rafraîchissement explicite avant de déclarer l'échec.
-      try { const db = await import("@/lib/supabase/db"); await db.fetchUsers(); user = store.login(identifier.trim(), password) } catch { /* offline */ }
-    }
+    let user: User | null = null
+    try {
+      const response = await fetch("/api/ext/auth", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: identifier.trim(), password }),
+      })
+      const result = await response.json()
+      if (response.ok && result.user) user = result.user as User
+      else { setError(result.error || "Connexion impossible"); setLoading(false); return }
+    } catch { setError("Connexion au serveur impossible. Veuillez réessayer."); setLoading(false); return }
     if (user) {
       // ── Super admin bypass: exempt du Device Guard (pas de validation MAC) ──
       if (user.role === "super_super_admin") {
