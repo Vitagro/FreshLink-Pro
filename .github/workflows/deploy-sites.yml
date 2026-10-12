@@ -1,184 +1,68 @@
-name: Deploy static sites to Hostinger
-
-# Deploys the static marketing sites under sites/ to their subdomains.
-# Static HTML, no build step. Same Hostinger account/SSH secrets as the ERP
-# deploy (deploy.yml).
-#
-# Confirmed via probe-hosting-paths.yml (2026-07-08): tech.vita-agro.com and
-# fresh.vita-agro.com are each their OWN document root
-# (~/domains/<sub>.vita-agro.com/public_html/), NOT subfolders under
-# vita-agro.com/public_html — that first guess put files in the wrong place
-# (left a harmless default.php placeholder still being served). Only
-# vita-agro.com root shares public_html with the already-live erp/ and shop/
-# subfolders, so that one only ever replaces index.html — never the whole
-# directory.
+name: Deploy static Vita sites to Hostinger
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
-    paths: ["sites/**", ".github/workflows/deploy-sites.yml"]
-  workflow_dispatch: {}
-
+    paths: [sites/deploy-manifest.json, scripts/prepare-vita-sites.mjs, scripts/install-vita-sites.sh, .github/workflows/deploy-sites.yml]
+permissions:
+  contents: read
 concurrency:
   group: deploy-sites
   cancel-in-progress: false
-
-env:
-  REMOTE_ROOT_BASE: /home/u387018932/domains/vita-agro.com/public_html
-  REMOTE_TECH_BASE: /home/u387018932/domains/tech.vita-agro.com/public_html
-  REMOTE_FRESH_BASE: /home/u387018932/domains/fresh.vita-agro.com/public_html
-  # Sous-domaines des trois filiales ajoutees en 2026-08. Le deploiement les
-  # ignore tant qu'ils n'existent pas cote Hostinger (voir l'etape dediee),
-  # ce qui permet de fusionner ce workflow avant leur creation.
-  REMOTE_LOGI_BASE: /home/u387018932/domains/logi.vita-agro.com/public_html
-  REMOTE_TRAD_BASE: /home/u387018932/domains/trad.vita-agro.com/public_html
-  REMOTE_STORES_BASE: /home/u387018932/domains/stores.vita-agro.com/public_html
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up SSH
+        with:
+          persist-credentials: false
+      - name: Prepare pinned public website sources
+        run: node scripts/prepare-vita-sites.mjs
+      - name: Prepare SSH transport
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq sshpass
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          for i in 1 2 3 4 5; do
-            ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null && break
-            echo "ssh-keyscan attempt $i failed, retrying..."
-            sleep 5
-          done
-
-      # ── One-time cleanup: remove the orphaned folders created by the first
-      # (wrong-path) deploy attempt, under vita-agro.com/public_html. ──
-      - name: Clean up orphaned tech/fresh folders under vita-agro.com
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" > ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts
+      - name: Back up and publish public website files
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          $SSH "rm -rf '${{ env.REMOTE_ROOT_BASE }}/tech' '${{ env.REMOTE_ROOT_BASE }}/tech-releases' '${{ env.REMOTE_ROOT_BASE }}/fresh' '${{ env.REMOTE_ROOT_BASE }}/fresh-releases'"
-
-      # ── tech.vita-agro.com and fresh.vita-agro.com: each has its own
-      # public_html, currently holding only Hostinger's default.php
-      # placeholder. Upload index.html directly and disable default.php so it
-      # can't shadow it in Apache's DirectoryIndex order. ──
-      - name: Deploy tech.vita-agro.com and fresh.vita-agro.com
+          set -euo pipefail
+          stamp="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          remote="/home/u387018932/backups/sites/$stamp"
+          ssh=(sshpass -e ssh -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -p "$SSH_PORT" "$SSH_USER@$SSH_HOST")
+          scp=(sshpass -e scp -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -P "$SSH_PORT")
+          "${ssh[@]}" "umask 077; mkdir -p '$remote'; chmod 700 /home/u387018932/backups/sites '$remote'"
+          tar -czf vita-sites.tar.gz -C site-bundle .
+          sha256sum vita-sites.tar.gz > vita-sites.tar.gz.sha256
+          "${scp[@]}" vita-sites.tar.gz vita-sites.tar.gz.sha256 "$SSH_USER@$SSH_HOST:$remote/"
+          "${ssh[@]}" bash -s -- "$stamp" < scripts/install-vita-sites.sh
+      - name: Verify HTTPS and deployed content
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          deploy_one() {
-            src="$1"; base="$2"
-            $SSH "[ -f '$base/default.php' ] && mv '$base/default.php' '$base/default.php.disabled' || true"
-            $SSH "[ -f '$base/index.html' ] && cp '$base/index.html' '$base/index.html.prev' || true"
-            $SCP "sites/${src}/index.html" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/index.html.new"
-            $SSH "mv '$base/index.html.new' '$base/index.html'"
-            # Fichiers annexes (.htaccess, robots.txt, sitemap.xml) : copies tels
-            # quels quand le dossier du site les fournit. Pas de .prev : ils sont
-            # statiques, et le rollback ne concerne que index.html.
-            for f in .htaccess robots.txt sitemap.xml; do
-              if [ -f "sites/${src}/$f" ]; then
-                $SCP "sites/${src}/$f" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/$f"
-              fi
-            done
-          }
-          deploy_one vita-tech "${{ env.REMOTE_TECH_BASE }}"
-          deploy_one vita-fresh "${{ env.REMOTE_FRESH_BASE }}"
-
-      # ── logi / trad / stores : sous-domaines des filiales ajoutees en
-      # 2026-08. Chacun n'est deploye que si son document root existe deja sur
-      # l'hebergement — sinon l'etape le signale et passe au suivant, sans
-      # faire echouer le deploiement des sites deja en ligne. Les sites
-      # effectivement deployes sont transmis au health check via NEW_SITES. ──
-      - name: Deploy subsidiary subdomains (skipped until they exist)
-        run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          deployed=""
-          deploy_sub() {
-            src="$1"; base="$2"; url="$3"; marker="$4"
-            if ! $SSH "[ -d '$base' ]"; then
-              echo "::notice::$url — document root absent ($base), sous-domaine pas encore cree : ignore."
-              return 0
-            fi
-            $SSH "[ -f '$base/default.php' ] && mv '$base/default.php' '$base/default.php.disabled' || true"
-            $SSH "[ -f '$base/index.html' ] && cp '$base/index.html' '$base/index.html.prev' || true"
-            $SCP "sites/${src}/index.html" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/index.html.new"
-            $SSH "mv '$base/index.html.new' '$base/index.html'"
-            for f in .htaccess robots.txt sitemap.xml; do
-              [ -f "sites/${src}/$f" ] && $SCP "sites/${src}/$f" "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${base}/$f"
-            done
-            deployed="${deployed}${url}|${marker};"
-            echo "$url -> deploye"
-          }
-          deploy_sub vita-logi   "${{ env.REMOTE_LOGI_BASE }}"   https://logi.vita-agro.com   "Vita Logi"
-          deploy_sub vita-trad   "${{ env.REMOTE_TRAD_BASE }}"   https://trad.vita-agro.com   "Vita Trad"
-          deploy_sub vita-stores "${{ env.REMOTE_STORES_BASE }}" https://stores.vita-agro.com "Vita Stores"
-          echo "NEW_SITES=$deployed" >> "$GITHUB_ENV"
-
-      # ── vita-agro.com (root domain): only replace index.html — public_html
-      # also holds the erp/ and shop/ subfolders, never move/replace the whole
-      # directory here. ──
-      - name: Deploy root site (vita-agro.com)
-        run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          $SSH "[ -f '${{ env.REMOTE_ROOT_BASE }}/index.html' ] && cp '${{ env.REMOTE_ROOT_BASE }}/index.html' '${{ env.REMOTE_ROOT_BASE }}/index.html.prev' || true"
-          $SCP sites/vita-agro/index.html "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_ROOT_BASE }}/index.html.new"
-          $SSH "mv '${{ env.REMOTE_ROOT_BASE }}/index.html.new' '${{ env.REMOTE_ROOT_BASE }}/index.html'"
-
-      # ── vita-agro.com/confidentialite — privacy policy page (4 mobile apps),
-      # required by Google Play submission. Own subfolder, only ever contains
-      # this one file, safe to fully manage here. ──
-      - name: Deploy privacy policy page (vita-agro.com/confidentialite)
-        run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          $SSH "mkdir -p '${{ env.REMOTE_ROOT_BASE }}/confidentialite'"
-          $SSH "[ -f '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html' ] && cp '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html' '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html.prev' || true"
-          $SCP sites/vita-agro/confidentialite/index.html "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html.new"
-          $SSH "mv '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html.new' '${{ env.REMOTE_ROOT_BASE }}/confidentialite/index.html'"
-
-      # ── Content-aware health check — a wrong path can still return HTTP 200
-      # (Hostinger's default.php placeholder does), so check for a string
-      # unique to each real page, not just the status code. ──
-      - name: Health check
-        id: health
-        run: |
-          sleep 5
-          fail=0
-          check() {
-            body=$(curl -sSL --max-time 20 "$1")
-            if ! echo "$body" | grep -q "$2"; then
-              echo "::error::$1 does not contain expected marker '$2' — got: $(echo "$body" | head -c 200)"
-              fail=1
-            else
-              echo "$1 -> OK ('$2' found)"
-            fi
-          }
-          check https://vita-agro.com "Vita Agro Capital"
-          check https://tech.vita-agro.com "Vita Tech"
-          check https://fresh.vita-agro.com "Vita Fresh"
-          check https://vita-agro.com/confidentialite "Politique de confidentialité"
-          # Sous-domaines des filiales : uniquement ceux que l'etape precedente
-          # a reellement deployes (NEW_SITES vide tant qu'ils n'existent pas).
-          IFS=';' read -ra entries <<< "${NEW_SITES:-}"
-          for entry in "${entries[@]}"; do
-            [ -z "$entry" ] && continue
-            check "${entry%%|*}" "${entry##*|}"
-          done
-          if [ "$fail" = "1" ]; then
-            echo "unhealthy=true" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
-      - name: Rollback on failed health check
-        if: failure() && steps.health.outputs.unhealthy == 'true'
-        run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          for base in "${{ env.REMOTE_TECH_BASE }}" "${{ env.REMOTE_FRESH_BASE }}" "${{ env.REMOTE_LOGI_BASE }}" "${{ env.REMOTE_TRAD_BASE }}" "${{ env.REMOTE_STORES_BASE }}" "${{ env.REMOTE_ROOT_BASE }}" "${{ env.REMOTE_ROOT_BASE }}/confidentialite"; do
-            $SSH "[ -f '$base/index.html.prev' ] && mv '$base/index.html.prev' '$base/index.html' || true"
-          done
-          echo "::error::Deploy failed health check — rolled back index.html where a previous version existed."
-
-      - name: Clean up SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          const sites=JSON.parse(fs.readFileSync('sites/deploy-manifest.json','utf8'));
+          const results=await Promise.all(sites.map(async site=>{
+            const expected=crypto.createHash('sha256').update(fs.readFileSync(`site-bundle/${site.name}/index.html`)).digest('hex');
+            for(let attempt=0;attempt<6;attempt++){
+              try {
+                const r=await fetch(`https://${site.domain}/?release=${process.env.GITHUB_RUN_ID}`,{signal:AbortSignal.timeout(20000)});
+                const body=Buffer.from(await r.arrayBuffer());
+                if(r.ok && crypto.createHash('sha256').update(body).digest('hex')===expected){console.log(`${site.domain}: HTTPS and exact content verified`);return true;}
+              }catch(e){console.log(`${site.domain}: waiting for HTTPS availability`);}
+              await new Promise(r=>setTimeout(r,10000));
+            }
+            console.error(`${site.domain}: public verification failed; private backup retained`);return false;
+          }));
+          if(results.some(ok=>!ok))process.exit(1);
+          JS

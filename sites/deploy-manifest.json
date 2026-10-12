@@ -1,0 +1,44 @@
+[
+  {
+    "name": "agro",
+    "repository": "Vitagro/vita-agro-site",
+    "revision": "f673161b3a1dc1f05303a30775e0dce2f2cd4802",
+    "html": "vita-agro-capital-site.html",
+    "domain": "vita-agro.com"
+  },
+  {
+    "name": "tech",
+    "repository": "Vitagro/vita-tech-site",
+    "revision": "61873757025a1c06dba8364a70cbe38bbb2169f8",
+    "html": "vita-tech-site.html",
+    "domain": "tech.vita-agro.com"
+  },
+  {
+    "name": "fresh",
+    "repository": "Vitagro/vita-fresh-site",
+    "revision": "ea1f2de5896504308131bfa924e22155b90b7a3e",
+    "html": "index.html",
+    "domain": "fresh.vita-agro.com"
+  },
+  {
+    "name": "stores",
+    "repository": "Vitagro/vita-stores-site",
+    "revision": "0078e310c0cdd3118d90e547da9d11b7f42532f1",
+    "html": "index.html",
+    "domain": "stores.vita-agro.com"
+  },
+  {
+    "name": "trad",
+    "repository": "Vitagro/vita-trad-site",
+    "revision": "357eebfca644b2029a08a39a97c49b80cd2d9236",
+    "html": "index.html",
+    "domain": "trad.vita-agro.com"
+  },
+  {
+    "name": "logi",
+    "repository": "Vitagro/vita-logi-site",
+    "revision": "f7f4d0a6dc3fd4d9524d3006f24fa2e15d62d24e",
+    "html": "index.html",
+    "domain": "logi.vita-agro.com"
+  }
+]
