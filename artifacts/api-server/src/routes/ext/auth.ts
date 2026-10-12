@@ -70,11 +70,17 @@ async function getAllUsers(): Promise<Record<string, unknown>[]> {
     });
     if (!res.ok) return [];
     const rows = await res.json() as { id: string; payload: Record<string, unknown> }[];
-    return rows.map((r) => ({ id: r.id, ...r.payload }));
+    return rows.map((r) => ({ ...r.payload, id: r.id }));
   } catch {
     return [];
   }
 }
+
+router.delete("/", (_req: Request, res: Response) => {
+  res.clearCookie("fl_auth_session", { path: "/" });
+  res.clearCookie("fl_sadmin_bypass", { path: "/" });
+  res.json({ ok: true });
+});
 
 router.options("/", (req: Request, res: Response) => {
   const origin = req.headers.origin ?? "*";
@@ -96,8 +102,8 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const { phone, email, password } = req.body as { phone?: string; email?: string; password?: string };
-  if (!password || (!phone && !email)) {
+  const { phone, email, identifier, password } = req.body as { phone?: string; email?: string; identifier?: string; password?: string };
+  if (!password || (!phone && !email && !identifier)) {
     res.status(400).json({ ok: false, error: "Identifiant et mot de passe requis" });
     return;
   }
@@ -123,6 +129,14 @@ router.post("/", async (req: Request, res: Response) => {
     );
   }
 
+  if (!found && typeof identifier === "string") {
+    const value = identifier.trim().toLowerCase();
+    const normalized = normalizePhone(value).local;
+    found = users.find(u => [u.email, u.name, u.username].some(v =>
+      typeof v === "string" && v.toLowerCase() === value) ||
+      (/^[+\d\s.-]{8,}$/.test(value) && normalizePhone(String(u.telephone ?? "")).local === normalized));
+  }
+
   // Ces trois cas (compte introuvable / désactivé / mauvais mot de passe)
   // renvoient volontairement le même message et le même statut pour ne pas
   // permettre à un attaquant d'énumérer les comptes existants.
@@ -131,24 +145,18 @@ router.post("/", async (req: Request, res: Response) => {
     return;
   }
 
-  const stored = String(found.password ?? "");
-  if (!stored) {
-    res.status(401).json({ ok: false, error: GENERIC_AUTH_ERROR });
-    return;
+  let matchedField = "";
+  for (const field of ["password", "passwordMobile", "passwordBO"]) {
+    const stored = String(found[field] ?? "");
+    if (!stored) continue;
+    const match = stored.startsWith("$2") ? await bcrypt.compare(password, stored) : safeEqual(stored, password);
+    if (match) { matchedField = field; break; }
   }
-
-  const isBcrypt = stored.startsWith("$2");
-  const match = isBcrypt ? await bcrypt.compare(password, stored) : safeEqual(stored, password);
-
-  if (!match) {
-    res.status(401).json({ ok: false, error: GENERIC_AUTH_ERROR });
-    return;
+  if (!matchedField) {
+    res.status(401).json({ ok: false, error: GENERIC_AUTH_ERROR }); return;
   }
-
-  // Legacy : mot de passe encore stocké en clair → migration silencieuse
-  // vers bcrypt maintenant qu'on vient de le vérifier avec succès.
-  if (!isBcrypt) {
-    void upgradeToBcrypt(String(found.id), found, password);
+  if (matchedField === "password" && !String(found.password).startsWith("$2")) {
+    await upgradeToBcrypt(String(found.id), found, password);
   }
 
   const token = signToken({
@@ -159,7 +167,11 @@ router.post("/", async (req: Request, res: Response) => {
     exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
   });
 
-  const { password: _p, ...safeUser } = found;
+  const { password: _p, passwordMobile: _m, passwordBO: _b, ...safeUser } = found;
+  res.cookie("fl_auth_session", token, {
+    httpOnly: true, secure: process.env.NODE_ENV === "production",
+    sameSite: "strict", path: "/", maxAge: 8 * 60 * 60 * 1000,
+  });
   res.json({ ok: true, token, user: safeUser });
 });
 

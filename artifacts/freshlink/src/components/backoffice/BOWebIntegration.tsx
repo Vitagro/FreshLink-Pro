@@ -51,17 +51,21 @@ export default function BOWebIntegration({ user }: Props) {
 
   const patch = (updates: Partial<WebIntegrationConfig>) => setCfg(c => c ? { ...c, ...updates } : c)
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!cfg) return
     if (!hasPermission(user.role, "modifier_api_config")) { logAction(user, "modifier_api_config", "denied"); return }
-    logAction(user, "modifier_api_config", "success")
     const updated = { ...cfg, updatedAt: new Date().toISOString(), updatedBy: user.id }
-    ;(store as any).saveWebIntegrationConfig(updated)
-    fetch(`${BASE}/api/ext/web-integration-config`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updated),
-    }).catch(() => {})
+    try {
+      const response = await fetch(`${BASE}/api/ext/web-integration-config`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated),
+      })
+      if (!response.ok) throw new Error("Enregistrement refusé. Reconnectez-vous avec un compte administrateur.")
+      ;(store as any).saveWebIntegrationConfig(updated)
+      logAction(user, "modifier_api_config", "success")
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "Enregistrement impossible")
+      return
+    }
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
   }

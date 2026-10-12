@@ -37,39 +37,57 @@ jobs:
       - name: Package archive
         id: pkg
         run: |
-          STAMP=$(date -u +%Y-%m-%d)
+          STAMP=$(date -u +%Y-%m-%dT%H-%M-%SZ)
           tar -czf "backup-${STAMP}.tar.gz" -C backup-output .
+          sha256sum "backup-${STAMP}.tar.gz" > "backup-${STAMP}.tar.gz.sha256"
           echo "stamp=$STAMP" >> "$GITHUB_OUTPUT"
 
       - name: Set up SSH
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq sshpass
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          for i in 1 2 3 4 5; do
-            ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null && break
-            sleep 5
-          done
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" > ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts
 
       - name: Upload archive to private directory
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
-          SCP="scp -i ~/.ssh/deploy_key -P ${{ secrets.SSH_PORT }}"
-          $SSH "mkdir -p '${{ env.REMOTE_BACKUP_DIR }}'"
+          SSH="sshpass -e ssh -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SCP="sshpass -e scp -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -P ${{ secrets.SSH_PORT }}"
+          $SSH "umask 077; mkdir -p '${{ env.REMOTE_BACKUP_DIR }}'; chmod 700 '${{ env.REMOTE_BACKUP_DIR }}'"
           $SCP "backup-${{ steps.pkg.outputs.stamp }}.tar.gz" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ env.REMOTE_BACKUP_DIR }}/backup-${{ steps.pkg.outputs.stamp }}.tar.gz"
 
-      - name: Prune backups older than retention window
+      - name: Verify remote archive checksum
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          STAMP: ${{ steps.pkg.outputs.stamp }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          sshpass -e scp -o StrictHostKeyChecking=yes -P "$SSH_PORT" "backup-${STAMP}.tar.gz.sha256" "$SSH_USER@$SSH_HOST:$REMOTE_BACKUP_DIR/"
+          sshpass -e ssh -o StrictHostKeyChecking=yes -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "cd '$REMOTE_BACKUP_DIR' && sha256sum -c 'backup-${STAMP}.tar.gz.sha256' && tar -tzf 'backup-${STAMP}.tar.gz' >/dev/null"
+
+      - name: Prune backups older than retention window
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          SSH="sshpass -e ssh -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           $SSH "find '${{ env.REMOTE_BACKUP_DIR }}' -name 'backup-*.tar.gz' -mtime +${{ env.KEEP_DAYS }} -delete" || true
 
       - name: Verify — list current backups on server
+        env:
+          SSHPASS: ${{ secrets.SSH_PASSWORD }}
         run: |
-          SSH="ssh -i ~/.ssh/deploy_key -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
+          SSH="sshpass -e ssh -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -p ${{ secrets.SSH_PORT }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}"
           echo "Contents of ${{ env.REMOTE_BACKUP_DIR }}:"
           $SSH "ls -lh '${{ env.REMOTE_BACKUP_DIR }}'"
 
       - name: Clean up SSH key and local dump
         if: always()
-        run: rm -f ~/.ssh/deploy_key; rm -rf backup-output backup-*.tar.gz
+        run: rm -f ~/.ssh/deploy_key; rm -rf backup-output backup-*.tar.gz backup-*.tar.gz.sha256

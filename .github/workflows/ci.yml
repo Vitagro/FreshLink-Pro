@@ -23,7 +23,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -34,3 +34,12 @@ jobs:
 
       - name: Build
         run: pnpm -r --if-present run build
+
+      - name: Security and order regression tests
+        run: node --test --test-isolation=none tests/security.mjs
+
+      - name: Catalogue regression tests
+        run: node --test --test-isolation=none artifacts/api-server/src/lib/ext/catalogueView.test.mjs
+
+      - name: Backup pagination regression test
+        run: node tests/backup.mjs
