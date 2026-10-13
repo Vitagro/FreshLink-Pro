@@ -2,21 +2,21 @@
   {
     "name": "agro",
     "repository": "Vitagro/vita-agro-site",
-    "revision": "f673161b3a1dc1f05303a30775e0dce2f2cd4802",
+    "revision": "1f35a16da2caa0740db55d5d4501fd85091998df",
     "html": "vita-agro-capital-site.html",
     "domain": "vita-agro.com"
   },
   {
     "name": "tech",
     "repository": "Vitagro/vita-tech-site",
-    "revision": "fd7d2742b6e6b1c5f1f461b620076a483268c15c",
+    "revision": "b62ad6eba3fc58ac0df0e19af4681687e686c054",
     "html": "vita-tech-site.html",
     "domain": "tech.vita-agro.com"
   },
   {
     "name": "fresh",
     "repository": "Vitagro/vita-fresh-site",
-    "revision": "ea1f2de5896504308131bfa924e22155b90b7a3e",
+    "revision": "18d58409a5525d08fcaea8dc68056dfd6f7e4510",
     "html": "index.html",
     "domain": "fresh.vita-agro.com"
   },
