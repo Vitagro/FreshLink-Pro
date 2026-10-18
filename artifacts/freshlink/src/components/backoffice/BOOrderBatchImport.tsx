@@ -46,7 +46,11 @@ export function BOOrderBatchImport({ user, onDone }: { user: User; onDone: () =>
       const byId = new Map(saved.map(c => [c.id, c]))
       const failures = fresh.filter(c => {
         const s = byId.get(c.id)
-        return !s || s.clientId !== c.clientId || s.commercialNom !== c.commercialNom || JSON.stringify(s.lignes) !== JSON.stringify(c.lignes)
+        return !s || s.clientId !== c.clientId || s.commercialNom !== c.commercialNom || s.date !== c.date || s.statut !== c.statut || s.notes !== c.notes ||
+          s.lignes?.length !== c.lignes.length || c.lignes.some((l, i) => {
+            const actual = s.lignes[i]
+            return actual.articleId !== l.articleId || actual.quantite !== l.quantite || actual.prixVente !== l.prixVente || actual.total !== l.total
+          })
       })
       if (failures.length) throw new Error(`${failures.length} commandes non vérifiées. Aucun succès global déclaré.`)
       logAction(user, 'creer_commande', 'success', { type: 'import_simulation', label: `${fresh.length} nouvelles commandes, ${commands.length - fresh.length} identifiants préexistants ignorés` })
