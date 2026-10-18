@@ -5,6 +5,8 @@ import { store, type Commande, type LigneCommande, type Client, type Article, ty
 import type { User } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
+import { BOOrderBatchImport } from './BOOrderBatchImport'
+import { readBatchTable } from '@/lib/orderBatch'
 
 interface Props { user: User }
 
@@ -496,9 +498,8 @@ export default function BOCommandesUnifiees({ user }: Props) {
       // ⚡ Lecture via l'API service_role (/api/sync-read) — le client Supabase ANON
       // est bloqué par la RLS sur fl_commandes (renvoie [] alors que les données existent).
       // Toutes les commandes (web ET ERP) sont stockées dans fl_commandes {id, payload}.
-      const res  = await fetch("/api/sync-read?table=fl_commandes", { cache: "no-store" })
-      const json = await res.json()
-      const rows: { id: string; payload: Record<string, unknown>; updated_at?: string }[] = json?.ok ? (json.data ?? []) : []
+      const payloads = await readBatchTable<Record<string, unknown>>('fl_commandes')
+      const rows = payloads.filter(p => p && p.id).map(payload => ({ id: String(payload.id), payload }))
       const orders: CmdUnifiee[] = rows
         .filter(r => r.payload && !String(r.id).startsWith("__"))
         .map(r => normalizeERP(r))
@@ -972,6 +973,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       </div>
 
       {/* ── Alerte cycle commande ── */}
+      <BOOrderBatchImport user={user} onDone={load} />
       <div className="rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm px-4 py-2.5 flex items-center gap-2">
         <span>✅</span>
         <span><strong>{cycleAlerte.livrees}</strong> commande(s) livrée(s) depuis {cycleAlerte.cutoffLabel} (cycle commande J-1 {cutoffCfg.heureDebut} → J {cutoffCfg.heureFin}).</span>
