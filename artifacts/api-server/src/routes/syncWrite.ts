@@ -62,6 +62,7 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
     deletes?: string[];
     clearAll?: boolean;
     preserveId?: string;
+    insertOnly?: boolean;
   };
 
   if (!body.table) {
@@ -124,7 +125,7 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
     if (body.upserts?.length) {
       const r = await fetch(base, {
         method: "POST",
-        headers: sbServiceHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+        headers: sbServiceHeaders({ Prefer: body.insertOnly ? "resolution=ignore-duplicates,return=minimal" : "resolution=merge-duplicates,return=minimal" }),
         body: JSON.stringify(body.upserts),
       });
       if (!r.ok) errors.push(`upsert: ${r.status} ${(await r.text().catch(() => "")).slice(0, 150)}`);

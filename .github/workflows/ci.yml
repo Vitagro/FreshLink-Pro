@@ -43,3 +43,6 @@ jobs:
 
       - name: Backup pagination regression test
         run: node tests/backup.mjs
+
+      - name: Controlled order import regression tests
+        run: node scripts/order-batch.test.mjs

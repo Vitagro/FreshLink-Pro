@@ -72,10 +72,17 @@ router.get("/", async (req: Request, res: Response) => {
   // qui doit rester correct face aux deletes sans un mécanisme de
   // tombstone/resync périodique complémentaire.
   const updatedSince = req.query["updatedSince"] as string | undefined;
+  const paged = req.query["offset"] !== undefined || req.query["limit"] !== undefined;
+  const offset = Number(req.query["offset"] ?? 0);
+  const limit = Number(req.query["limit"] ?? 250);
+  if (paged && (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 500)) {
+    res.status(400).json({ ok: false, error: "Pagination invalide" });
+    return;
+  }
   try {
     const filter = updatedSince ? `&updated_at=gte.${encodeURIComponent(updatedSince)}` : "";
     const r = await fetch(
-      `${SB_URL}/rest/v1/${table}?select=id,payload,updated_at&limit=20000${filter}`,
+      `${SB_URL}/rest/v1/${table}?select=id,payload,updated_at&${paged ? `order=id.asc&offset=${offset}&limit=${limit}` : "limit=20000"}${filter}`,
       { headers: { apikey: SB_SERVICE_KEY, Authorization: `Bearer ${SB_SERVICE_KEY}` } },
     );
     if (!r.ok) {
