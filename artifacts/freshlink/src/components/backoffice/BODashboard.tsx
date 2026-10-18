@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { store, type User, type Client, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole, recordHeure, inHeureRange } from "@/lib/store"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { store, type User, type Client, type Commande, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole, recordHeure, inHeureRange, isClientVisible } from "@/lib/store"
+import { readBatchTable } from '@/lib/orderBatch'
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import {
@@ -69,7 +70,10 @@ const DELAI_MS: Record<string, number> = {
 }
 
 export default function BODashboard({ user }: Props) {
-  const [commandes, setCommandes] = useState(store.getVisibleCommandes())
+  const [commandes, setCommandes] = useState<Commande[]>([])
+  const [ordersLoading, setOrdersLoading] = useState(true)
+  const [ordersError, setOrdersError] = useState('')
+  const ordersInFlight = useRef(false)
   const [articles, setArticles] = useState(store.getArticles())
   const [clients, setClients] = useState(store.getVisibleClients())
   const [bonsAchat, setBonsAchat] = useState(store.getBonsAchat())
@@ -118,15 +122,27 @@ export default function BODashboard({ user }: Props) {
   const [refreshTick, setRefreshTick] = useState(0)
 
   const refreshData = () => {
-    setCommandes(store.getVisibleCommandes())
+    // Fetch the complete server snapshot: the legacy local cache can be truncated
+    // by PostgREST's row cap or exceed localStorage capacity for large order books.
+    if (!ordersInFlight.current) {
+      ordersInFlight.current = true
+      setOrdersLoading(true)
+      Promise.all([readBatchTable<Commande>('fl_commandes'), readBatchTable<Client>('fl_clients')]).then(([allOrders, allClients]) => {
+        const visibleClients = allClients.filter(c => isClientVisible(c, user))
+        const visibleIds = new Set(visibleClients.map(c => c.id))
+        setCommandes(allOrders.filter(c => visibleIds.has(c.clientId)))
+        setClients(store.getVisibleClients())
+        setOrdersError('')
+        setLastRefreshed(new Date())
+      }).catch(e => setOrdersError(e instanceof Error ? e.message : String(e)))
+        .finally(() => { ordersInFlight.current = false; setOrdersLoading(false) })
+    }
     setArticles(store.getArticles())
-    setClients(store.getVisibleClients())
     setBonsAchat(store.getBonsAchat())
     setUsers(store.getUsers())
     setRetours(store.getRetours())
     setBls(store.getVisibleBonsLivraison())
     setVisites(store.getVisites ? store.getVisites() : [])
-    setLastRefreshed(new Date())
   }
 
   useEffect(() => { refreshData() }, [])
@@ -458,6 +474,8 @@ export default function BODashboard({ user }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
+      {ordersError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{ordersError} Les compteurs ne sont pas à jour.</p>
+        : <p role="status" className="rounded-xl border p-3 text-sm">{ordersLoading ? 'Chargement du carnet complet…' : `${commandes.length.toLocaleString('fr-FR')} commandes chargées depuis Supabase.`} Les commandes simulées restent en attente d’approbation.</p>}
       {/* Header — pro grade */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">

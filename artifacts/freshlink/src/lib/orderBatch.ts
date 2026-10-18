@@ -49,12 +49,12 @@ export function prepareOrderBatch(batch: OrderBatch, clients: Client[], articles
 
 export async function readBatchTable<T>(table: string): Promise<T[]> {
   const result: T[] = []
-  for (let offset = 0; offset < 100000; offset += 250) {
-    const r = await fetch(`/api/sync-read?table=${encodeURIComponent(table)}&offset=${offset}&limit=250`, { cache: 'no-store' })
-    const body = await r.json()
-    if (!r.ok || !body.ok || !Array.isArray(body.data)) throw new Error(`Lecture impossible : ${table}`)
-    result.push(...body.data.map((row: { payload: T }) => row.payload))
-    if (body.data.length < 250) return result
+  for (let offset = 0; offset < 100000; offset += 500) {
+    const r = await fetch(`/api/sync-read?table=${encodeURIComponent(table)}&offset=${offset}&limit=500`, { cache: 'no-store' })
+    const body = await r.json().catch(() => null)
+    if (!r.ok || !body?.ok || !Array.isArray(body.data)) throw new Error(r.status === 401 ? 'Session expirée : reconnectez-vous à l’ERP.' : `Lecture impossible : ${table} (${r.status}). Réessayez avec Actualiser.`)
+    result.push(...body.data.filter((row: { id: string; payload: unknown }) => row.payload && typeof row.payload === 'object' && !row.id.startsWith('__')).map((row: { id: string; payload: T }) => ({ ...row.payload, id: row.id })))
+    if (body.data.length < 500) return result
   }
   throw new Error('Lecture trop volumineuse : import interrompu')
 }
