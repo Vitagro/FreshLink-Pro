@@ -512,6 +512,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       setCmds(orders.filter(o => !normTel(o.telephone) || visibleTels.has(normTel(o.telephone))))
     } catch (e) {
       console.error("[BOCommandesUnifiees]", e)
+      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Chargement des commandes impossible. Cliquez sur Actualiser.' })
     }
     setLoading(false)
   }, [])
