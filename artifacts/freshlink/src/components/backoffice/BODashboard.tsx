@@ -296,12 +296,6 @@ export default function BODashboard({ user }: Props) {
     prevendeurCA[c.commercialId].cmds++
     prevendeurCA[c.commercialId].tonnage += c.lignes.reduce((s, l) => s + lineKg(l), 0)
   })
-  // Complete avec les prevendeurs actifs sans commande sur la periode (CA=0)
-  // pour toujours afficher un top 10 plein tant qu'il y a ≥10 prevendeurs actifs,
-  // au lieu de tronquer la liste aux seuls prevendeurs ayant vendu.
-  prevendeurs.forEach(pv => {
-    if (!prevendeurCA[pv.id]) prevendeurCA[pv.id] = { nom: pv.name, ca: 0, cmds: 0, tonnage: 0 }
-  })
   const top10Prevendeurs = Object.entries(prevendeurCA).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
 
   // --- Top secteurs (CA) ---
