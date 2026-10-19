@@ -583,6 +583,8 @@ function AgentChat({ agent, user }: { agent: typeof AGENTS[0]; user: User }) {
     ts: Date.now(),
   }])
   const [input, setInput] = useState("")
+  const [diagnostic, setDiagnostic] = useState("")
+  const [testing, setTesting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [n3Triggered, setN3Triggered] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -624,25 +626,8 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse 
       failCountRef.current = 0
       setMsgs(prev => [...prev, { role: "assistant", text: reply, ts: Date.now() }])
     } catch (e: unknown) {
-      failCountRef.current += 1
-      const isQuota = e instanceof Error && e.message === "QUOTA_EXCEEDED"
-      if (failCountRef.current >= 3 && !n3Triggered) {
-        setN3Triggered(true)
-        triggerN3Alert(`Agent ${agent.name} inaccessible apres 3 tentatives. Dernier message : ${text}`)
-        setMsgs(prev => [...prev, {
-          role: "assistant",
-          text: "Connexion momentanement indisponible. L'alerte N3 a ete declenchee automatiquement.",
-          ts: Date.now()
-        }])
-      } else {
-        setMsgs(prev => [...prev, {
-          role: "assistant",
-          text: isQuota
-            ? "Limite de requetes atteinte. Attends quelques secondes et reessaie."
-            : "Connexion impossible. Verifie ton reseau et reessaie.",
-          ts: Date.now()
-        }])
-      }
+      setMsgs(prev => [...prev, { role: "assistant",
+        text: e instanceof Error ? e.message : "Service IA indisponible.", ts: Date.now() }])
     } finally {
       setLoading(false)
     }
@@ -714,10 +699,22 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse 
         </div>
         <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Actif
+          Conseil IA
         </div>
       </div>
 
+      <div className="px-4 py-2 text-xs border-b">
+        <button disabled={testing || loading} className="underline disabled:opacity-50" onClick={async () => {
+          setTesting(true); setDiagnostic("Test du service IA…")
+          try {
+            await callLLM("Test technique de connexion. Réponds uniquement OK.", [{ role: "user", text: "Bonjour" }], { max_tokens: 16, temperature: 0 })
+            setDiagnostic("Connexion IA vérifiée : le fournisseur a répondu.")
+          } catch (e) { setDiagnostic(e instanceof Error ? e.message : "Test impossible.") }
+          finally { setTesting(false) }
+        }}>{testing ? "Test en cours…" : "Tester la connexion IA"}</button>
+        <p role="status">{diagnostic}</p>
+        <p className="text-slate-500">Assistant de conseil : les actions proposées nécessitent votre validation. Le test ne transmet aucune donnée métier.</p>
+      </div>
       {/* Quick actions */}
       {actions.length > 0 && (
         <div className="px-3 py-2 flex gap-1.5 overflow-x-auto border-b border-slate-100 bg-slate-50 shrink-0"

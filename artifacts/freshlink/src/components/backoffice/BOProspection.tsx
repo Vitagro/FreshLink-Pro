@@ -211,25 +211,7 @@ Génère une analyse complète en JSON avec exactement cette structure:
   "resume": "<résumé exécutif en 1 phrase percutante>"
 }`
 
-  const res = await fetch("https://llm.blackbox.ai/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "openrouter/claude-sonnet-4",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user",   content: userMsg },
-      ],
-      max_tokens: 800,
-      temperature: 0.4,
-    }),
-  })
-
-  if (!res.ok) throw new Error(`API error ${res.status}`)
-  const data = await res.json()
-  const raw = data.choices?.[0]?.message?.content ?? "{}"
+  const raw = await callLLM(systemPrompt, [{ role: "user", text: userMsg }], { max_tokens: 800, temperature: 0.4 })
   // Extract JSON even if wrapped in ```json ... ```
   const jsonMatch = raw.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error("No JSON in response")

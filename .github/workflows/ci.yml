@@ -46,3 +46,6 @@ jobs:
 
       - name: Controlled order import regression tests
         run: node scripts/order-batch.test.mjs
+
+      - name: AI connection regression tests
+        run: node scripts/ai-client.test.mjs
