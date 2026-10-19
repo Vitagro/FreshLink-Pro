@@ -14,10 +14,10 @@ import { requireDeviceApi } from "../lib/deviceGuard.js";
 const router = Router();
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY ?? "";
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-20250514";
+const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 
 interface AiChatBody {
   system?: string;
@@ -33,7 +33,7 @@ async function callAnthropic(
   temperature: number,
 ): Promise<string> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 10000);
+  const t = setTimeout(() => ctrl.abort(), ANTHROPIC_KEY && GEMINI_KEY ? 10000 : 20000);
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -49,7 +49,7 @@ async function callAnthropic(
       throw new Error(`PROVIDER_${r.status}`);
     }
     const data = (await r.json()) as { content?: { text?: string }[] };
-    return data?.content?.[0]?.text?.trim() ?? "";
+    return data?.content?.map(block => block.text ?? "").join("\n").trim() ?? "";
   } finally {
     clearTimeout(t);
   }
@@ -62,7 +62,7 @@ async function callGemini(
   temperature: number,
 ): Promise<string> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 10000);
+  const t = setTimeout(() => ctrl.abort(), ANTHROPIC_KEY && GEMINI_KEY ? 10000 : 20000);
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_KEY}`;
     const r = await fetch(url, {
@@ -84,7 +84,7 @@ async function callGemini(
     const data = (await r.json()) as {
       candidates?: { content?: { parts?: { text?: string }[] } }[];
     };
-    return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
+    return data?.candidates?.[0]?.content?.parts?.map(part => part.text ?? "").join("\n").trim() ?? "";
   } finally {
     clearTimeout(t);
   }
