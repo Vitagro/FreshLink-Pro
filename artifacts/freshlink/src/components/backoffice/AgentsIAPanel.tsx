@@ -507,7 +507,7 @@ SIGNAL : [RH_VALIDÉ], [MATRICULE_GÉNÉRÉ], [ALERTE_RH], [DOCUMENT_PRÊT]`,
     bgColor: "#ecfdf5",
     borderColor: "#a7f3d0",
     badge: "N2 · Achat IA",
-    greeting: `Salam ! Je suis ASHEL, l'intelligence artificielle achat de FreshLink Pro.\n\nJe travaille 24h/24 — sourcing, comparaison fournisseurs, alertes prix, calcul PO optimal. Si une marge tombe en dessous de 20%, je déclenche automatiquement un War Plan. Quel produit ou fournisseur on analyse ?`,
+    greeting: `Salam ! Je suis ASHEL, l'intelligence artificielle achat de FreshLink Pro.\n\nJe vous aide à analyser le sourcing, les fournisseurs, les prix et les besoins d’achat à partir des données disponibles. Je propose des actions que vous validez. Quel produit ou fournisseur on analyse ?`,
     tasks: [
       { label: "Comparer N fournisseurs", desc: "Tableau prix/qualité/fiabilité + recommandation finale" },
       { label: "Calculer PO optimal", desc: "(Ventes J-7 + Stock sécu) - Stock actuel = quantité à commander" },
@@ -878,7 +878,7 @@ export default function AgentsIAPanel({ user, initialAgent }: Props) {
                 FRESH<span className="text-green-600">LINK</span>
                 <span className="text-green-700 text-[9px] tracking-widest ml-1">PRO</span>
               </p>
-              <p className="text-[9px] text-slate-400">{AGENTS.length} agents IA actifs</p>
+              <p className="text-[9px] text-slate-400">{AGENTS.length} assistants IA à la demande</p>
             </div>
           </div>
         </div>
@@ -910,7 +910,7 @@ export default function AgentsIAPanel({ user, initialAgent }: Props) {
             <p className="text-[10px] font-bold text-slate-700">Alerte Direction</p>
           </div>
           <p className="text-[10px] text-slate-500 leading-relaxed px-1">
-            Declenchement automatique si N1+N2 ne resolvent pas.
+            En cas de blocage, contactez la direction. Aucun message automatique envoyé.
           </p>
           <p className="text-[10px] font-bold text-amber-600 mt-1 px-1">+212663898707</p>
         </div>
