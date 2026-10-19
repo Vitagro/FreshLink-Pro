@@ -52,3 +52,6 @@ jobs:
 
       - name: AI server regression tests
         run: node scripts/ai-server.test.mjs
+
+      - name: Dashboard metric regression tests
+        run: node scripts/dashboard-metrics.test.mjs

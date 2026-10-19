@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
+import { requireAccount } from "../lib/adminAuth.js";
 import { requireDeviceApi } from "../lib/deviceGuard.js";
 import { SB_URL, SB_SERVICE_KEY } from "../lib/ext/supabaseEnv.js";
 
@@ -46,7 +47,7 @@ const ALLOWED_TABLES = new Set([
   "fl_charges_client_acheteur", "fl_trip_charges",
 ]);
 
-router.get("/", async (req: Request, res: Response) => {
+router.get("/", requireAccount, async (req: Request, res: Response) => {
   if (requireDeviceApi(req)) {
     res.status(401).json({ ok: false, error: "Device non autorisé" });
     return;

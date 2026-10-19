@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from "react"
 import { store, type User, type Client, type Commande, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole, recordHeure, inHeureRange, isClientVisible } from "@/lib/store"
+import { isSimulationOrder, selectOrderScope, selectPeriod, lineWeightKg, ORDER_STATUS_LABELS, type OrderScope } from "@/lib/dashboardMetrics"
 import { readBatchTable } from '@/lib/orderBatch'
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
@@ -70,6 +71,7 @@ const DELAI_MS: Record<string, number> = {
 }
 
 export default function BODashboard({ user }: Props) {
+  const [orderScope, setOrderScope] = useState<OrderScope>("real")
   const [commandes, setCommandes] = useState<Commande[]>([])
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [ordersError, setOrdersError] = useState('')
@@ -84,7 +86,7 @@ export default function BODashboard({ user }: Props) {
   const [dashTab, setDashTab] = useState<DashTab>("global")
   const [confirmResetCreditDash, setConfirmResetCreditDash] = useState(false)
   // Intervalle de dates du "Tableau de bord" — par defaut aujourd'hui seul
-  // (comportement historique inchange). Le KPI "CA aujourd'hui" et les
+  // (comportement historique inchange). Le KPI "Valeur des commandes du jour" et les
   // listes associees (commandes/visites/retours) agregent sur cet
   // intervalle ; les comparaisons (vs J-1, vs semaine passee) restent
   // ancrees sur dateFin pour rester lisibles meme en mode periode.
@@ -195,7 +197,7 @@ export default function BODashboard({ user }: Props) {
   // ce même statut plutôt qu'un hard-delete) reste dans l'historique mais ne
   // doit compter dans AUCUN indicatif commercial : CA, tonnage, top client,
   // top article, top commercial. Base commune pour tous ces calculs.
-  const commandesActives = useMemo(() => commandes.filter(c => c.statut !== "refuse"), [commandes])
+  const commandesActives = useMemo(() => selectOrderScope(commandes, orderScope), [commandes, orderScope])
 
   // --- Commandes helpers ---
   // "Today" = tout l'intervalle choisi (dateDebut..dateFin) — un seul jour
@@ -203,12 +205,14 @@ export default function BODashboard({ user }: Props) {
   const cmdsToday    = useMemo(() => commandesActives.filter(c => c.date >= dateDebut && c.date <= dateFin && inHeureRange(heureDebut, heureFin, recordHeure(c))), [commandesActives, dateDebut, dateFin, heureDebut, heureFin])
   const cmdsYday     = useMemo(() => commandesActives.filter(c => c.date === yesterday), [commandesActives, yesterday])
   const cmdsLastWkDay= useMemo(() => commandesActives.filter(c => c.date === lastWeekSameDay), [commandesActives, lastWeekSameDay])
-  const cmdsWeek     = useMemo(() => commandesActives.filter(c => c.date >= weekRange.start && c.date <= weekRange.end), [commandesActives, weekRange])
+  const cmdsWeek     = selectPeriod(commandesActives, weekRange.start, dateFin)
   const cmdsLastWeek = useMemo(() => commandesActives.filter(c => c.date >= lastWeekRange.start && c.date <= lastWeekRange.end), [commandesActives, lastWeekRange])
-  const cmdsMonth    = useMemo(() => commandesActives.filter(c => c.date >= monthRange.start && c.date <= monthRange.end), [commandesActives, monthRange])
+  const cmdsMonth    = selectPeriod(commandesActives, monthRange.start, dateFin)
 
   const caOf   = (arr: typeof commandes) => arr.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite * l.prixVente, 0), 0)
-  const tonnOf = (arr: typeof commandes) => arr.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + l.quantite, 0), 0)
+  const unitByArticle = new Map(articles.map(a => [a.id, a.unite]))
+  const lineKg = (line: Commande["lignes"][number]) => lineWeightKg(line, unitByArticle.get(line.articleId))
+  const tonnOf = (arr: typeof commandes) => arr.reduce((s, c) => s + c.lignes.reduce((ls, l) => ls + lineKg(l), 0), 0)
 
   const caToday     = caOf(cmdsToday)
   const caYday      = caOf(cmdsYday)
@@ -259,7 +263,7 @@ export default function BODashboard({ user }: Props) {
   // Compter uniquement le statut brut "en_attente" affichait 0 dès qu'une
   // commande avait avancé dans le flux (valide/en_preparation), ce qui est
   // le cas de la quasi-totalité des commandes réelles.
-  const cmdsEnAttente = commandes.filter(c => !["livre", "refuse", "retour"].includes(c.statut)).length
+  const cmdsEnAttente = commandesActives.filter(c => !["livre", "refuse", "retour"].includes(c.statut)).length
   const totalAchats   = bonsAchat.reduce((s, b) => s + b.lignes.reduce((ls, l) => ls + l.quantite * l.prixAchat, 0), 0)
 
   // Libelle dynamique de periode — reutilise pour tous les badges "Top X" afin
@@ -278,7 +282,7 @@ export default function BODashboard({ user }: Props) {
     if (!clientsCA[c.clientId]) clientsCA[c.clientId] = { nom: c.clientNom, ca: 0, cmds: 0, tonnage: 0 }
     clientsCA[c.clientId].ca += ca
     clientsCA[c.clientId].cmds++
-    clientsCA[c.clientId].tonnage += c.lignes.reduce((s, l) => s + l.quantite, 0)
+    clientsCA[c.clientId].tonnage += c.lignes.reduce((s, l) => s + lineKg(l), 0)
   })
   const top10Clients = Object.entries(clientsCA).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
 
@@ -290,7 +294,7 @@ export default function BODashboard({ user }: Props) {
     if (!prevendeurCA[c.commercialId]) prevendeurCA[c.commercialId] = { nom: c.commercialNom, ca: 0, cmds: 0, tonnage: 0 }
     prevendeurCA[c.commercialId].ca += ca
     prevendeurCA[c.commercialId].cmds++
-    prevendeurCA[c.commercialId].tonnage += c.lignes.reduce((s, l) => s + l.quantite, 0)
+    prevendeurCA[c.commercialId].tonnage += c.lignes.reduce((s, l) => s + lineKg(l), 0)
   })
   // Complete avec les prevendeurs actifs sans commande sur la periode (CA=0)
   // pour toujours afficher un top 10 plein tant qu'il y a ≥10 prevendeurs actifs,
@@ -307,7 +311,7 @@ export default function BODashboard({ user }: Props) {
     if (!secteurStats[c.secteur]) secteurStats[c.secteur] = { nom: c.secteur, ca: 0, cmds: 0, tonnage: 0 }
     secteurStats[c.secteur].ca += ca
     secteurStats[c.secteur].cmds++
-    secteurStats[c.secteur].tonnage += c.lignes.reduce((s, l) => s + l.quantite, 0)
+    secteurStats[c.secteur].tonnage += c.lignes.reduce((s, l) => s + lineKg(l), 0)
   })
   const top10Secteurs = Object.entries(secteurStats).sort(([, a], [, b]) => b.ca - a.ca).slice(0, 10)
 
@@ -393,16 +397,17 @@ export default function BODashboard({ user }: Props) {
 
   // Top articles sold (all time, by kg)
   const artSold: Record<string, { nom: string; kg: number }> = {}
-  commandesActives.forEach(c => c.lignes.forEach(l => {
+  cmdsToday.forEach(c => c.lignes.forEach(l => {
+    if (lineKg(l) === 0) return
     if (!artSold[l.articleNom]) artSold[l.articleNom] = { nom: l.articleNom, kg: 0 }
-    artSold[l.articleNom].kg += l.quantite
+    artSold[l.articleNom].kg += lineKg(l)
   }))
   const artChartData = Object.entries(artSold).sort(([, a], [, b]) => b.kg - a.kg).slice(0, 10)
     .map(([, v]) => ({ name: v.nom, kg: Math.round(v.kg) }))
 
   // CA per secteur
   const secteurCA: Record<string, number> = {}
-  commandesActives.forEach(c => {
+  cmdsToday.forEach(c => {
     secteurCA[c.secteur] = (secteurCA[c.secteur] ?? 0) + caOf([c])
   })
   const secteurChartData = Object.entries(secteurCA).sort(([, a], [, b]) => b - a).slice(0, 8)
@@ -474,8 +479,50 @@ export default function BODashboard({ user }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
+      <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-lg sm:px-8">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Vita Fresh · Operations</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Votre activité, en un regard.</h2>
+            <p className="mt-2 max-w-xl text-sm text-slate-300">Commandes, livraisons et priorités du jour. Des indicateurs reliés à leur période et à leur source.</p>
+          </div>
+          <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm">
+            <p className="text-slate-400">Fiabilité de la lecture</p>
+            <p className="mt-1 font-semibold">{ordersError ? "Actualisation interrompue" : ordersLoading ? "Actualisation en cours" : "Carnet synchronisé"}</p>
+          </div>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Source des indicateurs">
+          {([['real', 'Activité réelle'], ['simulation', 'Simulation']] as const).map(([scope, label]) => (
+            <button key={scope} onClick={() => setOrderScope(scope)} aria-pressed={orderScope === scope}
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white ${orderScope === scope ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-white hover:bg-white/20'}`}>{label}</button>
+          ))}
+          <span className="text-xs text-slate-300 sm:ml-2">{commandes.filter(isSimulationOrder).length.toLocaleString('fr-FR')} commandes simulées, isolées des indicateurs réels.</span>
+        </div>
+      </section>
+      {orderScope === 'simulation' && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Mode simulation : ces chiffres ne représentent pas des ventes réalisées. Aucun stock ni paiement n’est modifié.</p>}
+      <p className="text-xs text-muted-foreground">Montants du carnet de commandes, hors commandes refusées ou retournées ; ce ne sont pas des encaissements. Les poids excluent les unités sans conversion fiable en kg.</p>
+
       {ordersError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{ordersError} Les compteurs ne sont pas à jour.</p>
         : <p role="status" className="rounded-xl border p-3 text-sm">{ordersLoading ? 'Chargement du carnet complet…' : `${commandes.length.toLocaleString('fr-FR')} commandes chargées depuis Supabase.`} Les commandes simulées restent en attente d’approbation.</p>}
+      <div className="flex flex-wrap items-center gap-2" aria-label="Périodes rapides">
+        <span className="mr-2 text-xs font-medium text-muted-foreground">Période</span>
+        {[{label: "Aujourd’hui", start: today}, {label: "7 derniers jours", start: dateOffset(today, -6)}, {label: "Ce mois", start: getMonthRange(today).start}].map(p => (
+          <button key={p.label} onClick={() => {setDateDebut(p.start); setDateFin(today); setHeureDebut(""); setHeureFin("")}}
+            className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted">{p.label}</button>
+        ))}
+      </div>
+      <section aria-label="Suivi logistique des commandes" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {[
+          {label: "À approuver", statuses: ["en_attente", "en_attente_approbation"], color: "text-amber-600"},
+          {label: "À préparer / charger", statuses: ["valide", "en_preparation", "charge"], color: "text-sky-600"},
+          {label: "En livraison", statuses: ["en_transit"], color: "text-violet-600"},
+          {label: "Livrées", statuses: ["livre"], color: "text-emerald-600"},
+        ].map(stage => <div key={stage.label} className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-xs font-semibold text-muted-foreground">{stage.label}</p>
+          <p className={`mt-2 text-2xl font-semibold tabular-nums ${stage.color}`}>{cmdsToday.filter(c => stage.statuses.includes(c.statut)).length}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">{periodLabel} · {orderScope === 'real' ? 'réel' : 'simulation'}</p>
+        </div>)}
+      </section>
       {/* Header — pro grade */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -494,7 +541,7 @@ export default function BODashboard({ user }: Props) {
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider"
                 style={{ background: "oklch(0.18 0.06 148)", color: "oklch(0.72 0.18 148)", border: "1px solid oklch(0.28 0.10 148)" }}>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                LIVE
+                {ordersError ? "À VÉRIFIER" : ordersLoading ? "MISE À JOUR" : "SYNCHRONISÉ"}
               </span>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
@@ -518,24 +565,24 @@ export default function BODashboard({ user }: Props) {
         {/* Intervalle de dates — par defaut aujourd'hui seul (comportement
             historique) ; les KPI "du jour" et listes associees agregent sur
             cet intervalle une fois elargi. */}
-        <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl" style={{ background: "oklch(0.12 0.018 255)", border: "1px solid oklch(0.20 0.016 255)" }}>
+        <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded-xl" style={{ background: "oklch(0.12 0.018 255)", border: "1px solid oklch(0.20 0.016 255)" }}>
           <span className="text-[10px] font-semibold text-muted-foreground pl-1">Du</span>
-          <input type="date" value={dateDebut} max={dateFin}
-            onChange={e => setDateDebut(e.target.value)}
+          <input aria-label="Début de période" type="date" value={dateDebut} max={dateFin}
+            onChange={e => { if (e.target.value && e.target.value <= dateFin) setDateDebut(e.target.value) }}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
             style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
           <span className="text-[10px] font-semibold text-muted-foreground">Au</span>
-          <input type="date" value={dateFin} min={dateDebut}
-            onChange={e => setDateFin(e.target.value)}
+          <input aria-label="Fin de période" type="date" value={dateFin} min={dateDebut}
+            onChange={e => { if (e.target.value && e.target.value >= dateDebut) setDateFin(e.target.value) }}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
             style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
           <span className="text-[10px] font-semibold text-muted-foreground">De</span>
-          <input type="time" value={heureDebut}
+          <input aria-label="Heure de début" type="time" value={heureDebut}
             onChange={e => setHeureDebut(e.target.value)}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
             style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
           <span className="text-[10px] font-semibold text-muted-foreground">à</span>
-          <input type="time" value={heureFin}
+          <input aria-label="Heure de fin" type="time" value={heureFin}
             onChange={e => setHeureFin(e.target.value)}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
             style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
@@ -622,22 +669,22 @@ export default function BODashboard({ user }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {[
               {
-                label: dateDebut === dateFin ? (dateFin === today ? "CA aujourd'hui" : `CA du ${dateFin}`) : `CA du ${dateDebut} au ${dateFin}`,
+                label: dateDebut === dateFin ? (dateFin === today ? "Valeur des commandes du jour" : `Commandes du ${dateFin}`) : `Commandes du ${dateDebut} au ${dateFin}`,
                 labelAr: "رقم الأعمال اليوم",
                 value: DH(caToday), sub: `${cmdsToday.length} commande(s)`,
-                delta1: <Delta current={caToday} previous={caYday} label="vs J-1" />,
-                delta2: <Delta current={caToday} previous={caLastWkDay} label="vs sem. passee" />,
+                delta1: dateDebut === dateFin && <Delta current={caToday} previous={caYday} label="vs J-1" />,
+                delta2: dateDebut === dateFin && <Delta current={caToday} previous={caLastWkDay} label="vs sem. passee" />,
                 icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6", iconBg: "bg-emerald-50", iconClr: "text-emerald-600", valClr: "text-emerald-600",
               },
               {
-                label: "CA semaine", labelAr: "رقم الأعمال الأسبوع",
+                label: "Commandes · semaine à date", labelAr: "رقم الأعمال الأسبوع",
                 value: DH(caWeek), sub: `${cmdsWeek.length} commandes`,
-                delta1: <Delta current={caWeek} previous={caLastWeek} label="vs S-1" />,
+                delta1: null,
                 delta2: null,
                 icon: "M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z", iconBg: "bg-amber-50", iconClr: "text-amber-600", valClr: "text-amber-600",
               },
               {
-                label: "CA mois", labelAr: "رقم الأعمال الشهر",
+                label: "Commandes · mois à date", labelAr: "رقم الأعمال الشهر",
                 value: DH(caMonth), sub: `${cmdsMonth.length} commandes`,
                 delta1: null, delta2: null,
                 icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z", iconBg: "bg-blue-50", iconClr: "text-blue-600", valClr: "text-blue-600",
@@ -868,9 +915,9 @@ export default function BODashboard({ user }: Props) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {[...commandes].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(c => {
+                  {[...cmdsToday].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10).map(c => {
                     const total = c.lignes.reduce((s, l) => s + l.quantite * l.prixVente, 0)
-                    const tonn = c.lignes.reduce((s, l) => s + l.quantite, 0)
+                    const tonn = c.lignes.reduce((s, l) => s + lineKg(l), 0)
                     return (
                       <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                         <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{c.id}</td>
@@ -887,13 +934,13 @@ export default function BODashboard({ user }: Props) {
                             c.statut === "valide" ? "bg-amber-100 text-amber-700" :
                             c.statut === "en_attente_approbation" ? "bg-orange-100 text-orange-700" :
                             "bg-muted text-muted-foreground"}`}>
-                            {c.statut}
+                            {ORDER_STATUS_LABELS[c.statut] ?? c.statut}
                           </span>
                         </td>
                       </tr>
                     )
                   })}
-                  {commandes.length === 0 && (
+                  {cmdsToday.length === 0 && (
                     <tr><td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">Aucune commande</td></tr>
                   )}
                 </tbody>
