@@ -29,7 +29,7 @@ function contextCommercial(user: User): string {
     : user.role === "team_leader" ? clients.filter(c => c.teamLeadId === user.id)
     : clients
   const cutoff7j = dateNJoursAgo(7)
-  const commandesRecentes = store.getVisibleCommandes().filter(c => c.date >= cutoff7j)
+  const commandesRecentes = store.getVisibleCommandes().filter(c => c.date >= cutoff7j && c.date <= store.today() && !c.id.startsWith("SIM-") && !(c as unknown as { isSimulation?: boolean }).isSimulation)
   const caParClient = new Map<string, number>()
   commandesRecentes.forEach(c => caParClient.set(c.clientId, (caParClient.get(c.clientId) ?? 0) + c.lignes.reduce((s, l) => s + (l.total || 0), 0)))
   const topClients = [...mesClients].map(c => ({ c, ca: caParClient.get(c.id) ?? 0 })).sort((a, b) => b.ca - a.ca).slice(0, 8)
@@ -171,7 +171,7 @@ const BUILDERS: Record<string, (user: User) => string> = {
  * (jamais bloquant : mieux vaut un agent sans données qu'un agent qui plante). */
 export function buildAgentDataContext(agentId: string, user: User): string {
   try {
-    return BUILDERS[agentId]?.(user) ?? ""
+    return "CONTEXTE : aperçu du cache local, potentiellement incomplet ou ancien. Ne jamais présenter ces chiffres comme un audit exhaustif. Les commandes SIM- sont des simulations, pas des ventes réalisées. Aucun outil de modification ni envoi de notification n’est connecté à cette conversation : proposer les actions sans prétendre les avoir exécutées. Les exemples de prix du persona ne sont pas des prix de marché vérifiés.\n" + (BUILDERS[agentId]?.(user) ?? "Aucune donnée métier disponible pour cet agent.")
   } catch {
     return ""
   }

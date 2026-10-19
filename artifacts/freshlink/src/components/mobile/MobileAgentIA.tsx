@@ -347,15 +347,9 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta répons
       const reply = await callLLM(contextPrompt, historyMsgs, { temperature: 0.65, max_tokens: 1200 })
       failCountRef.current = 0
       setMsgs(prev => [...prev, { role: "assistant", text: reply, ts: Date.now() }])
-    } catch {
-      failCountRef.current += 1
-      if (failCountRef.current >= 3 && !n3Triggered) {
-        setN3Triggered(true)
-        n3Alert(`Agent ${agent.name} mobile inaccessible. Utilisateur: ${user.name} (${user.role}). Message: ${msg}`)
-        setMsgs(prev => [...prev, { role: "assistant", text: "Connexion temporairement indisponible. Le responsable a été notifié automatiquement.", ts: Date.now() }])
-      } else {
-        setMsgs(prev => [...prev, { role: "assistant", text: "Connexion impossible. Vérifiez votre réseau et réessayez.", ts: Date.now() }])
-      }
+    } catch (e: unknown) {
+      setMsgs(prev => [...prev, { role: "assistant",
+        text: e instanceof Error ? e.message : "Service IA indisponible.", ts: Date.now() }])
     } finally {
       setLoading(false)
     }
@@ -379,7 +373,7 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta répons
             </span>
             <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Actif
+              Conseil IA
             </span>
           </div>
           <p className="text-xs font-medium text-slate-500 mt-0.5 truncate">{agent.fullName}</p>

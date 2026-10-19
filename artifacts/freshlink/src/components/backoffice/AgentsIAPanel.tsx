@@ -507,7 +507,7 @@ SIGNAL : [RH_VALIDÉ], [MATRICULE_GÉNÉRÉ], [ALERTE_RH], [DOCUMENT_PRÊT]`,
     bgColor: "#ecfdf5",
     borderColor: "#a7f3d0",
     badge: "N2 · Achat IA",
-    greeting: `Salam ! Je suis ASHEL, l'intelligence artificielle achat de FreshLink Pro.\n\nJe travaille 24h/24 — sourcing, comparaison fournisseurs, alertes prix, calcul PO optimal. Si une marge tombe en dessous de 20%, je déclenche automatiquement un War Plan. Quel produit ou fournisseur on analyse ?`,
+    greeting: `Salam ! Je suis ASHEL, l'intelligence artificielle achat de FreshLink Pro.\n\nJe vous aide à analyser le sourcing, les fournisseurs, les prix et les besoins d’achat à partir des données disponibles. Je propose des actions que vous validez. Quel produit ou fournisseur on analyse ?`,
     tasks: [
       { label: "Comparer N fournisseurs", desc: "Tableau prix/qualité/fiabilité + recommandation finale" },
       { label: "Calculer PO optimal", desc: "(Ventes J-7 + Stock sécu) - Stock actuel = quantité à commander" },
@@ -583,6 +583,8 @@ function AgentChat({ agent, user }: { agent: typeof AGENTS[0]; user: User }) {
     ts: Date.now(),
   }])
   const [input, setInput] = useState("")
+  const [diagnostic, setDiagnostic] = useState("")
+  const [testing, setTesting] = useState(false)
   const [loading, setLoading] = useState(false)
   const [n3Triggered, setN3Triggered] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -624,25 +626,8 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse 
       failCountRef.current = 0
       setMsgs(prev => [...prev, { role: "assistant", text: reply, ts: Date.now() }])
     } catch (e: unknown) {
-      failCountRef.current += 1
-      const isQuota = e instanceof Error && e.message === "QUOTA_EXCEEDED"
-      if (failCountRef.current >= 3 && !n3Triggered) {
-        setN3Triggered(true)
-        triggerN3Alert(`Agent ${agent.name} inaccessible apres 3 tentatives. Dernier message : ${text}`)
-        setMsgs(prev => [...prev, {
-          role: "assistant",
-          text: "Connexion momentanement indisponible. L'alerte N3 a ete declenchee automatiquement.",
-          ts: Date.now()
-        }])
-      } else {
-        setMsgs(prev => [...prev, {
-          role: "assistant",
-          text: isQuota
-            ? "Limite de requetes atteinte. Attends quelques secondes et reessaie."
-            : "Connexion impossible. Verifie ton reseau et reessaie.",
-          ts: Date.now()
-        }])
-      }
+      setMsgs(prev => [...prev, { role: "assistant",
+        text: e instanceof Error ? e.message : "Service IA indisponible.", ts: Date.now() }])
     } finally {
       setLoading(false)
     }
@@ -714,10 +699,22 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse 
         </div>
         <div className="flex items-center gap-1 text-[10px] font-semibold text-emerald-600 shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          Actif
+          Conseil IA
         </div>
       </div>
 
+      <div className="px-4 py-2 text-xs border-b">
+        <button disabled={testing || loading} className="underline disabled:opacity-50" onClick={async () => {
+          setTesting(true); setDiagnostic("Test du service IA…")
+          try {
+            await callLLM("Test technique de connexion. Réponds uniquement OK.", [{ role: "user", text: "Bonjour" }], { max_tokens: 16, temperature: 0 })
+            setDiagnostic("Connexion IA vérifiée : le fournisseur a répondu.")
+          } catch (e) { setDiagnostic(e instanceof Error ? e.message : "Test impossible.") }
+          finally { setTesting(false) }
+        }}>{testing ? "Test en cours…" : "Tester la connexion IA"}</button>
+        <p role="status">{diagnostic}</p>
+        <p className="text-slate-500">Assistant de conseil : les actions proposées nécessitent votre validation. Le test ne transmet aucune donnée métier.</p>
+      </div>
       {/* Quick actions */}
       {actions.length > 0 && (
         <div className="px-3 py-2 flex gap-1.5 overflow-x-auto border-b border-slate-100 bg-slate-50 shrink-0"
@@ -881,7 +878,7 @@ export default function AgentsIAPanel({ user, initialAgent }: Props) {
                 FRESH<span className="text-green-600">LINK</span>
                 <span className="text-green-700 text-[9px] tracking-widest ml-1">PRO</span>
               </p>
-              <p className="text-[9px] text-slate-400">{AGENTS.length} agents IA actifs</p>
+              <p className="text-[9px] text-slate-400">{AGENTS.length} assistants IA à la demande</p>
             </div>
           </div>
         </div>
@@ -913,7 +910,7 @@ export default function AgentsIAPanel({ user, initialAgent }: Props) {
             <p className="text-[10px] font-bold text-slate-700">Alerte Direction</p>
           </div>
           <p className="text-[10px] text-slate-500 leading-relaxed px-1">
-            Declenchement automatique si N1+N2 ne resolvent pas.
+            En cas de blocage, contactez la direction. Aucun message automatique envoyé.
           </p>
           <p className="text-[10px] font-bold text-amber-600 mt-1 px-1">+212663898707</p>
         </div>
