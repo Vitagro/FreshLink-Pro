@@ -49,3 +49,6 @@ jobs:
 
       - name: AI connection regression tests
         run: node scripts/ai-client.test.mjs
+
+      - name: AI server regression tests
+        run: node scripts/ai-server.test.mjs
