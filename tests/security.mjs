@@ -109,3 +109,15 @@ test('order totals are authoritative and repeat submissions reuse the durable or
   body.montant_total=1;
   assert.equal((await send()).status,409);
 });
+
+
+test('ERP reads require an active account as well as a device', async()=>{
+  const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
+  const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');
+  const deviceHeaders={Cookie:'fl_device_token='+cookie};
+  assert.equal((await call('/sync-read?table=fl_clients',{headers:deviceHeaders})).status,401);
+  assert.equal((await call('/sync-read?table=fl_clients',{headers:{...headers,...deviceHeaders}})).status,200);
+  active=false;
+  try { assert.equal((await call('/sync-read?table=fl_clients',{headers:{...headers,...deviceHeaders}})).status,403) }
+  finally { active=true }
+});
