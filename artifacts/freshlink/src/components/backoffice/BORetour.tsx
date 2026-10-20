@@ -35,7 +35,7 @@ export default function BORetour({ user }: { user: User }) {
     if (!hasPermission(user.role, "gerer_retour")) { logAction(user, "gerer_retour", "denied"); return }
     const retours_ = store.getRetours()
     const r = retours_.find(r => r.id === id)
-    if (!r) return
+    if (!r || r.statut !== "en_attente") return
     logAction(user, "gerer_retour", "success", { type: "retour", id })
     r.statut = "validé"
     r.validePar = "magasinier"

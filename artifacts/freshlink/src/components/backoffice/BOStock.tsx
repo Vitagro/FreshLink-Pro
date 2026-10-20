@@ -269,7 +269,12 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
     }
     // store.addTransfert applique deja le mouvement de stock conforme<->defect en interne —
     // ne pas le refaire ici, sous peine de doubler le mouvement (bug precedent).
-    store.addTransfert(t)
+    try {
+      store.addTransfert(t)
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Transfert impossible.")
+      return
+    }
     reload(); setShowTransfert(false)
     setSaved("Transfert enregistré"); setTimeout(() => setSaved(""), 2000)
   }
