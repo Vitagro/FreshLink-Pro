@@ -1,6 +1,7 @@
 ﻿"use client"
 
 import bcrypt from "bcryptjs"
+import { transferBalances } from "./stockTransfer"
 
 // ============================================================
 // TYPES
@@ -3932,17 +3933,21 @@ export const store = {
   getTransferts: (): TransfertStock[] => getLS("fl_transferts", []),
   saveTransferts: (t: TransfertStock[]) => setLS("fl_transferts", t),
   addTransfert: (t: TransfertStock) => {
-    const ts = store.getTransferts(); ts.push(t); store.saveTransferts(ts)
+    const ts = store.getTransferts()
+    if (ts.some(existing => existing.id === t.id)) return
+    if (!Number.isFinite(t.quantite) || t.quantite <= 0) throw new Error("Quantité de transfert invalide.")
+    const articles = store.getArticles()
+    const article = articles.find(a => a.id === t.articleId)
+    if (!article) throw new Error("Article introuvable.")
     // Pas de mouvement de stock entrepot en mode crossdocking (rien a transferer) —
     // le transfert reste enregistre pour la tracabilite, sans impact sur stockDisponible/stockDefect.
-    if (store.isCrossdockMode()) return
-    if (t.sens === "conforme_vers_defect") {
-      store.updateStock(t.articleId, -t.quantite, false)
-      store.updateStock(t.articleId, t.quantite, true)
-    } else {
-      store.updateStock(t.articleId, -t.quantite, true)
-      store.updateStock(t.articleId, t.quantite, false)
+    if (!store.isCrossdockMode()) {
+      const balances = transferBalances(article.stockDisponible, article.stockDefect, t.quantite, t.sens)
+      Object.assign(article, balances)
+      store.saveArticles(articles)
     }
+    ts.push(t)
+    store.saveTransferts(ts)
   },
 
   // --- Notices / Discussions ---

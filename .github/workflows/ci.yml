@@ -55,3 +55,6 @@ jobs:
 
       - name: Dashboard metric regression tests
         run: node scripts/dashboard-metrics.test.mjs
+
+      - name: Stock transfer regression tests
+        run: node scripts/stock-transfer.test.mjs
