@@ -88,8 +88,8 @@ export default function BODashboard({ user }: Props) {
   // Intervalle de dates du "Tableau de bord" — par defaut aujourd'hui seul
   // (comportement historique inchange). Le KPI "Valeur des commandes du jour" et les
   // listes associees (commandes/visites/retours) agregent sur cet
-  // intervalle ; les comparaisons (vs J-1, vs semaine passee) restent
-  // ancrees sur dateFin pour rester lisibles meme en mode periode.
+  // intervalle ; les comparaisons journalières ne s'affichent que pour
+  // une journée complète, afin de comparer des périodes équivalentes.
   const [dateDebut, setDateDebut] = useState(store.today())
   const [dateFin, setDateFin] = useState(store.today())
   // Intervalle heure (optionnel) — n'affecte que les entites avec une heure
@@ -97,6 +97,7 @@ export default function BODashboard({ user }: Props) {
   // toujours passer les entites sans heure (voir lib/store.ts).
   const [heureDebut, setHeureDebut] = useState("")
   const [heureFin, setHeureFin] = useState("")
+  const canCompareDays = dateDebut === dateFin && !heureDebut && !heureFin
   // Factures impayées (fl_invoices) → intégrées au crédit (sinon crédit=0 alors
   // qu'une facture est « Impayée » côté Finance).
   const [unpaidByClient, setUnpaidByClient] = useState<Record<string, number>>({})
@@ -666,8 +667,8 @@ export default function BODashboard({ user }: Props) {
                 label: dateDebut === dateFin ? (dateFin === today ? "Valeur des commandes du jour" : `Commandes du ${dateFin}`) : `Commandes du ${dateDebut} au ${dateFin}`,
                 labelAr: "رقم الأعمال اليوم",
                 value: DH(caToday), sub: `${cmdsToday.length} commande(s)`,
-                delta1: dateDebut === dateFin && <Delta current={caToday} previous={caYday} label="vs J-1" />,
-                delta2: dateDebut === dateFin && <Delta current={caToday} previous={caLastWkDay} label="vs sem. passee" />,
+                delta1: canCompareDays && <Delta current={caToday} previous={caYday} label="vs J-1" />,
+                delta2: canCompareDays && <Delta current={caToday} previous={caLastWkDay} label="vs sem. passee" />,
                 icon: "M13 7h8m0 0v8m0-8l-8 8-4-4-6 6", iconBg: "bg-emerald-50", iconClr: "text-emerald-600", valClr: "text-emerald-600",
               },
               {
@@ -706,22 +707,22 @@ export default function BODashboard({ user }: Props) {
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
             {[
               {
-                label: "Tonnage jour",
+                label: "Tonnage · période",
                 v: KG(tonnageToday),
                 clr: "text-amber-600",
-                sub: <Delta current={tonnageToday} previous={tonnageYday} label="vs J-1" />,
-                sub2: <Delta current={tonnageToday} previous={tonnageLastWkDay} label="vs S-1" />,
+                sub: canCompareDays && <Delta current={tonnageToday} previous={tonnageYday} label="vs J-1" />,
+                sub2: canCompareDays && <Delta current={tonnageToday} previous={tonnageLastWkDay} label="vs S-1" />,
               },
               {
-                label: "Visites jour",
+                label: "Visites · période",
                 v: String(visitesToday),
                 clr: "text-blue-600",
-                sub: <Delta current={visitesToday} previous={visitesYday} label="vs J-1" />,
-                sub2: <Delta current={visitesToday} previous={visitesLastWk} label="vs S-1" />,
+                sub: canCompareDays && <Delta current={visitesToday} previous={visitesYday} label="vs J-1" />,
+                sub2: canCompareDays && <Delta current={visitesToday} previous={visitesLastWk} label="vs S-1" />,
               },
-              { label: "Retours (kg/j)",  v: KG(totalRetourKgToday), clr: "text-red-600", sub: null, sub2: null },
+              { label: "Retours · période",  v: KG(totalRetourKgToday), clr: "text-red-600", sub: null, sub2: null },
               { label: "Taux retour",     v: `${tauxRetour}%`, clr: tauxRetour > 10 ? "text-red-600" : tauxRetour > 5 ? "text-amber-600" : "text-emerald-600", sub: null, sub2: null },
-              { label: "Cmds en attente", v: String(cmdsEnAttente), clr: "text-yellow-600", sub: null, sub2: null },
+              { label: "En attente · toutes dates", v: String(cmdsEnAttente), clr: "text-yellow-600", sub: null, sub2: null },
               ...(crossdock ? [] : [{ label: "Stock faible", v: String(stockFaible), clr: stockFaible > 0 ? "text-red-600" : "text-emerald-600", sub: null, sub2: null }]),
             ].map(k => (
               <div key={k.label} className="bg-card border border-border rounded-xl p-3">
