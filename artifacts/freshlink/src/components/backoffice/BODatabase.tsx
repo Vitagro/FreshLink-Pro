@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { store, type Client } from "@/lib/store"
+import { isSimulationOrder } from "@/lib/dashboardMetrics"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import { fetchClients, upsertClient, importClients, getLastSupabaseError } from "@/lib/supabase/db"
@@ -299,16 +300,14 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
     setForceSyncLoading(false)
   }
 
-  // Regularisation en masse : toutes les commandes pas encore livrees/refusees
-  // passent en "livre" avec la trace normale du processus (Bon de Livraison +
-  // encaissement caisse) — cf. store.bulkMarkCommandesLivrees.
+  // Régularisation logistique : jamais de paiement implicite ou de simulation.
   const handleBulkLivrer = () => {
     const session = store.getSession()
     if (!hasPermission(session?.role, "backup_restore")) { logAction(session, "backup_restore", "denied", { type: "bulk_livrer_commandes" }); return }
-    const nbConcernees = store.getCommandes().filter(c => c.statut !== "livre" && c.statut !== "refuse").length
+    const nbConcernees = store.getCommandes().filter(c => !isSimulationOrder(c) && !["livre", "refuse", "retour"].includes(c.statut)).length
     if (nbConcernees === 0) { setBulkLivrerResult({ count: 0 }); return }
     if (!confirm(
-      `⚠️ Cette action va marquer ${nbConcernees} commande(s) comme "livree" (toutes sauf celles deja livrees ou refusees), en creant pour chacune le Bon de Livraison et l'encaissement caisse correspondants (trace normale du processus).\n\nCette action est irreversible en un clic. Continuer ?`
+      `⚠️ Cette action va marquer ${nbConcernees} commande(s) réelles comme livrées et créer les bons de livraison manquants. Les simulations, refus et retours sont exclus. Aucun paiement ni encaissement ne sera créé.\n\nConfirmez uniquement des livraisons réellement effectuées. Continuer ?`
     )) return
     setBulkLivrerLoading(true)
     logAction(session, "backup_restore", "success", { type: "bulk_livrer_commandes", label: `${nbConcernees} commande(s)` })
@@ -568,9 +567,9 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
             <h3 className="font-semibold text-red-900 text-sm">Regularisation — marquer les commandes comme livrees</h3>
           </div>
           <p className="text-xs text-red-700">
-            Passe toutes les commandes qui ne sont pas encore livrees ni refusees au statut « livree », en creant pour
-            chacune le Bon de Livraison et l&apos;encaissement caisse correspondants (trace normale du processus, pas
-            seulement un changement de statut).
+            Régularise uniquement des livraisons réelles confirmées et crée les bons manquants.
+            Les simulations, commandes refusées et retours sont exclus. Aucun encaissement n’est créé ;
+            les paiements doivent être enregistrés séparément après réception effective.
           </p>
           <div className="flex items-center gap-3 flex-wrap">
             <button

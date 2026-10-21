@@ -61,3 +61,6 @@ jobs:
 
       - name: Catalogue concurrency client tests
         run: node scripts/catalogue-sync.test.mjs
+
+      - name: Delivery and finance isolation tests
+        run: node scripts/delivery-finance.test.mjs
