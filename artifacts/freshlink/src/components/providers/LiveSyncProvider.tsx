@@ -146,13 +146,14 @@ export default function LiveSyncProvider({ children }: { children?: React.ReactN
         const deleted = prevItems.filter(i => i.id && !newSet.has(i.id))
 
         if (upserted.length > 0 || deleted.length > 0) {
-          const rows = upserted.map(toRow)
+          const rows = upserted.map(item => ({ ...toRow(item), ...(sbTable === "fl_articles" ? { expectedPayload: prevMap.get(item.id) ? JSON.parse(prevMap.get(item.id)!) : null } : {}) }))
           const delIds = deleted.map(i => i.id as string).filter(Boolean)
           console.log(`[LiveSync↑] Envoi ${sbTable} — ${upserted.length} upsert(s), ${delIds.length} delete(s)`)
           void fetch("/api/sync-write", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ table: sbTable, upserts: rows, deletes: delIds }),
+            body: JSON.stringify({ table: sbTable, upserts: rows, deletes: delIds,
+              ...(sbTable === "fl_articles" ? { expectedDeletes: Object.fromEntries(deleted.map(item => [item.id, item])) } : {}) }),
           }).then(r => r.json()).then((res: { ok: boolean; errors?: string[] }) => {
             if (!res.ok) {
               const msg = res.errors?.join(", ") ?? "Erreur inconnue"

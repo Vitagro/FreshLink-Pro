@@ -63,6 +63,7 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
     clearAll?: boolean;
     preserveId?: string;
     insertOnly?: boolean;
+    expectedDeletes?: Record<string, unknown>;
   };
 
   if (!body.table) {
@@ -80,6 +81,31 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
 
   const base = `${SB_URL}/rest/v1/${body.table}`;
   const errors: string[] = [];
+
+  if (body.table === "fl_articles") {
+    if (body.clearAll) {
+      res.status(409).json({ ok: false, errors: ["Suppression globale du catalogue désactivée. Supprimez les articles individuellement après actualisation."] });
+      return;
+    }
+    try {
+      const response = await fetch(`${SB_URL}/rest/v1/rpc/fl_catalogue_write`, {
+        method: "POST", headers: sbServiceHeaders(),
+        body: JSON.stringify({ p_rows: body.upserts ?? [], p_deletes: (body.deletes ?? []).map(id => ({ id, expectedPayload: body.expectedDeletes?.[id] ?? null })) }),
+      });
+      const result = await response.json().catch(() => null) as { ok?: boolean; code?: string } | null;
+      if (!response.ok || result?.ok !== true) {
+        const conflict = result?.code === "P0001";
+        res.status(conflict ? 409 : 503).json({ ok: false, errors: [conflict
+          ? "Catalogue modifié sur un autre appareil. Actualisez avant de refaire votre modification ; aucune ligne de ce lot n'a été enregistrée."
+          : "Sauvegarde du catalogue indisponible. Aucune confirmation de sauvegarde ; réessayez après actualisation."] });
+        return;
+      }
+      res.json({ ok: true, errors: [] });
+    } catch {
+      res.status(503).json({ ok: false, errors: ["Sauvegarde du catalogue non confirmée. Réessayez après actualisation."] });
+    }
+    return;
+  }
 
   // Hard lock caisse négative — CÔTÉ SERVEUR. Le garde côté client
   // (store.addCaisseEntry) protège le flux normal de l'app, mais un appel
