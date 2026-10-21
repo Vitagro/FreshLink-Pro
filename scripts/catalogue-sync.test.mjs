@@ -15,7 +15,7 @@ globalThis.fetch = async (url, options) => {
 };
 const source=fs.readFileSync(new URL('../artifacts/freshlink/src/lib/supabase/autoSync.ts',import.meta.url),'utf8');
 const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {onLocalWrite,suppressAutoSync}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const {onLocalWrite,suppressAutoSync,syncDelete}=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 async function flush() {
   const pending=[...timers.values()]; timers.clear(); pending.forEach(fn=>fn());
   await new Promise(resolve=>setImmediate(resolve));
@@ -37,4 +37,16 @@ test('hydration seeds exact payload; stale conflict preserves baseline and raise
   onLocalWrite('fl_articles',JSON.stringify(changed)); await flush();
   onLocalWrite('fl_articles',JSON.stringify([{...changed[0],stockDisponible:8}])); await flush();
   assert.deepEqual(requests.at(-1).upserts[0].expectedPayload,changed[0]);
+});
+test('cash delete retries retain their original expected payload',async()=>{
+  const entry={id:'cash-fixture',type:'entree',montant:10};
+  suppressAutoSync(()=>onLocalWrite('fl_caisse',JSON.stringify([entry])));
+  conflict=true;
+  await syncDelete('fl_caisse_entries',[entry.id]);
+  assert.deepEqual(requests.at(-1).expectedDeletes[entry.id],entry);
+  conflict=false;
+  window.dispatchEvent(new Event('online'));
+  await flush();
+  const retried=requests.filter(r=>r.table==='fl_caisse_entries' && r.deletes).at(-1);
+  assert.deepEqual(retried.expectedDeletes[entry.id],entry);
 });

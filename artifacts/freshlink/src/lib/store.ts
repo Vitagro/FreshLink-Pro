@@ -3235,6 +3235,12 @@ export const store = {
   // l'instant T. Retourne { ok:false } au lieu de lancer une exception pour
   // que l'appelant affiche un message clair sans try/catch.
   addCaisseEntry: (e: CaisseEntry): { ok: boolean; error?: string; solde?: number } => {
+    if (!Number.isFinite(e.montant) || e.montant <= 0 || !["entree", "sortie"].includes(e.type)) {
+      return { ok: false, error: "Montant strictement positif et type entrée/sortie requis." }
+    }
+    const existing = store.getCaisseEntries().find(entry => entry.id === e.id)
+    if (existing) return JSON.stringify(existing) === JSON.stringify(e)
+      ? { ok: true } : { ok: false, error: "Identifiant de caisse déjà utilisé. Actualisez avant de réessayer." }
     if (e.type === "sortie") {
       const soldeActuel = store.getCaisseSolde()
       if (soldeActuel - e.montant < 0) {

@@ -121,7 +121,7 @@ async function flushKey(key: string, raw: string): Promise<void> {
   for (const [id, json] of next) {
     if (!prev || prev.get(id) !== json) {
       upserts.push({ id, payload: JSON.parse(json) as Row, updated_at: now,
-        ...(key === "fl_articles" ? { expectedPayload: prev?.get(id) ? JSON.parse(prev.get(id)!) as Row : null } : {}) })
+        ...(["fl_articles", "fl_caisse", "fl_caisse_entries"].includes(key) ? { expectedPayload: prev?.get(id) ? JSON.parse(prev.get(id)!) as Row : null } : {}) })
     }
   }
 
@@ -202,39 +202,47 @@ function flushQueue(): void {
 // tête de fichier). Elle doit être propagée explicitement, sinon la ligne reste
 // en base et « revient » au prochain fetch (bug « commandes supprimées qui
 // reviennent »). File d'attente hors-ligne rejouée au retour de connexion.
-function queueDelete(table: string, id: string): void {
+function queueDelete(table: string, id: string, expectedPayload?: unknown): void {
   try {
-    const q = JSON.parse(localStorage.getItem(DELETE_QUEUE_KEY) ?? "[]") as { table: string; id: string }[]
-    q.push({ table, id })
+    const q = JSON.parse(localStorage.getItem(DELETE_QUEUE_KEY) ?? "[]") as { table: string; id: string; expectedPayload?: unknown }[]
+    q.push({ table, id, expectedPayload })
     localStorage.setItem(DELETE_QUEUE_KEY, JSON.stringify(q))
   } catch { /* noop */ }
 }
 
-export async function syncDelete(table: string, ids: string[]): Promise<void> {
+export async function syncDelete(table: string, ids: string[], previous?: Record<string, unknown>): Promise<void> {
   if (typeof window === "undefined" || ids.length === 0) return
   // Retire les ids du snapshot pour éviter tout re-push via un futur diff.
-  const snap = snapshots[table]
+  const snap = snapshots[table] ?? (table === "fl_caisse_entries" ? snapshots.fl_caisse : undefined)
+  const expectedDeletes = previous ?? Object.fromEntries(ids.map(id => [id, snap?.get(id) ? JSON.parse(snap.get(id)!) : null]))
   if (snap) for (const id of ids) snap.delete(String(id))
-  if (!isOnline()) { for (const id of ids) queueDelete(table, id); return }
+  if (!isOnline()) { for (const id of ids) queueDelete(table, id, expectedDeletes[id]); return }
   try {
     const res = await fetch("/api/sync-write", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ table, deletes: ids }),
+      body: JSON.stringify({ table, deletes: ids, expectedDeletes }),
     })
-    const json = await res.json() as { ok: boolean }
-    if (!json.ok) for (const id of ids) queueDelete(table, id)
-  } catch { for (const id of ids) queueDelete(table, id) }
+    const json = await res.json() as { ok: boolean; errors?: string[] }
+    if (!json.ok) {
+      for (const id of ids) queueDelete(table, id, expectedDeletes[id])
+      window.dispatchEvent(new CustomEvent("fl_sync_error", { detail: { table, error: json.errors?.join(", "), code: String(res.status) } }))
+    }
+  } catch { for (const id of ids) queueDelete(table, id, expectedDeletes[id]) }
 }
 
 function flushDeleteQueue(): void {
-  let q: { table: string; id: string }[] = []
+  let q: { table: string; id: string; expectedPayload?: unknown }[] = []
   try { q = JSON.parse(localStorage.getItem(DELETE_QUEUE_KEY) ?? "[]") } catch { /* noop */ }
   if (q.length === 0) return
   localStorage.removeItem(DELETE_QUEUE_KEY)
   const byTable: Record<string, string[]> = {}
-  for (const { table, id } of q) (byTable[table] ??= []).push(id)
-  for (const [table, ids] of Object.entries(byTable)) void syncDelete(table, ids)
+  const baselines: Record<string, Record<string, unknown>> = {}
+  for (const { table, id, expectedPayload } of q) {
+    (byTable[table] ??= []).push(id);
+    (baselines[table] ??= {})[id] = expectedPayload ?? null
+  }
+  for (const [table, ids] of Object.entries(byTable)) void syncDelete(table, ids, baselines[table])
 }
 
 /** Installe le rejeu hors-ligne (une seule fois). */
