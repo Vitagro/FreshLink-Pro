@@ -9,6 +9,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
 const nativeFetch = globalThis.fetch;
 let role = 'admin', active = true, databaseDown = false, writeCount = 0, failWrites = false;
 let catalogueRpcCode = null, catalogueRpcBody;
+let dashboardScope = 'real';
 const orders = new Map();
 const catalogue = [{ id: 'fruit', nom: 'Fruit', unite: 'kg', prix_public: 17, marketplace_actif: true, statut: 'disponible' }];
 globalThis.fetch = async (input, options = {}) => {
@@ -16,6 +17,14 @@ globalThis.fetch = async (input, options = {}) => {
   if (!url.startsWith('https://database.test/')) throw new Error('Unexpected external network request blocked by test');
   if (databaseDown) return new Response('{}', { status: 503 });
   if (url.includes('/fl_users')) return Response.json([{id:'admin-test',payload:{role,actif:active,email:'test@example.invalid',password:'isolated-password',passwordMobile:'isolated-mobile-password'}}]);
+  if (url.includes('/fl_dashboard_settings')) {
+    if (options.method === 'POST') {
+      if (failWrites) return new Response('',{status:503});
+      dashboardScope = JSON.parse(options.body).payload.scope; writeCount++;
+      return new Response(null,{status:201});
+    }
+    return Response.json([{payload:{scope:dashboardScope}}]);
+  }
   if (url.endsWith('/rpc/fl_catalogue_write') || url.endsWith('/rpc/fl_cash_write')) {
     catalogueRpcBody = JSON.parse(options.body);
     return catalogueRpcCode ? Response.json({code:catalogueRpcCode},{status:400}) : Response.json({ok:true});
@@ -49,6 +58,40 @@ function token(claims) {
 }
 const headers = {'Content-Type':'application/json', Authorization:'Bearer '+token({sub:'admin-test',role:'admin',exp:Date.now()+60000})};
 const call = (path, options={}) => nativeFetch(base+path, options);
+
+test('only the database-confirmed super super admin controls the shared dashboard mode',async()=>{
+  const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
+  const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');
+  const protectedHeaders={...headers,Cookie:'fl_device_token='+cookie};
+  const read=()=>call('/dashboard-scope',{headers:protectedHeaders});
+  const save=(scope)=>call('/dashboard-scope',{method:'POST',headers:protectedHeaders,body:JSON.stringify({scope,role:'super_super_admin'})});
+  assert.equal((await call('/dashboard-scope')).status,401);
+  try {
+    for (const otherRole of ['admin','super_admin','prevendeur','financier']) {
+      role=otherRole;
+      const before=writeCount;
+      assert.equal((await save('simulation')).status,403);
+      assert.equal(writeCount,before);
+      assert.deepEqual(await (await read()).json(),{ok:true,scope:'real',canChange:false});
+    }
+    role='super_super_admin';
+    const beforeBypass=writeCount;
+    assert.equal((await call('/sync-write',{method:'POST',headers:protectedHeaders,body:JSON.stringify({table:'fl_dashboard_settings',upserts:[{id:'global',payload:{scope:'simulation'}}]})})).status,403);
+    assert.equal(writeCount,beforeBypass);
+    assert.equal((await save('simulation')).status,200);
+    assert.deepEqual(await (await read()).json(),{ok:true,scope:'simulation',canChange:true});
+    role='super_admin';
+    assert.deepEqual(await (await read()).json(),{ok:true,scope:'simulation',canChange:false});
+    assert.equal((await save('real')).status,403);
+    role='super_super_admin';
+    assert.equal((await save('invalid')).status,400);
+    failWrites=true;
+    assert.equal((await save('real')).status,503);
+    assert.equal(dashboardScope,'simulation');
+    failWrites=false; active=false;
+    assert.equal((await save('real')).status,403);
+  } finally { role='admin'; active=true; failWrites=false; dashboardScope='real' }
+});
 
 test('cash uses transactional writes and maps insufficient balance and invalid amounts without fallback',async()=>{
   const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
