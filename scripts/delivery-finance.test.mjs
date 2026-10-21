@@ -16,6 +16,17 @@ globalThis.window=new EventTarget();
 globalThis.localStorage={getItem:k=>memory.get(k)??null,setItem:(k,v)=>memory.set(k,v),removeItem:k=>memory.delete(k)};
 globalThis.fetch=()=>{throw new Error('No external requests allowed in isolated workflow tests')};
 const {store}=await import(dataUrl(compile(source)));
+test('cash rejects negative amounts, overspending and conflicting duplicate IDs',()=>{
+  store.saveCaisseEntries([]);
+  const deposit={id:'deposit',type:'entree',montant:10};
+  assert.equal(store.addCaisseEntry(deposit).ok,true);
+  assert.equal(store.addCaisseEntry(deposit).ok,true);
+  assert.equal(store.getCaisseSolde(),10);
+  assert.equal(store.addCaisseEntry({...deposit,montant:20}).ok,false);
+  assert.equal(store.addCaisseEntry({id:'negative',type:'sortie',montant:-5}).ok,false);
+  assert.equal(store.addCaisseEntry({id:'overspending',type:'sortie',montant:11}).ok,false);
+  assert.equal(store.getCaisseEntries().length,1);
+});
 test('delivery regularization excludes all simulation markers and never fabricates payment',()=>{
   const base={date:'2026-10-21',statut:'valide',clientId:'fixture-client',clientNom:'Fixture',commercialNom:'Fixture',lignes:[{articleId:'fixture',articleNom:'Fixture',quantite:10,prixVente:5,unite:'kg'}]};
   store.saveClients([]); store.saveBonsLivraison([]); store.saveCaisseEntries([]);

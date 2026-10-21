@@ -82,59 +82,35 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
   const base = `${SB_URL}/rest/v1/${body.table}`;
   const errors: string[] = [];
 
-  if (body.table === "fl_articles") {
+  if (body.table === "fl_articles" || body.table === "fl_caisse_entries") {
+    const cash = body.table === "fl_caisse_entries";
+    const label = cash ? "registre de caisse" : "catalogue";
     if (body.clearAll) {
-      res.status(409).json({ ok: false, errors: ["Suppression globale du catalogue désactivée. Supprimez les articles individuellement après actualisation."] });
+      res.status(409).json({ ok: false, errors: [`Suppression globale du ${label} désactivée. Utilisez les opérations individuelles après actualisation.`] });
       return;
     }
     try {
-      const response = await fetch(`${SB_URL}/rest/v1/rpc/fl_catalogue_write`, {
+      const response = await fetch(`${SB_URL}/rest/v1/rpc/${cash ? "fl_cash_write" : "fl_catalogue_write"}`, {
         method: "POST", headers: sbServiceHeaders(),
         body: JSON.stringify({ p_rows: body.upserts ?? [], p_deletes: (body.deletes ?? []).map(id => ({ id, expectedPayload: body.expectedDeletes?.[id] ?? null })) }),
       });
       const result = await response.json().catch(() => null) as { ok?: boolean; code?: string } | null;
       if (!response.ok || result?.ok !== true) {
         const conflict = result?.code === "P0001";
-        res.status(conflict ? 409 : 503).json({ ok: false, errors: [conflict
-          ? "Catalogue modifié sur un autre appareil. Actualisez avant de refaire votre modification ; aucune ligne de ce lot n'a été enregistrée."
-          : "Sauvegarde du catalogue indisponible. Aucune confirmation de sauvegarde ; réessayez après actualisation."] });
+        const insufficient = result?.code === "P0002";
+        const invalid = result?.code === "22023";
+        res.status(conflict || insufficient ? 409 : invalid ? 400 : 503).json({ ok: false, errors: [insufficient
+          ? "Solde caisse insuffisant. Le lot entier a été annulé ; actualisez le solde."
+          : invalid ? "Écriture invalide : montant strictement positif et type entrée/sortie requis."
+          : conflict ? `Le ${label} a été modifié sur un autre appareil. Actualisez avant de refaire votre modification ; aucune ligne de ce lot n'a été enregistrée.`
+          : `Sauvegarde du ${label} indisponible. Aucune confirmation de sauvegarde ; réessayez après actualisation.`] });
         return;
       }
       res.json({ ok: true, errors: [] });
     } catch {
-      res.status(503).json({ ok: false, errors: ["Sauvegarde du catalogue non confirmée. Réessayez après actualisation."] });
+      res.status(503).json({ ok: false, errors: [`Sauvegarde du ${label} non confirmée. Réessayez après actualisation.`] });
     }
     return;
-  }
-
-  // Hard lock caisse négative — CÔTÉ SERVEUR. Le garde côté client
-  // (store.addCaisseEntry) protège le flux normal de l'app, mais un appel
-  // direct à cette API le contournerait entièrement. On revérifie donc ici
-  // à la source, sur la table réelle : jamais un upsert qui ferait passer
-  // le solde caisse sous zéro à l'instant T.
-  if (body.table === "fl_caisse_entries" && body.upserts?.length) {
-    type CaisseP = { type?: "entree" | "sortie"; montant?: number };
-    const incoming = body.upserts as Array<{ id: string; payload: CaisseP }>;
-    const incomingIds = new Set(incoming.map((u) => u.id));
-    try {
-      const r = await fetch(`${base}?select=id,payload`, { headers: sbServiceHeaders() });
-      if (r.ok) {
-        const rows = (await r.json()) as Array<{ id: string; payload: CaisseP }>;
-        const soldeAvant = rows
-          .filter((row) => !incomingIds.has(row.id)) // exclut ce que ce batch remplace (update/backfill)
-          .reduce((s, row) => s + (row.payload?.type === "entree" ? (row.payload.montant ?? 0) : -(row.payload?.montant ?? 0)), 0);
-        const deltaBatch = incoming.reduce((s, u) => s + (u.payload?.type === "entree" ? (u.payload.montant ?? 0) : -(u.payload?.montant ?? 0)), 0);
-        const soldeApres = soldeAvant + deltaBatch;
-        if (soldeApres < -0.01) {
-          res.status(409).json({ ok: false, errors: [`Solde caisse insuffisant (${soldeAvant.toFixed(2)} DH) — cette écriture ferait passer le solde à ${soldeApres.toFixed(2)} DH.`] });
-          return;
-        }
-      }
-      if (!r.ok) throw new Error("Cash balance lookup failed");
-    } catch {
-      res.status(503).json({ ok: false, errors: ["Solde caisse non vérifiable. Écriture annulée, veuillez réessayer."] });
-      return;
-    }
   }
 
   try {

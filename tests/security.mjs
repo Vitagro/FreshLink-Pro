@@ -16,7 +16,7 @@ globalThis.fetch = async (input, options = {}) => {
   if (!url.startsWith('https://database.test/')) throw new Error('Unexpected external network request blocked by test');
   if (databaseDown) return new Response('{}', { status: 503 });
   if (url.includes('/fl_users')) return Response.json([{id:'admin-test',payload:{role,actif:active,email:'test@example.invalid',password:'isolated-password',passwordMobile:'isolated-mobile-password'}}]);
-  if (url.endsWith('/rpc/fl_catalogue_write')) {
+  if (url.endsWith('/rpc/fl_catalogue_write') || url.endsWith('/rpc/fl_cash_write')) {
     catalogueRpcBody = JSON.parse(options.body);
     return catalogueRpcCode ? Response.json({code:catalogueRpcCode},{status:400}) : Response.json({ok:true});
   }
@@ -49,6 +49,20 @@ function token(claims) {
 }
 const headers = {'Content-Type':'application/json', Authorization:'Bearer '+token({sub:'admin-test',role:'admin',exp:Date.now()+60000})};
 const call = (path, options={}) => nativeFetch(base+path, options);
+
+test('cash uses transactional writes and maps insufficient balance and invalid amounts without fallback',async()=>{
+  const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
+  const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');
+  const send=()=>call('/sync-write',{method:'POST',headers:{...headers,Cookie:'fl_device_token='+cookie},body:JSON.stringify({table:'fl_caisse_entries',upserts:[{id:'fixture',payload:{type:'sortie',montant:5}}]})});
+  const before=writeCount;
+  try {
+    catalogueRpcCode=null; assert.equal((await send()).status,200);
+    catalogueRpcCode='P0002'; assert.equal((await send()).status,409);
+    catalogueRpcCode='22023'; assert.equal((await send()).status,400);
+    catalogueRpcCode='42883'; assert.equal((await send()).status,503);
+    assert.equal(writeCount,before);
+  } finally { catalogueRpcCode=null }
+});
 
 test('catalogue writes use atomic RPC and never fall back after conflict or outage', async () => {
   const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
