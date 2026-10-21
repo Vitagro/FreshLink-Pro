@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo, useRef } from "react"
 import { store, type User, type Client, type Commande, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole, recordHeure, inHeureRange, isClientVisible } from "@/lib/store"
-import { isSimulationOrder, selectOrderScope, selectPeriod, lineWeightKg, ORDER_STATUS_LABELS, type OrderScope } from "@/lib/dashboardMetrics"
+import { isSimulationOrder, selectOrderScope, selectPeriod, lineWeightKg, ORDER_STATUS_LABELS } from "@/lib/dashboardMetrics"
 import { readBatchTable } from '@/lib/orderBatch'
+import { useSharedDashboardScope } from '@/lib/useSharedDashboardScope'
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import {
@@ -71,7 +72,7 @@ const DELAI_MS: Record<string, number> = {
 }
 
 export default function BODashboard({ user }: Props) {
-  const [orderScope, setOrderScope] = useState<OrderScope>("real")
+  const {scope:orderScope, ready:scopeReady, canChange:canChangeScope, saving:scopeSaving, error:scopeError, changeScope} = useSharedDashboardScope(user.id)
   const [commandes, setCommandes] = useState<Commande[]>([])
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [ordersError, setOrdersError] = useState('')
@@ -472,6 +473,8 @@ export default function BODashboard({ user }: Props) {
     { id: "credit", label: "Credit", alert: creditAlerts.length },
   ]
 
+  if (!scopeReady) return <div role={scopeError ? "alert" : "status"} className="rounded-xl border p-5">{scopeError || "Chargement du mode choisi par le Super Super Admin…"}</div>
+
   return (
     <div className="flex flex-col gap-5">
       <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-lg sm:px-8">
@@ -487,13 +490,16 @@ export default function BODashboard({ user }: Props) {
           </div>
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Source des indicateurs">
-          {([['real', 'Activité réelle'], ['simulation', 'Simulation']] as const).map(([scope, label]) => (
-            <button key={scope} onClick={() => setOrderScope(scope)} aria-pressed={orderScope === scope}
+          {canChangeScope && ([['real', 'Activité réelle'], ['simulation', 'Simulation']] as const).map(([scope, label]) => (
+            <button key={scope} disabled={scopeSaving} onClick={() => { void changeScope(scope) }} aria-pressed={orderScope === scope}
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white ${orderScope === scope ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-white hover:bg-white/20'}`}>{label}</button>
           ))}
+          {!canChangeScope && <span className="text-sm text-slate-200">Mode défini par le Super Super Admin.</span>}
+          {canChangeScope && <span className="text-xs text-slate-300">{scopeSaving ? "Enregistrement…" : "Choix partagé avec tous les comptes."}</span>}
           <span className="text-xs text-slate-300 sm:ml-2">{commandes.filter(isSimulationOrder).length.toLocaleString('fr-FR')} commandes simulées, isolées des indicateurs réels.</span>
         </div>
       </section>
+      {scopeError && <p role="alert" className="rounded-xl border border-red-300 p-3 text-sm">{scopeError}</p>}
       {orderScope === 'simulation' && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Mode simulation : ces chiffres ne représentent pas des ventes réalisées. Aucun stock ni paiement n’est modifié.</p>}
       <p className="text-xs text-muted-foreground">Montants du carnet de commandes, hors commandes refusées ou retournées ; ce ne sont pas des encaissements. Les poids excluent les unités sans conversion fiable en kg.</p>
 
