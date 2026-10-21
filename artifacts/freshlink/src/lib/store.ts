@@ -3,6 +3,7 @@
 import bcrypt from "bcryptjs"
 import { transferBalances } from "./stockTransfer"
 import { onLocalWrite } from "./supabase/autoSync"
+import { isSimulationOrder } from "./dashboardMetrics"
 
 // ============================================================
 // TYPES
@@ -3666,14 +3667,10 @@ export const store = {
   },
 
   // --- Action BO : marquer en masse les commandes comme livrees ---
-  // Regularisation d'un backlog de commandes bloquees avant livraison : au lieu
-  // de changer uniquement Commande.statut, on reconstitue la trace normale du
-  // processus (Bon de Livraison "livre/encaisse" + encaissement caisse) comme
-  // le ferait une livraison reelle — les ecrans caisse/facturation/BL
-  // s'appuient sur ces enregistrements, pas seulement sur le statut brut.
-  // Cible : toutes les commandes pas encore livrees ni refusees.
+  // Régularisation logistique uniquement : aucune écriture de caisse implicite.
+  // Les simulations, refus et retours sont exclus.
   bulkMarkCommandesLivrees: (operateurId: string, operateurNom: string): number => {
-    const commandes = store.getCommandes().filter(c => c.statut !== "livre" && c.statut !== "refuse")
+    const commandes = store.getCommandes().filter(c => !isSimulationOrder(c) && !["livre", "refuse", "retour"].includes(c.statut))
     const clients = store.getClients()
     const yearCounters: Record<number, number> = {}
     const numeroFor = (dateStr: string): string => {
@@ -3701,7 +3698,6 @@ export const store = {
         blId = existingBL.id
         store.updateBonLivraison(existingBL.id, {
           statutLivraison: "livre",
-          statut: "encaissé",
           heureLivraisonReelle: existingBL.heureLivraisonReelle ?? heure,
         })
       } else {
@@ -3722,7 +3718,7 @@ export const store = {
             total: l.quantite * l.prixVente,
           })),
           montantTotal, tva, montantTTC,
-          statut: "encaissé",
+          statut: "émis",
           statutLivraison: "livre",
           heureLivraisonReelle: heure,
           ...(clientRecord ? {
@@ -3744,19 +3740,7 @@ export const store = {
 
       store.updateCommande(commande.id, { statut: "livre" })
 
-      const dejaEncaisse = store.getCaisseEntries().some(e => e.reference === blId && e.categorie === "vente")
-      if (!dejaEncaisse) {
-        store.addCaisseEntry({
-          id: store.genId(),
-          date: commande.date,
-          libelle: `Livraison (régularisation) — ${commande.clientNom}`,
-          type: "entree",
-          categorie: "vente",
-          montant: montantTotal,
-          reference: blId,
-          createdBy: operateurId,
-        })
-      }
+      // Delivery is not proof of payment. Cash entries require an explicit collection.
       count++
     })
     return count
