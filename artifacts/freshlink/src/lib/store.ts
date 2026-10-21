@@ -2,6 +2,7 @@
 
 import bcrypt from "bcryptjs"
 import { transferBalances } from "./stockTransfer"
+import { onLocalWrite } from "./supabase/autoSync"
 
 // ============================================================
 // TYPES
@@ -2570,10 +2571,9 @@ export function setLS<T>(key: string, val: T): void {
   const raw = JSON.stringify(val)
   localStorage.setItem(key, raw)
   window.dispatchEvent(new CustomEvent("fl_store_updated", { detail: key }))
-  // Write-through Supabase : Supabase est la source de vérité, localStorage
-  // n'est qu'un cache/tampon hors-ligne. Fire-and-forget, ignoré si la table
-  // n'est pas synchronisée. (import dynamique → client only, pas de cycle)
-  import("@/lib/supabase/autoSync").then(m => m.onLocalWrite(key, raw)).catch(() => {})
+  // Register synchronously so suppressAutoSync still applies during hydration.
+  // Network writes remain debounced and asynchronous inside onLocalWrite.
+  onLocalWrite(key, raw)
 }
 
 // Propagation explicite d'une suppression vers Supabase (les deletes ne peuvent

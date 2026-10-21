@@ -117,10 +117,11 @@ async function flushKey(key: string, raw: string): Promise<void> {
 
   // Diff : lignes nouvelles ou modifiées (jamais de delete déduit).
   const now = new Date().toISOString()
-  const upserts: { id: string; payload: Row; updated_at: string }[] = []
+  const upserts: { id: string; payload: Row; updated_at: string; expectedPayload?: Row | null }[] = []
   for (const [id, json] of next) {
     if (!prev || prev.get(id) !== json) {
-      upserts.push({ id, payload: JSON.parse(json) as Row, updated_at: now })
+      upserts.push({ id, payload: JSON.parse(json) as Row, updated_at: now,
+        ...(key === "fl_articles" ? { expectedPayload: prev?.get(id) ? JSON.parse(prev.get(id)!) as Row : null } : {}) })
     }
   }
 
@@ -133,9 +134,12 @@ async function flushKey(key: string, raw: string): Promise<void> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ table: TABLE_NAME_OVERRIDE[key] ?? key, upserts }),
     })
-    const json = await res.json() as { ok: boolean }
+    const json = await res.json() as { ok: boolean; errors?: string[] }
     if (json.ok) snapshots[key] = next   // succès → le snapshot avance
-    else markDirty(key)
+    else {
+      markDirty(key)
+      window.dispatchEvent(new CustomEvent("fl_sync_error", { detail: { table: key, error: json.errors?.join(", ") ?? "Sauvegarde non confirmée", code: String(res.status) } }))
+    }
   } catch { markDirty(key) }
 }
 

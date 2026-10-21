@@ -3,6 +3,7 @@
 import { Suspense, lazy, useState, useEffect } from "react"
 import { Router as WouterRouter, Switch, Route } from "wouter"
 import { store, type User, getUserInterface } from "@/lib/store"
+import CatalogueSyncWarning from "@/components/CatalogueSyncWarning"
 
 const LoginPage          = lazy(() => import("@/components/auth/LoginPage"))
 const MobileLayout       = lazy(() => import("@/components/mobile/MobileLayout"))
@@ -242,6 +243,7 @@ function MainApp() {
         <Suspense fallback={null}>
           <CutoffNotifier user={user} />
           <UpdateBanner />
+          <CatalogueSyncWarning />
         </Suspense>
       </>
     )
@@ -256,6 +258,7 @@ function MainApp() {
       <Suspense fallback={null}>
         <CutoffNotifier user={user} />
         <UpdateBanner />
+        <CatalogueSyncWarning />
       </Suspense>
     </>
   )

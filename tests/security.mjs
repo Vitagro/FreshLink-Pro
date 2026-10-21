@@ -8,6 +8,7 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://database.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
 const nativeFetch = globalThis.fetch;
 let role = 'admin', active = true, databaseDown = false, writeCount = 0, failWrites = false;
+let catalogueRpcCode = null, catalogueRpcBody;
 const orders = new Map();
 const catalogue = [{ id: 'fruit', nom: 'Fruit', unite: 'kg', prix_public: 17, marketplace_actif: true, statut: 'disponible' }];
 globalThis.fetch = async (input, options = {}) => {
@@ -15,6 +16,10 @@ globalThis.fetch = async (input, options = {}) => {
   if (!url.startsWith('https://database.test/')) throw new Error('Unexpected external network request blocked by test');
   if (databaseDown) return new Response('{}', { status: 503 });
   if (url.includes('/fl_users')) return Response.json([{id:'admin-test',payload:{role,actif:active,email:'test@example.invalid',password:'isolated-password',passwordMobile:'isolated-mobile-password'}}]);
+  if (url.endsWith('/rpc/fl_catalogue_write')) {
+    catalogueRpcBody = JSON.parse(options.body);
+    return catalogueRpcCode ? Response.json({code:catalogueRpcCode},{status:400}) : Response.json({ok:true});
+  }
   if (url.includes('/v_marketplace_catalogue')) return Response.json(catalogue);
   if (url.includes('/fl_notices')) return Response.json([]);
   if (url.includes('/fl_commandes?')) {
@@ -44,6 +49,21 @@ function token(claims) {
 }
 const headers = {'Content-Type':'application/json', Authorization:'Bearer '+token({sub:'admin-test',role:'admin',exp:Date.now()+60000})};
 const call = (path, options={}) => nativeFetch(base+path, options);
+
+test('catalogue writes use atomic RPC and never fall back after conflict or outage', async () => {
+  const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
+  const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');
+  const body={table:'fl_articles',upserts:[{id:'fruit',payload:{stockDisponible:9},expectedPayload:{stockDisponible:10}}]};
+  const send=()=>call('/sync-write',{method:'POST',headers:{...headers,Cookie:'fl_device_token='+cookie},body:JSON.stringify(body)});
+  const before=writeCount;
+  assert.equal((await send()).status,200);
+  assert.deepEqual(catalogueRpcBody.p_rows,body.upserts);
+  try {
+    catalogueRpcCode='P0001'; assert.equal((await send()).status,409);
+    catalogueRpcCode='42883'; assert.equal((await send()).status,503);
+    assert.equal(writeCount,before);
+  } finally { catalogueRpcCode=null }
+});
 test('anonymous configuration read and write are refused', async () => {
   assert.equal((await call('/ext/web-integration-config')).status,401);
   assert.equal((await call('/ext/web-integration-config',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);

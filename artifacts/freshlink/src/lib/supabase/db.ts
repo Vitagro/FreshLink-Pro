@@ -15,7 +15,7 @@
 // Les lectures utilisent le client anon (lecture seule, RLS permissive).
 // ============================================================
 
-import { store } from "@/lib/store"
+import { store, getLS } from "@/lib/store"
 import * as cp from "@/lib/coutPrevendeur"
 import { suppressAutoSync } from "./autoSync"
 import type {
@@ -69,24 +69,27 @@ async function readRows(table: string): Promise<{ data: { id: string; payload: u
 }
 
 // Route all writes through /api/sync-write (service role key bypasses RLS)
-async function apiUpsert(table: string, item: Record<string, unknown>): Promise<void> {
+async function apiUpsert(table: string, item: Record<string, unknown>, expectedPayload?: unknown): Promise<void> {
   try {
     const res = await fetch("/api/sync-write", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ table, upserts: [toRow(item)] }),
+      body: JSON.stringify({ table, upserts: [{ ...toRow(item), ...(table === "fl_articles" ? { expectedPayload: expectedPayload ?? null } : {}) }] }),
     })
     const json = await res.json() as { ok: boolean; errors?: string[] }
-    if (!json.ok) console.error(`[db] upsert ${table}:`, json.errors?.join(", "))
+    if (!json.ok) {
+      console.error(`[db] upsert ${table}:`, json.errors?.join(", "))
+      window.dispatchEvent(new CustomEvent("fl_sync_error", { detail: { table, error: json.errors?.join(", "), code: String(res.status) } }))
+    }
   } catch { /* offline */ }
 }
 
-async function apiDelete(table: string, id: string): Promise<void> {
+async function apiDelete(table: string, id: string, expectedPayload?: unknown): Promise<void> {
   try {
     const res = await fetch("/api/sync-write", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ table, deletes: [id] }),
+      body: JSON.stringify({ table, deletes: [id], ...(table === "fl_articles" ? { expectedDeletes: { [id]: expectedPayload ?? null } } : {}) }),
     })
     const json = await res.json() as { ok: boolean; errors?: string[] }
     if (!json.ok) console.error(`[db] delete ${table}/${id}:`, json.errors?.join(", "))
@@ -175,14 +178,16 @@ export async function importClients(rows: Client[]): Promise<{ inserted: number;
 export async function upsertArticle(a: Article) {
   const all = store.getArticles()
   const idx = all.findIndex(x => x.id === a.id)
+  const expectedPayload = getLS<Article[]>("fl_articles", []).find(item => item.id === a.id) ?? null
   if (idx >= 0) all[idx] = a; else all.push(a)
   store.saveArticles(all)
-  await apiUpsert("fl_articles", a as unknown as Record<string, unknown>)
+  await apiUpsert("fl_articles", a as unknown as Record<string, unknown>, expectedPayload)
 }
 
 export async function deleteArticle(id: string) {
+  const expectedPayload = getLS<Article[]>("fl_articles", []).find(a => a.id === id) ?? null
   store.saveArticles(store.getArticles().filter(a => a.id !== id))
-  await apiDelete("fl_articles", id)
+  await apiDelete("fl_articles", id, expectedPayload)
 }
 
 export async function fetchArticles(): Promise<Article[]> {

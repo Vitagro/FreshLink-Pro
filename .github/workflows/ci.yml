@@ -58,3 +58,6 @@ jobs:
 
       - name: Stock transfer regression tests
         run: node scripts/stock-transfer.test.mjs
+
+      - name: Catalogue concurrency client tests
+        run: node scripts/catalogue-sync.test.mjs
