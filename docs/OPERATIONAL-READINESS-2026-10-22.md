@@ -28,3 +28,9 @@ Cette livraison n'est pas une certification de tout l'ERP. Restent des travaux d
 ## Déploiement et retour arrière
 
 Aucune nouvelle dépendance ou migration de données. CI et prévisualisation avant fusion ; pilote IA maintenu désactivé et aucun secret modifié. Restaurer le déploiement Vercel précédent si une régression apparaît ; attention, cela retire aussi les nouveaux contrôles de lecture. Les données métier ne sont pas modifiées par les essais automatisés.
+
+## Vérification Supabase supplémentaire
+
+Les quatre vues héritées exposant notamment coûts et stock ont été passées en security_invoker et réservées au serveur. Les accès directs anonymes/authentifiés à la table articles héritée et à sa fonction de recherche ont été retirés ; l’ERP actif utilise fl_articles via son serveur. Les deux fonctions signalées ont un search_path fixé. Migration 20261022232200_restrict_legacy_catalogue_views.sql appliquée après essai transactionnel annulé, puis tests de droits et de lecture service_role réussis. Catalogue public : 232 articles, aucun champ prixAchat/prix_achat.
+
+L’advisor ne remonte plus d’erreur de vue ni d’avertissement search_path. Restent 69 informations RLS sans politique sur des tables dont l’accès passe par le serveur, et l’avertissement pg_trgm installé dans public. Le déplacement de cette extension n’a pas été effectué sans validation de ses dépendances. Référence : https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public.
