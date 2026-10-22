@@ -70,3 +70,6 @@ jobs:
 
       - name: Delivery and finance isolation tests
         run: node scripts/delivery-finance.test.mjs
+
+      - name: Operational planning and draft reconciliation tests
+        run: node scripts/operational-planning.test.mjs

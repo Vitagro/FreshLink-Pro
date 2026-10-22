@@ -2,6 +2,8 @@
 
 Date : 22 octobre 2026. Destinataires : responsable ERP, développeurs et équipe pilote.
 
+> Mise à jour : les compléments sans clé fournisseur (prévisions, itinéraire, rapprochement commande, droits de lecture et intégrité des sauvegardes) sont décrits dans [OPERATIONAL-READINESS-2026-10-22.md](OPERATIONAL-READINESS-2026-10-22.md). Les sections historiques ci-dessous décrivent la livraison IA initiale.
+
 ## État exact de cette livraison
 
 Code préparé sur une branche isolée ; l'activation fournisseur reste bloquée tant que la clé du propriétaire n'est pas configurée. Consulter la PR 50 pour le statut de déploiement.

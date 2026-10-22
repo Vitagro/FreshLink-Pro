@@ -13,9 +13,9 @@ test('commercial context filters by server account and rejects foreign/simulated
  const previous=globalThis.fetch;
  globalThis.fetch=async url=>{
   if(String(url).includes('fl_dashboard_settings'))return Response.json([{payload:{scope:'real'}}]);
-  assert.equal(new URL(url).searchParams.get('payload->>prevendeurId'),'eq.own');
+  assert.equal(new URL(url).searchParams.get('or'),'(payload->>prevendeurId.eq.own,payload->>commercialId.eq.own)');
   return Response.json([
-   {id:'ok',payload:{prevendeurId:'own',statut:'livre'}},
+   {id:'ok',payload:{commercialId:'own',statut:'livre'}},
    {id:'foreign',payload:{prevendeurId:'other',statut:'livre'}},
    {id:'hidden-sim',payload:{prevendeurId:'own',statut:'livre',sourceImport:'simulation_fixture'}},
    {id:'refused',payload:{prevendeurId:'own',statut:'refuse'}},

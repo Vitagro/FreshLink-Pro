@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import React, { useState, useEffect, useCallback, Component } from "react"
 // next/dynamic replaced with React.lazy
@@ -344,7 +344,7 @@ const NAV_GROUPS_RAW: NavGroup[] = [
       { id: "familles",     label: "Gestion des Familles",  labelAr: "إدارة الفئات",     permKey: "canViewStock",      icon: <Icon d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /> },
       { id: "stock",        label: "Stock & Inventaire",    labelAr: "المخزون",          permKey: "canViewStock",      icon: <Icon d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /> },
       { id: "shelf_life",   label: "Shelf Life & DLC",      labelAr: "تاريخ الصلاحية",  permKey: "canViewStock",      icon: <Icon d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /> },
-      { id: "forecast",     label: "Forecast & Achat Auto", labelAr: "التوقعات",         permKey: "canViewStock",      icon: <Icon d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> },
+      { id: "forecast",     label: "Prévisions & Réassort", labelAr: "التوقعات",         permKey: "canViewStock",      icon: <Icon d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /> },
       { id: "caisses_vides",label: "Caisses Vides",         labelAr: "الصناديق الفارغة", permKey: "canViewLogistique", icon: <Icon d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /> },
     ],
   },

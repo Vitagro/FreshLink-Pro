@@ -12,8 +12,11 @@ export async function buildServerAiContext(account:Account):Promise<string> {
   if(scope!=="real"&&scope!=="simulation")throw Error("CONTEXT_UNAVAILABLE");
   const start=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
   const end=new Date().toISOString().slice(0,10);
-  const params=new URLSearchParams({select:"id,payload",limit:"501","payload->>date":`gte.${start}`,and:`(payload->>date.lte.${end})`});
-  if(!privileged)params.set("payload->>prevendeurId",`eq.${account.id}`);
+  const params=new URLSearchParams({select:"id,payload",limit:"501",order:"id.asc","payload->>date":`gte.${start}`,and:`(payload->>date.lte.${end})`});
+  if(!privileged){
+    if(!/^[A-Za-z0-9_-]+$/.test(account.id))throw Error("CONTEXT_UNAVAILABLE");
+    params.set("or",`(payload->>prevendeurId.eq.${account.id},payload->>commercialId.eq.${account.id})`);
+  }
   const response=await fetch(`${SB_URL}/rest/v1/fl_commandes?${params}`,{headers:sbServiceHeaders(),signal:AbortSignal.timeout(5000)});
   if(!response.ok)throw Error("CONTEXT_UNAVAILABLE");
   const rows=await response.json() as {id:string;payload:Record<string,unknown>}[];
@@ -21,7 +24,7 @@ export async function buildServerAiContext(account:Account):Promise<string> {
   const truncated=rows.length>500;
   const selected=rows.slice(0,500).filter(r=>{
     const p=r.payload;
-    if(!p||(!privileged&&p.prevendeurId!==account.id))return false;
+    if(!p||(!privileged&&p.prevendeurId!==account.id&&p.commercialId!==account.id))return false;
     const simulation=p.isSimulation===true||r.id.startsWith("SIM-")||String(p.sourceImport??"").startsWith("simulation_");
     return simulation===(scope==="simulation")&&!["refuse","retour"].includes(String(p.statut));
   });
