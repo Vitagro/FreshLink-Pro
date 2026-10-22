@@ -39,6 +39,7 @@ import extCallRouter from "./ext/call.js";
 import portalTrackingRouter from "./portal/tracking.js";
 import portalSupplierRouter from "./portal/supplier.js";
 import aiChatRouter from "./aiChat.js";
+import aiDraftsRouter from "./aiDrafts.js";
 import waGroupsRouter from "./waGroups.js";
 
 const router: IRouter = Router();
@@ -84,6 +85,7 @@ router.use("/ext/web-integration-config", extWebIntegrationConfigRouter);
 router.use("/portal/tracking", portalTrackingRouter);
 router.use("/portal/supplier", portalSupplierRouter);
 router.use("/ai-chat", aiChatRouter);
+router.use("/ai-drafts", aiDraftsRouter);
 router.use("/wa-groups", waGroupsRouter);
 
 export default router;

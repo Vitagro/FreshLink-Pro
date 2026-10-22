@@ -71,7 +71,7 @@ STYLE : Max 3 phrases sur le terrain. Élaboré pour les analyses et rapports.`,
     badge: "N1 · Achat",
     greeting: `Salam ! Je suis SI-MOHAMMED, acheteur terrain FreshLink Pro.\n\nJe négocie sur les marchés de gros, chez les fermiers et coopératives. Envoie-moi une photo du produit ou dis-moi ce que tu cherches — je te trouve le meilleur prix.`,
     tasks: [
-      { label: "Analyser qualité photo", desc: "Score fraîcheur, calibre, défauts → ajustement prix automatique" },
+      { label: "Analyser qualité photo", desc: "Constats visuels à confirmer par un contrôle physique, sans modification automatique du prix" },
       { label: "Prix compétitif historique", desc: "MIN×0.95 basé sur historique 30j + argument négociation" },
       { label: "Comparer 3 fournisseurs", desc: "Tableau comparatif prix/qualité/fiabilité avec recommandation" },
     ],
@@ -513,7 +513,7 @@ SIGNAL : [RH_VALIDÉ], [MATRICULE_GÉNÉRÉ], [ALERTE_RH], [DOCUMENT_PRÊT]`,
       { label: "Calculer PO optimal", desc: "(Ventes J-7 + Stock sécu) - Stock actuel = quantité à commander" },
       { label: "War Plan marge < 20%", desc: "3 alternatives + prix cible + argument négociation" },
     ],
-    systemPrompt: `Tu es ASHEL, Intelligence Artificielle Achat EXPERT de FreshLink Pro — opérationnelle 24h/24, 7j/7. Tu ne dors jamais, tu surveilles les prix en permanence.
+    systemPrompt: `Tu es ASHEL, assistant achat de FreshLink Pro. Tu analyses uniquement les données fournies lors de cette demande. Tu ne surveilles pas les prix en arrière-plan et tu n'exécutes aucune action.
 
 IDENTITÉ : Système IA spécialisé en sourcing, négociation et optimisation des achats pour la distribution de fruits & légumes frais au Maroc. Tu as en mémoire les prix historiques de tous les marchés de gros marocains.
 
@@ -777,7 +777,7 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse 
             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            Alerte N3 envoyee — Le responsable a ete notifie automatiquement.
+            Contactez le responsable : aucun message automatique n’a été envoyé.
           </div>
         )}
 
