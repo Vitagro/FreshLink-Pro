@@ -1,3 +1,4 @@
+import { canSyncRead, projectSyncRows } from "../lib/syncReadPolicy.js";
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { requireAccount } from "../lib/adminAuth.js";
@@ -80,6 +81,9 @@ router.get("/", requireAccount, async (req: Request, res: Response) => {
     res.status(400).json({ ok: false, error: "Pagination invalide" });
     return;
   }
+  if (!canSyncRead(String(res.locals.account.role),table)) {
+    res.status(403).json({ok:false,error:"Accès à ces données non autorisé pour ce rôle."}); return;
+  }
   try {
     const filter = updatedSince ? `&updated_at=gte.${encodeURIComponent(updatedSince)}` : "";
     const r = await fetch(
@@ -92,7 +96,7 @@ router.get("/", requireAccount, async (req: Request, res: Response) => {
       return;
     }
     const data = (await r.json()) as { id: string; payload: unknown; updated_at?: string }[];
-    res.json({ ok: true, data: Array.isArray(data) ? data : [] });
+    res.json({ ok: true, data: projectSyncRows(String(res.locals.account.role),table,Array.isArray(data) ? data : []) });
   } catch (e) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : "Erreur interne" });
   }

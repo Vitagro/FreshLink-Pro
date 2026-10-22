@@ -1,5 +1,6 @@
 "use client"
 
+import { proposeRoute, validPoint } from "@/lib/operationalPlanning"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { store, type User, type Client, type Visite } from "@/lib/store"
 
@@ -578,33 +579,15 @@ export default function BOGPSTracker({ user }: Props) {
 
   // ── Nearest-neighbor route optimizer ──────────────────────────
   const optimizeRouteNearestNeighbor = useCallback(() => {
-    if (!etaStartLat || !etaStartLng || etaOrderedIds.length < 2) return
-    const remaining = [...etaOrderedIds]
-    let currentLat = etaStartLat
-    let currentLng = etaStartLng
-    const result: string[] = []
-    while (remaining.length > 0) {
-      let nearestIdx = 0
-      let nearestDist = Infinity
-      remaining.forEach((id, i) => {
-        const c = etaClients.find(cl => cl.id === id)
-        // Client sans GPS : ne sert de repli que si aucun candidat valide n'a
-        // encore ete trouve dans ce passage (sinon il ecrasait a tort le plus
-        // proche reel trouve plus tot dans le forEach).
-        if (!c?.gpsLat || !c?.gpsLng) { if (nearestDist === Infinity) nearestIdx = i; return }
-        const d = haversineKm(currentLat, currentLng, c.gpsLat, c.gpsLng)
-        if (d < nearestDist) { nearestDist = d; nearestIdx = i }
-      })
-      const nextId = remaining[nearestIdx]
-      result.push(nextId)
-      remaining.splice(nearestIdx, 1)
-      const nextClient = etaClients.find(cl => cl.id === nextId)
-      if (nextClient?.gpsLat && nextClient?.gpsLng) {
-        currentLat = nextClient.gpsLat
-        currentLng = nextClient.gpsLng
-      }
-    }
-    setEtaOrderedIds(result)
+    if (!validPoint({lat:etaStartLat??NaN,lng:etaStartLng??NaN}) || etaOrderedIds.length < 2) return
+    try {
+      const proposal=proposeRoute({lat:etaStartLat??NaN,lng:etaStartLng??NaN},etaOrderedIds.map(id=>{
+        const c=etaClients.find(client=>client.id===id)
+        return {id,lat:c?.gpsLat,lng:c?.gpsLng}
+      }))
+      if(window.confirm(`Proposition à vol d’oiseau : ${proposal.beforeKm.toFixed(1)} → ${proposal.afterKm.toFixed(1)} km. ${proposal.missing.length} arrêt(s) sans GPS placés à la fin. Vérifiez routes, horaires, capacité et chaîne du froid. Appliquer cet ordre au simulateur ?`))setEtaOrderedIds(proposal.ids)
+    } catch(e){window.alert(e instanceof Error?e.message:'Calcul indisponible')}
+
   }, [etaStartLat, etaStartLng, etaOrderedIds, etaClients])
 
   return (
@@ -1075,13 +1058,13 @@ export default function BOGPSTracker({ user }: Props) {
                   <div className="flex gap-2">
                     <button
                       onClick={optimizeRouteNearestNeighbor}
-                      disabled={!etaStartLat || !etaStartLng || etaOrderedIds.length < 2}
+                      disabled={!validPoint({lat:etaStartLat??NaN,lng:etaStartLng??NaN}) || etaOrderedIds.length < 2}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 text-violet-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <svg width="14" height="14" className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
-                      Optimiser l&apos;itinéraire
+                      Proposer un ordre géographique
                     </button>
                     <button
                       onClick={() => setEtaOrderedIds([])}

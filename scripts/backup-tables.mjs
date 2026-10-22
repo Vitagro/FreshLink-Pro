@@ -28,7 +28,7 @@ async function fetchTable(table) {
   const rows = [];
   let expected;
   for (let offset = 0; ; ) {
-    const res = await fetch(`${SB_URL}/rest/v1/${table}?select=*&order=id.asc&offset=${offset}&limit=1000`, {
+    const res = await fetch(`${SB_URL}/rest/v1/${table}?select=*&order=${table === "fl_ai_usage" ? "day.asc,subject.asc" : "id.asc"}&offset=${offset}&limit=1000`, {
       headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Prefer: "count=exact" },
     });
     if (!res.ok) throw new Error(`${table}: HTTP ${res.status}`);

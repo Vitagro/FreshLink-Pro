@@ -218,3 +218,17 @@ test('ERP reads require an active account as well as a device', async()=>{
   try { assert.equal((await call('/sync-read?table=fl_clients',{headers:{...headers,...deviceHeaders}})).status,403) }
   finally { active=true }
 });
+
+test('sync read enforces database role and strips sensitive directory fields',async()=>{
+ const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
+ const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');
+ const h={...headers,Cookie:'fl_device_token='+cookie};
+ try{
+  role='prevendeur';
+  for(const table of ['fl_salaries','fl_paiements','fl_email_config'])assert.equal((await call('/sync-read?table='+table,{headers:h})).status,403);
+  const response=await call('/sync-read?table=fl_users',{headers:h});assert.equal(response.status,200);const body=await response.json();
+  assert.equal(body.data[0].payload.password,undefined);assert.equal(body.data[0].payload.passwordMobile,undefined);assert.equal(body.data[0].payload.email,undefined);
+  role='client';assert.equal((await call('/sync-read?table=fl_commandes',{headers:h})).status,403);
+  role='rh_manager';assert.equal((await call('/sync-read?table=fl_salaries',{headers:h})).status,200);
+ }finally{role='admin'}
+});

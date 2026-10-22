@@ -1,5 +1,7 @@
 "use client"
 
+import AiWorkbench from "@/components/shared/AiWorkbench"
+import { resolveOrderDraft } from "@/lib/orderDraft"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { store, type Article, type User, type Client, type Commande, type Visite, DELAI_RECOUVREMENT_LABELS, type DelaiRecouvrement, MODALITE_LABELS, type ModalitePaiement, getAllSecteurs, VILLES_MAROC, ROLE_LABELS } from "@/lib/store"
 import { sendEmail, buildCommandeEmail } from "@/lib/email"
@@ -1080,6 +1082,13 @@ export default function MobileCommercial({ user }: Props) {
       </div>
 
       {commTab === "nouvelle" && (<>
+      <details className="border rounded-xl p-3"><summary>Brouillon de commande assisté</summary><AiWorkbench fixedTask="order" key={user.id} onOrder={draft=>{
+        const allowed=['prevendeur','commercial'].includes(user.role)?clients.filter(c=>c.prevendeurId===user.id):myClients
+        const result=resolveOrderDraft<Client,Article>(draft,allowed,articles,(article,client)=>store.computePrixEffectif(article,client))
+        if(lignes.some(l=>l.articleId)&&!window.confirm('Remplacer les lignes actuellement saisies par ce brouillon vérifié ?'))return
+        pickClient(result.client.id);setLignes(result.lines);setSuccess(false)
+      }}/></details>
+
 
       {success && (
         <div className={`rounded-xl p-4 flex items-start gap-3 border ${successWorkflow === "direct" ? "bg-green-50 border-green-300" : "bg-amber-50 border-amber-300"}`}>
