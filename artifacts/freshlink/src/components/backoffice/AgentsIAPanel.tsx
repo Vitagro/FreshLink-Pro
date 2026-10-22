@@ -1,7 +1,7 @@
-﻿"use client"
+"use client"
+import AiWorkbench from "@/components/shared/AiWorkbench"
 
-import { callLLM, triggerN3Alert } from "@/lib/ai"
-import { buildAgentDataContext } from "@/lib/agentContext"
+import { callLLM } from "@/lib/ai"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { type User } from "@/lib/store"
 
@@ -610,7 +610,7 @@ function AgentChat({ agent, user }: { agent: typeof AGENTS[0]; user: User }) {
     setLoading(true)
 
     try {
-      const dataContext = buildAgentDataContext(agent.id, user)
+      const dataContext = "" // Context is read and scoped by the server, never copied from the local cache.
       const contextualPrompt = `${agent.systemPrompt}
 
 CONTEXTE SESSION :
@@ -622,7 +622,7 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES REELS dans ta reponse 
 
       const historyForLLM = msgs.slice(-14).map(m => ({ role: m.role, text: m.text }))
       historyForLLM.push({ role: "user", text })
-      const reply = await callLLM(contextualPrompt, historyForLLM)
+      const reply = await callLLM(contextualPrompt, historyForLLM, {agentId:agent.id})
       failCountRef.current = 0
       setMsgs(prev => [...prev, { role: "assistant", text: reply, ts: Date.now() }])
     } catch (e: unknown) {
@@ -862,6 +862,7 @@ export default function AgentsIAPanel({ user, initialAgent }: Props) {
 
       {/* ── Sidebar ───────────────────────────────────────────────────── */}
       <div className="w-56 shrink-0 flex flex-col bg-white border-r border-slate-200 overflow-y-auto">
+        <button className="m-3 rounded-xl bg-emerald-700 p-3 text-white text-sm" onClick={()=>setSelected("workbench")}>Brouillons : voix et documents</button>
 
         {/* Brand */}
         <div className="px-4 py-4 border-b border-slate-200 shrink-0">
@@ -918,7 +919,7 @@ export default function AgentsIAPanel({ user, initialAgent }: Props) {
 
       {/* ── Chat ──────────────────────────────────────────────────────── */}
       <div className="flex-1 min-w-0">
-        <AgentChat key={agent.id} agent={agent} user={user} />
+        {selected === "workbench" ? <div className="p-4"><AiWorkbench key={user.id}/></div> : <AgentChat key={agent.id} agent={agent} user={user} />}
       </div>
 
     </div>

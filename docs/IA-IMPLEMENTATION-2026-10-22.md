@@ -4,11 +4,15 @@ Date : 22 octobre 2026. Destinataires : responsable ERP, développeurs et équip
 
 ## État exact de cette livraison
 
-Code préparé sur une branche isolée, sans activation ni déploiement en production.
+Code préparé sur une branche isolée ; l'activation fournisseur reste bloquée tant que la clé du propriétaire n'est pas configurée. Consulter la PR 50 pour le statut de déploiement.
 
-Implémenté : API authentifiée `/api/ai-drafts`, validation JSON côté serveur, contrats commande/bon fournisseur/constat visuel, transcription audio, client partagé mobile/back-office, restriction aux comptes pilotes, délai maximal, absence de sauvegarde métier automatique, tests isolés. Correction du filtre des commandes du contexte commercial et de deux promesses trompeuses dans les agents.
+Implémenté : API authentifiée `/api/ai-drafts`, validation JSON côté serveur, contrats commande/bon fournisseur/constat visuel, transcription audio, atelier accessible dans les espaces IA web et mobile, microphone limité à 60 secondes, compression des images, restriction aux comptes pilotes, absence d'écriture métier automatique. Les deux anciens appels photo Blackbox sont supprimés ; le comparatif fournisseur classe les offres saisies sans inventer de prix. Le constat retour version 2 conserve les anciens champs de lecture avec valeurs inconnues explicites.
 
-Non implémenté dans cette livraison : remplacement des deux écrans photo historiques, boutons de saisie vocale/OCR dans les formulaires métier, contexte IA intégralement reconstruit côté serveur, quotas distribués, envoi WhatsApp, rapprochement automatique des références, prévisions et optimisation des tournées. Les contrats et étapes ci-dessous spécifient leur raccordement. Ne pas présenter ces éléments comme déjà opérationnels.
+Le contexte automatique des assistants est lu côté serveur : Super Super Admin et commandes assignées aux rôles commercial/prévendeur, période de 30 jours, maximum 500 lignes, mode partagé réel/simulation. Les autres rôles n'obtiennent pas automatiquement de données métier : l'extension aux achats/finance/RH doit être accompagnée d'une politique de droits dédiée. Aucun cache local n'est injecté par les deux panneaux d'assistants.
+
+Quota distribué installé : 10 appels par minute et compte, 100 par jour et compte, 1 000 par jour pour l'ensemble de l'ERP, commun aux brouillons et assistants textuels. Les tentatives fournisseur consomment le quota, même en échec ; il s'agit d'un nombre d'appels, pas d'un plafond monétaire. RLS activée, accès exclusivement service_role ; l'avis « RLS sans politique » est attendu pour cette table privée côté API.
+
+Restent non implémentés : validation du brouillon vers une commande ou réception existante (actuellement lecture/relecture), rapprochement automatique des références, envoi WhatsApp, prévisions et optimisation des tournées. Ces chantiers métier dépassent le raccordement des assistants et nécessitent une recette spécifique ; aucune promesse d'achèvement global.
 
 Une clé fournisseur et un modèle accessible sont requis pour les essais réels. Les tests automatisés utilisent des réponses simulées, jamais des documents clients envoyés au fournisseur.
 
@@ -80,7 +84,7 @@ const transcript = await requestAiDraft({task:'transcribe',audio:audioBase64,mim
 const draft = await requestAiDraft({task:'order',text:correctedTranscript})
 ```
 
-L'enregistrement avec MediaRecorder, la demande d'accès microphone, l'arrêt des pistes et le brouillon hors connexion restent à raccorder dans l'écran mobile. Ne pas forcer « français » pour un enregistrement mixte français/darija. Le code utilise un modèle configurable : ne pas figer Whisper sans vérifier son cycle de disponibilité.
+L'enregistrement MediaRecorder est raccordé, avec arrêt des pistes et limite de 60 secondes. La saisie reste en mémoire après une erreur réseau ; elle ne survit pas encore à une fermeture/recharge de page. Ne pas forcer « français » pour un enregistrement mixte français/darija. Le code utilise un modèle configurable : ne pas figer Whisper sans vérifier son cycle de disponibilité.
 
 ### Bon fournisseur ou retour photo
 
@@ -91,7 +95,7 @@ const observation = await requestAiDraft({task:'quality',text:'Produit déclaré
 
 `document` contient fournisseur, référence, date, lignes, prix unitaire lu et questions. `quality` contient produit, défauts visibles, limites et contrôles physiques à effectuer. Les champs inconnus sont null. Les images externes par URL sont refusées pour ne pas introduire de téléchargement arbitraire côté fournisseur ; utiliser un data URL JPEG/PNG/WebP compressé, <= 2,8 millions de caractères.
 
-Pour remplacer `CameraIARetour`, adapter également `MobileControlRetour` qui persiste encore `etat` et `shelfLifeEstime`. Versionner le nouveau résultat (`analysisVersion:2`) et maintenir la lecture des anciens résultats. Ne pas fabriquer un état « bon » pour satisfaire l'ancien type.
+`CameraIARetour` est raccordé à `quality`. `MobileControlRetour` accepte l'identification inconnue ; le résultat porte `analysisVersion:2`, « À contrôler physiquement » et « Non déterminable sur photo ». La lecture des anciens résultats reste compatible. Ne pas fabriquer un état « bon » pour satisfaire l'ancien type.
 
 Dans `AchatIAModules`, le comparatif fournisseur doit comparer les prix/devise/unité/transport déterministement. Les photos complètent le constat qualité ; elles ne justifient pas un ajustement automatique du prix ni un score arbitraire.
 
@@ -162,7 +166,7 @@ pnpm -r --if-present run build
 3. Vérifier connexion, commandes, livraisons, caisse et synchronisation sur la nouvelle version. Le déploiement progressif réduit le risque mais ne garantit pas zéro interruption.
 4. Activer les seules identités pilotes après raccordement des écrans et validation fournisseur sur données fictives.
 5. Observer 48 heures : erreurs, latence, correction humaine, coût et absence d'écriture involontaire.
-6. Élargir après accord métier. Avant généralisation, remplacer la limite de 10 appels/minute **par instance** par un quota atomique partagé par utilisateur/jour ; elle ne protège pas un budget global sur Vercel multi-instance. Configurer aussi des alertes de budget fournisseur.
+6. Élargir après accord métier. Le quota atomique partagé est installé via `20261022155055_ai_shared_usage.sql` et testé avec `tests/ai-quota.sql`. Configurer aussi des alertes de budget fournisseur : le nombre d'appels ne limite pas directement leur coût monétaire.
 7. Retour arrière : désactiver le pilote et redéployer, ou restaurer la version Vercel précédente. Les brouillons ne modifient aucune table métier et ne nécessitent donc aucune restauration de données.
 
 ## Sources de contrat API

@@ -56,6 +56,9 @@ jobs:
       - name: Structured AI draft tests
         run: node scripts/ai-drafts.test.mjs
 
+      - name: Server scoped AI context tests
+        run: node scripts/ai-context.test.mjs
+
       - name: Dashboard metric regression tests
         run: node scripts/dashboard-metrics.test.mjs
 

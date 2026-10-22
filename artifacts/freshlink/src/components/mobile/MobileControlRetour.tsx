@@ -23,7 +23,7 @@ interface RetourItem {
 }
 
 interface RetourAnalysis {
-  isMarchandise: boolean
+  isMarchandise: boolean | null
   etat: string
   shelfLifeEstime: string
   prixSuggest: number | null
@@ -441,7 +441,7 @@ function RetourCard({ r, onAnalyseIA, onValidate, statusBadge, statusLabel, canV
           <p className="text-xs text-blue-700">
             Etat : <strong>{r.analysisResult.etat}</strong> ·
             Shelf life : <strong>{r.analysisResult.shelfLifeEstime}</strong> ·
-            Notre produit : <strong>{r.analysisResult.isMarchandise ? "Oui" : "Non"}</strong>
+            Notre produit : <strong>{r.analysisResult.isMarchandise == null ? "À vérifier" : r.analysisResult.isMarchandise ? "Oui" : "Non"}</strong>
           </p>
           {r.analysisResult.prixSuggest && (
             <p className="text-xs text-blue-700 mt-0.5">Prix suggere : <strong>{r.analysisResult.prixSuggest} MAD</strong></p>

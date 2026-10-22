@@ -4,7 +4,7 @@ export interface MsgLike { role: string; text: string }
 export async function callLLM(
   systemPrompt: string,
   history: MsgLike[],
-  options: { temperature?: number; max_tokens?: number; attempt?: number } = {}
+  options: { temperature?: number; max_tokens?: number; attempt?: number; agentId?: string } = {}
 ): Promise<string> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 28000)
@@ -12,7 +12,7 @@ export async function callLLM(
     const res = await fetch("/api/ai-chat", {
       method: "POST", credentials: "include", signal: ctrl.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system: systemPrompt,
+      body: JSON.stringify({ system: systemPrompt, agentId: options.agentId,
         messages: history.slice(-20).map(m => ({ role: m.role, content: m.text })),
         max_tokens: options.max_tokens ?? 1500, temperature: options.temperature ?? 0.65 }),
     })

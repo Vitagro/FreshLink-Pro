@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAccount } from "../lib/adminAuth.js";
 import { requireDeviceApi } from "../lib/deviceGuard.js";
 import { CONTRACTS, generateDraft, transcribeAudio, type DraftTask } from "../lib/aiDrafts.js";
+import { reserveAiCall } from "../lib/aiQuota.js";
 const router = Router();
 // Per-instance pilot guard, not a distributed billing quota.
 const requests = new Map<string,{start:number;count:number}>();
@@ -32,6 +33,8 @@ router.post("/",async(req,res) => {
   }
   const started = Date.now();
   try {
+    if(!process.env.OPENAI_API_KEY || !(task === "transcribe" ? process.env.OPENAI_TRANSCRIBE_MODEL : process.env.OPENAI_DRAFT_MODEL)) throw Error("NOT_CONFIGURED");
+    if(!await reserveAiCall(String(res.locals.account.id))) {res.status(429).json({ok:false,error:"Quota IA atteint. Réessayez plus tard ou contactez votre administrateur."});return;}
     const result = task === "transcribe"
       ? {text:await transcribeAudio(Buffer.from(audio,"base64"),mime),requiresHumanReview:true}
       : await generateDraft(task as DraftTask,text,image);
@@ -40,7 +43,7 @@ router.post("/",async(req,res) => {
   } catch (error) {
     const code = error instanceof Error ? error.message : "FAILED";
     req.log?.warn({task,durationMs:Date.now()-started,outcome:"failed"},"ai_draft");
-    const status = code === "NOT_CONFIGURED" ? 503 : code === "INVALID_AUDIO" ? 400 : 502;
+    const status = ["NOT_CONFIGURED","QUOTA_UNAVAILABLE"].includes(code) ? 503 : code === "INVALID_AUDIO" ? 400 : 502;
     res.status(status).json({ok:false,error:code === "NOT_CONFIGURED" ? "Clé ou modèle IA serveur non configuré." : "Analyse indisponible ou résultat invalide. Aucune donnée métier enregistrée."});
   }
 });
