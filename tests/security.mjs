@@ -59,6 +59,26 @@ function token(claims) {
 const headers = {'Content-Type':'application/json', Authorization:'Bearer '+token({sub:'admin-test',role:'admin',exp:Date.now()+60000})};
 const call = (path, options={}) => nativeFetch(base+path, options);
 
+test('AI drafts require session, device, feature activation and pilot membership',async()=>{
+  const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
+  const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');
+  const send=(h)=>call('/ai-drafts',{method:'POST',headers:h,body:JSON.stringify({task:'order',text:'2 kg tomates'})});
+  const protectedHeaders={...headers,Cookie:'fl_device_token='+cookie};
+  try {
+    assert.equal((await send({'Content-Type':'application/json'})).status,401);
+    assert.equal((await send(headers)).status,401);
+    delete process.env.AI_DRAFTS_ENABLED;
+    assert.equal((await send(protectedHeaders)).status,503);
+    process.env.AI_DRAFTS_ENABLED='true'; process.env.AI_PILOT_USER_IDS='someone-else';
+    assert.equal((await send(protectedHeaders)).status,403);
+    process.env.AI_PILOT_USER_IDS='admin-test';
+    assert.equal((await call('/ai-drafts',{method:'POST',headers:protectedHeaders,body:JSON.stringify({task:'__proto__',text:'test'})})).status,400);
+    assert.equal((await call('/ai-drafts',{method:'POST',headers:protectedHeaders,body:JSON.stringify({task:'quality',text:'test',image:'https://private.example/image'})})).status,400);
+    assert.equal((await send(protectedHeaders)).status,503);
+    active=false; assert.equal((await send(protectedHeaders)).status,403);
+  } finally {delete process.env.AI_DRAFTS_ENABLED;delete process.env.AI_PILOT_USER_IDS;active=true}
+});
+
 test('only the database-confirmed super super admin controls the shared dashboard mode',async()=>{
   const data=Buffer.from(JSON.stringify({fp:'device',exp:Date.now()+60000})).toString('base64url');
   const cookie=data+'.'+createHmac('sha256',process.env.DEVICE_SECRET).update(data).digest('base64url');

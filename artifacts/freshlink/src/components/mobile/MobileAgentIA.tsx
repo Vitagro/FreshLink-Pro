@@ -1,7 +1,7 @@
 "use client"
+import AiWorkbench from "@/components/shared/AiWorkbench"
 
-import { callLLM, triggerN3Alert as n3Alert } from "@/lib/ai"
-import { buildAgentDataContext } from "@/lib/agentContext"
+import { callLLM } from "@/lib/ai"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { type User } from "@/lib/store"
 
@@ -336,7 +336,7 @@ export default function MobileAgentIA({ user }: Props) {
     setLoading(true)
     try {
       const history = msgs.slice(-8).map(m => ({ role: m.role, content: m.text }))
-      const dataContext = buildAgentDataContext(agent.id, user)
+      const dataContext = "" // Read by the server under the active account's permissions.
       const contextPrompt = `${agent.systemPrompt}
 
 CONTEXTE : L'utilisateur qui te parle a le rôle "${user.role}" dans FreshLink Pro. Son nom est ${user.name}.
@@ -344,7 +344,7 @@ Adapte ton ton, ta langue et ton niveau de détail exactement selon ce rôle.
 ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta réponse — ne devine jamais, ne dis jamais des généralités si tu as la vraie donnée ci-dessus.` : ""}`
       const historyMsgs = msgs.slice(-12).map(m => ({ role: m.role, text: m.text }))
       historyMsgs.push({ role: "user", text: msg })
-      const reply = await callLLM(contextPrompt, historyMsgs, { temperature: 0.65, max_tokens: 1200 })
+      const reply = await callLLM(contextPrompt, historyMsgs, { temperature: 0.3, max_tokens: 1200, agentId:agent.id })
       failCountRef.current = 0
       setMsgs(prev => [...prev, { role: "assistant", text: reply, ts: Date.now() }])
     } catch (e: unknown) {
@@ -358,6 +358,7 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta répons
   return (
     <div className="flex flex-col bg-slate-50" style={{ minHeight: "calc(100dvh - 130px)" }}>
 
+      <details className="m-3"><summary className="cursor-pointer font-semibold">Brouillons : voix, commandes et documents</summary><AiWorkbench key={user.id}/></details>
       {/* Agent identity card — light, clean */}
       <div className="mx-3 mt-3 mb-2 rounded-2xl p-4 flex items-center gap-3 bg-white border border-slate-200 shadow-sm">
         <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-sm font-black shrink-0 text-white shadow-sm"

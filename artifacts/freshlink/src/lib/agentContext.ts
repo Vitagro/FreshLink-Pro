@@ -15,6 +15,7 @@
 // ══════════════════════════════════════════════════════════════════════════
 
 import { store, type User } from "./store"
+import { selectOrderScope } from "./dashboardMetrics"
 
 function money(n: number): string { return `${Math.round(n || 0).toLocaleString("fr-MA")} DH` }
 function dateNJoursAgo(n: number): string {
@@ -29,7 +30,7 @@ function contextCommercial(user: User): string {
     : user.role === "team_leader" ? clients.filter(c => c.teamLeadId === user.id)
     : clients
   const cutoff7j = dateNJoursAgo(7)
-  const commandesRecentes = store.getVisibleCommandes().filter(c => c.date >= cutoff7j && c.date <= store.today() && !c.id.startsWith("SIM-") && !(c as unknown as { isSimulation?: boolean }).isSimulation)
+  const commandesRecentes = selectOrderScope(store.getVisibleCommandes(), "real").filter(c => c.date >= cutoff7j && c.date <= store.today())
   const caParClient = new Map<string, number>()
   commandesRecentes.forEach(c => caParClient.set(c.clientId, (caParClient.get(c.clientId) ?? 0) + c.lignes.reduce((s, l) => s + (l.total || 0), 0)))
   const topClients = [...mesClients].map(c => ({ c, ca: caParClient.get(c.id) ?? 0 })).sort((a, b) => b.ca - a.ca).slice(0, 8)
