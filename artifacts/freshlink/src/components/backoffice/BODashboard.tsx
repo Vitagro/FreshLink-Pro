@@ -1,5 +1,6 @@
 "use client"
 
+import { useLang } from "@/lib/i18n"
 import { useState, useEffect, useMemo, useRef } from "react"
 import { store, type User, type Client, type Commande, DELAI_RECOUVREMENT_LABELS, type Visite, userHasRole, recordHeure, inHeureRange, isClientVisible } from "@/lib/store"
 import { isSimulationOrder, selectOrderScope, selectPeriod, lineWeightKg, ORDER_STATUS_LABELS } from "@/lib/dashboardMetrics"
@@ -72,6 +73,8 @@ const DELAI_MS: Record<string, number> = {
 }
 
 export default function BODashboard({ user }: Props) {
+  const lang = useLang()
+  const label = (fr: string, ar: string) => lang === "ar" ? ar : lang === "fr-ar" ? `${fr} / ${ar}` : fr
   const {scope:orderScope, ready:scopeReady, canChange:canChangeScope, saving:scopeSaving, error:scopeError, changeScope} = useSharedDashboardScope(user.id)
   const [commandes, setCommandes] = useState<Commande[]>([])
   const [ordersLoading, setOrdersLoading] = useState(true)
@@ -476,20 +479,20 @@ export default function BODashboard({ user }: Props) {
   if (!scopeReady) return <div role={scopeError ? "alert" : "status"} className="rounded-xl border p-5">{scopeError || "Chargement du mode choisi par le Super Super Admin…"}</div>
 
   return (
-    <div className="flex flex-col gap-5">
-      <section className="relative overflow-hidden rounded-3xl bg-slate-950 px-6 py-7 text-white shadow-lg sm:px-8">
-        <div className="flex flex-wrap items-start justify-between gap-5">
+    <div className="erp-dashboard flex flex-col gap-4">
+      <section className="relative overflow-hidden rounded-xl bg-slate-950 p-4 text-white sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Vita Fresh · Operations</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">Votre activité, en un regard.</h2>
-            <p className="mt-2 max-w-xl text-sm text-slate-300">Commandes, livraisons et priorités du jour. Des indicateurs reliés à leur période et à leur source.</p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight sm:text-2xl">Pilotage des opérations</h2>
+            <p className="mt-1 max-w-xl text-sm text-slate-300">Commandes, livraisons et priorités de la période.</p>
           </div>
-          <div className="rounded-2xl border border-white/15 bg-white/5 px-4 py-3 text-sm">
+          <div className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs">
             <p className="text-slate-400">Fiabilité de la lecture</p>
             <p className="mt-1 font-semibold">{ordersError ? "Actualisation interrompue" : ordersLoading ? "Actualisation en cours" : "Carnet synchronisé"}</p>
           </div>
         </div>
-        <div className="mt-6 flex flex-wrap items-center gap-2" aria-label="Source des indicateurs">
+        <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Source des indicateurs">
           {canChangeScope && ([['real', 'Activité réelle'], ['simulation', 'Simulation']] as const).map(([scope, label]) => (
             <button key={scope} disabled={scopeSaving} onClick={() => { void changeScope(scope) }} aria-pressed={orderScope === scope}
               className={`rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white ${orderScope === scope ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-white hover:bg-white/20'}`}>{label}</button>
@@ -500,16 +503,18 @@ export default function BODashboard({ user }: Props) {
         </div>
       </section>
       {scopeError && <p role="alert" className="rounded-xl border border-red-300 p-3 text-sm">{scopeError}</p>}
-      {orderScope === 'simulation' && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">Mode simulation : ces chiffres ne représentent pas des ventes réalisées. Aucun stock ni paiement n’est modifié.</p>}
-      <p className="text-xs text-muted-foreground">Montants du carnet de commandes, hors commandes refusées ou retournées ; ce ne sont pas des encaissements. Les poids excluent les unités sans conversion fiable en kg.</p>
-
-      {ordersError ? <p role="alert" className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">{ordersError} Les compteurs ne sont pas à jour.</p>
-        : <p role="status" className="rounded-xl border p-3 text-sm">{ordersLoading ? 'Chargement du carnet complet…' : `${commandes.length.toLocaleString('fr-FR')} commandes chargées depuis Supabase.`} Les commandes simulées restent en attente d’approbation.</p>}
+      {orderScope === 'simulation' && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">Mode simulation : ces chiffres ne représentent pas des ventes réalisées. Aucun stock ni paiement n’est modifié.</p>}
+      <details className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+        <summary className="cursor-pointer py-1 font-medium text-foreground">Source et règles de calcul · {commandes.length.toLocaleString('fr-FR')} commandes chargées</summary>
+        <p className="mt-2 leading-relaxed">Montants du carnet de commandes, hors commandes refusées ou retournées ; ce ne sont pas des encaissements. Les poids excluent les unités sans conversion fiable en kg. Les commandes simulées restent en attente d’approbation.</p>
+      </details>
+      {ordersError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{ordersError} Les compteurs ne sont pas à jour.</p>}
       <div className="flex flex-wrap items-center gap-2" aria-label="Périodes rapides">
         <span className="mr-2 text-xs font-medium text-muted-foreground">Période</span>
         {[{label: "Aujourd’hui", start: today}, {label: "7 derniers jours", start: dateOffset(today, -6)}, {label: "Ce mois", start: getMonthRange(today).start}].map(p => (
           <button key={p.label} onClick={() => {setDateDebut(p.start); setDateFin(today); setHeureDebut(""); setHeureFin("")}}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted">{p.label}</button>
+            aria-pressed={dateDebut === p.start && dateFin === today && !heureDebut && !heureFin}
+            className="erp-period rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold text-foreground hover:bg-muted">{p.label}</button>
         ))}
       </div>
       <section aria-label="Suivi logistique des commandes" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -518,7 +523,7 @@ export default function BODashboard({ user }: Props) {
           {label: "À préparer / charger", statuses: ["valide", "en_preparation", "charge"], color: "text-sky-600"},
           {label: "En livraison", statuses: ["en_transit"], color: "text-violet-600"},
           {label: "Livrées", statuses: ["livre"], color: "text-emerald-600"},
-        ].map(stage => <div key={stage.label} className="rounded-2xl border border-border bg-card p-4">
+        ].map(stage => <div key={stage.label} className="rounded-xl border border-border bg-card p-3">
           <p className="text-xs font-semibold text-muted-foreground">{stage.label}</p>
           <p className={`mt-2 text-2xl font-semibold tabular-nums ${stage.color}`}>{cmdsToday.filter(c => stage.statuses.includes(c.statut)).length}</p>
           <p className="mt-1 text-[11px] text-muted-foreground">{periodLabel} · {orderScope === 'real' ? 'réel' : 'simulation'}</p>
@@ -534,9 +539,9 @@ export default function BODashboard({ user }: Props) {
             </svg>
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-black text-foreground">
-                Tableau de bord <span className="font-normal text-base text-muted-foreground">/ لوحة القيادة</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-base font-semibold text-foreground">
+                {label("Analyse de la période", "تحليل الفترة")}
               </h2>
               {/* LIVE badge */}
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider"
@@ -553,7 +558,7 @@ export default function BODashboard({ user }: Props) {
                 onClick={() => refreshData()}
                 title="Actualiser maintenant"
                 className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-semibold transition-colors hover:opacity-80"
-                style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.60 0.12 255)", border: "1px solid oklch(0.25 0.020 255)" }}>
+                style={{ background: "hsl(var(--muted))", color: "hsl(var(--foreground))", border: "1px solid hsl(var(--border))" }}>
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
@@ -566,27 +571,27 @@ export default function BODashboard({ user }: Props) {
         {/* Intervalle de dates — par defaut aujourd'hui seul (comportement
             historique) ; les KPI "du jour" et listes associees agregent sur
             cet intervalle une fois elargi. */}
-        <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded-xl" style={{ background: "oklch(0.12 0.018 255)", border: "1px solid oklch(0.20 0.016 255)" }}>
+        <div className="flex flex-wrap items-center gap-1.5 px-2 py-1.5 rounded-xl" style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}>
           <span className="text-[10px] font-semibold text-muted-foreground pl-1">Du</span>
           <input aria-label="Début de période" type="date" value={dateDebut} max={dateFin}
             onChange={e => { if (e.target.value && e.target.value <= dateFin) setDateDebut(e.target.value) }}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
-            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+            style={{ background: "hsl(var(--background))", color: "hsl(var(--foreground))", border: "1px solid hsl(var(--border))" }} />
           <span className="text-[10px] font-semibold text-muted-foreground">Au</span>
           <input aria-label="Fin de période" type="date" value={dateFin} min={dateDebut}
             onChange={e => { if (e.target.value && e.target.value >= dateDebut) setDateFin(e.target.value) }}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
-            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+            style={{ background: "hsl(var(--background))", color: "hsl(var(--foreground))", border: "1px solid hsl(var(--border))" }} />
           <span className="text-[10px] font-semibold text-muted-foreground">De</span>
           <input aria-label="Heure de début" type="time" value={heureDebut}
             onChange={e => setHeureDebut(e.target.value)}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
-            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+            style={{ background: "hsl(var(--background))", color: "hsl(var(--foreground))", border: "1px solid hsl(var(--border))" }} />
           <span className="text-[10px] font-semibold text-muted-foreground">à</span>
           <input aria-label="Heure de fin" type="time" value={heureFin}
             onChange={e => setHeureFin(e.target.value)}
             className="px-2 py-1 rounded-lg text-xs font-semibold"
-            style={{ background: "oklch(0.18 0.030 255)", color: "oklch(0.85 0.010 255)", border: "1px solid oklch(0.25 0.020 255)" }} />
+            style={{ background: "hsl(var(--background))", color: "hsl(var(--foreground))", border: "1px solid hsl(var(--border))" }} />
           {(dateDebut !== today || dateFin !== today || heureDebut || heureFin) && (
             <button onClick={() => { setDateDebut(today); setDateFin(today); setHeureDebut(""); setHeureFin("") }}
               title="Revenir a aujourd'hui"
@@ -598,13 +603,13 @@ export default function BODashboard({ user }: Props) {
         </div>
 
         {isAdmin && (
-          <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{ background: "oklch(0.12 0.018 255)", border: "1px solid oklch(0.20 0.016 255)" }}>
+          <div className="flex gap-1 p-1 rounded-xl flex-wrap" style={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}>
             {TABS.map(t => (
-              <button key={t.id} onClick={() => setDashTab(t.id)}
+              <button key={t.id} aria-pressed={dashTab === t.id} onClick={() => setDashTab(t.id)}
                 className="relative px-4 py-2 rounded-lg text-sm font-bold transition-all"
                 style={dashTab === t.id
                   ? { background: "oklch(0.55 0.18 250)", color: "#fff", boxShadow: "0 2px 8px oklch(0.55 0.18 250 / 0.3)" }
-                  : { color: "oklch(0.50 0.010 255)" }}>
+                  : { color: "hsl(var(--muted-foreground))" }}>
                 {t.label}
                 {t.alert && t.alert > 0 ? (
                   <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-white text-[10px] font-black flex items-center justify-center"
@@ -698,8 +703,8 @@ export default function BODashboard({ user }: Props) {
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground">{k.label} / {k.labelAr}</p>
-                  <p className={`text-2xl font-black ${k.valClr}`}>{k.value}</p>
+                  <p className="text-xs text-muted-foreground">{label(k.label, k.labelAr)}</p>
+                  <p className={`text-2xl font-semibold tabular-nums ${k.valClr}`}>{k.value}</p>
                   <p className="text-xs text-muted-foreground">{k.sub}</p>
                   {(k.delta1 || k.delta2) && (
                     <div className="flex gap-1 mt-1.5 flex-wrap">{k.delta1}{k.delta2}</div>
@@ -746,7 +751,7 @@ export default function BODashboard({ user }: Props) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
               <div>
-                <p className="text-sm font-bold text-red-800">Alerte stock faible / تنبيه مخزون</p>
+                <p className="text-sm font-bold text-red-800">{label("Alerte stock faible", "تنبيه مخزون")}</p>
                 <p className="text-xs text-red-600">{stockFaible} article(s) sous 50 kg — Passez des commandes fournisseur.</p>
               </div>
             </div>
@@ -760,7 +765,7 @@ export default function BODashboard({ user }: Props) {
                   <svg className="w-4 h-4 shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                   </svg>
-                  <h3 className="text-sm font-bold text-foreground">Tournées du Jour / جولات اليوم</h3>
+                  <h3 className="text-sm font-bold text-foreground">{label("Tournées du Jour", "جولات اليوم")}</h3>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs font-black px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700">
@@ -816,7 +821,7 @@ export default function BODashboard({ user }: Props) {
             {/* Top 10 clients CA */}
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                <h3 className="text-sm font-bold text-foreground">Top 10 clients / أفضل الزبائن</h3>
+                <h3 className="text-sm font-bold text-foreground">{label("Top 10 clients", "أفضل الزبائن")}</h3>
                 <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {top10Clients.length === 0
@@ -838,7 +843,7 @@ export default function BODashboard({ user }: Props) {
             {/* Top articles vendus */}
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                <h3 className="text-sm font-bold text-foreground">Top articles vendus / الأكثر مبيعاً</h3>
+                <h3 className="text-sm font-bold text-foreground">{label("Top articles vendus", "الأكثر مبيعاً")}</h3>
                 <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {artChartData.length === 0
@@ -859,7 +864,7 @@ export default function BODashboard({ user }: Props) {
             {/* Top prevendeurs (CA) */}
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                <h3 className="text-sm font-bold text-foreground">Top prevendeurs / أفضل مندوبي المبيعات</h3>
+                <h3 className="text-sm font-bold text-foreground">{label("Top prevendeurs", "أفضل مندوبي المبيعات")}</h3>
                 <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {top10Prevendeurs.length === 0
@@ -881,7 +886,7 @@ export default function BODashboard({ user }: Props) {
             {/* Top secteurs (CA) */}
             <div className="rounded-2xl overflow-hidden bg-card border border-border">
               <div className="px-4 py-3 flex items-center justify-between border-b border-border">
-                <h3 className="text-sm font-bold text-foreground">Top secteurs / أفضل القطاعات</h3>
+                <h3 className="text-sm font-bold text-foreground">{label("Top secteurs", "أفضل القطاعات")}</h3>
                 <span className="text-xs text-muted-foreground">{periodLabel}</span>
               </div>
               {top10Secteurs.length === 0
@@ -904,7 +909,7 @@ export default function BODashboard({ user }: Props) {
           {/* Recent commandes */}
           <div className="bg-card rounded-xl border border-border overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
-              <h3 className="text-sm font-bold text-foreground">Dernieres commandes / آخر الطلبيات</h3>
+              <h3 className="text-sm font-bold text-foreground">{label("Dernieres commandes", "آخر الطلبيات")}</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1083,7 +1088,7 @@ export default function BODashboard({ user }: Props) {
             {/* Top 10 clients qui retournent */}
             <div className="bg-card rounded-xl border border-border overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
-                <h3 className="text-sm font-bold text-red-700">Top clients retours / أكثر زبائن برجوع</h3>
+                <h3 className="text-sm font-bold text-red-700">{label("Top clients retours", "أكثر زبائن برجوع")}</h3>
               </div>
               {top10RetourClients.length === 0
                 ? <p className="px-4 py-6 text-sm text-muted-foreground text-center">Aucun retour</p>
@@ -1440,7 +1445,7 @@ export default function BODashboard({ user }: Props) {
           {/* Full credit table */}
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <h3 className="text-sm font-bold text-foreground">Situation credit par client / وضعية الائتمان</h3>
+              <h3 className="text-sm font-bold text-foreground">{label("Situation credit par client", "وضعية الائتمان")}</h3>
               {!confirmResetCreditDash ? (
                 <button onClick={() => setConfirmResetCreditDash(true)}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors">

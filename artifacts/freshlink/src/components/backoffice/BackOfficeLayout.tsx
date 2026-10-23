@@ -710,7 +710,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
 
   // ── Render ─────────────────────────────────────────────────
   return (
-    <div className="flex h-screen overflow-hidden font-sans bg-muted text-foreground">
+    <div className="erp-shell flex h-dvh overflow-hidden font-sans bg-muted text-foreground">
 
       {isAdminOrAbove && <BONotifications navigate={navigate} />}
 
@@ -947,8 +947,8 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
 
 
         {/* ── Content ────────────────────────────────────── */}
-        <main className="flex-1 overflow-auto bg-muted">
-          <div className="p-4 lg:p-6 min-h-full">
+        <main id="erp-main" className="erp-workspace flex-1 overflow-auto bg-muted" tabIndex={-1}>
+          <div className="p-3 sm:p-4 lg:p-5 min-h-full">
             <PanelErrorBoundary key={activeTab} label={allItems.find(i => i.id === activeTab)?.label ?? activeTab}>
               {PANELS[activeTab]?.(user, setActiveTab) ?? (
                 <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
@@ -963,7 +963,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
         <CallCenter user={user} />
 
         {/* ── Footer ─────────────────────────────────────── */}
-        <footer className="shrink-0 border-t border-border bg-white px-4 py-2 flex items-center justify-between gap-4 flex-wrap">
+        <footer className="shrink-0 border-t border-border bg-white px-4 py-1 hidden sm:flex items-center justify-between gap-4 flex-wrap">
           <p className="text-[11px] text-muted-foreground">
             &copy; 2026{" "}
             <span className="font-black" style={{ color: "#1a4f2a" }}>
