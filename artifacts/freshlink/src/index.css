@@ -316,14 +316,14 @@ img, video, iframe, canvas { max-width: 100%; }
   min-height: 2.5rem;
   border-radius: .5rem;
 }
-.erp-workspace :is(input, textarea)::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; }
+.erp-workspace :is(input, textarea)::placeholder { color: hsl(var(--muted-foreground)) !important; opacity: 1; }
 .erp-workspace :is(button, input, select, textarea):focus-visible {
   outline: 2px solid #059669; outline-offset: 3px;
 }
 .dark .erp-workspace :is(button, input, select, textarea):focus-visible { outline-color: #6ee7b7; }
 .erp-workspace button:disabled { cursor: not-allowed; opacity: .55; }
 .erp-workspace table { width: 100%; font-variant-numeric: tabular-nums; }
-.erp-workspace th { font-weight: 600; text-align: start; }
+.erp-workspace th { font-weight: 600; }
 .erp-workspace :is(th, td) { vertical-align: middle; }
 .erp-workspace tbody tr { border-bottom: 1px solid hsl(var(--border)); }
 .erp-workspace tbody tr:focus-within { outline: 2px solid #059669; outline-offset: -2px; }
@@ -353,3 +353,10 @@ img, video, iframe, canvas { max-width: 100%; }
     transition-duration: .01ms !important;
   }
 }
+
+/* Legacy semantic cards must remain legible in the dark back-office. */
+.dark .erp-workspace :is(.bg-indigo-50, .bg-indigo-100, .bg-indigo-50\/60) { background-color: #252c46 !important; }
+.dark .erp-workspace :is(.text-indigo-600, .text-indigo-700, .text-indigo-800) { color: #c7d2fe !important; }
+.dark .erp-workspace :is(.bg-teal-50, .bg-teal-100) { background-color: #153b38 !important; }
+.dark .erp-workspace :is(.text-teal-600, .text-teal-700, .text-teal-800) { color: #99f6e4 !important; }
+.dark .erp-workspace :is(.text-amber-900, .text-amber-950, .text-yellow-900, .text-yellow-950) { color: #fde68a !important; }

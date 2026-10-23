@@ -138,7 +138,7 @@ export default function BODashboard({ user }: Props) {
         const visibleClients = allClients.filter(c => isClientVisible(c, user))
         const visibleIds = new Set(visibleClients.map(c => c.id))
         setCommandes(allOrders.filter(c => visibleIds.has(c.clientId)))
-        setClients(store.getVisibleClients())
+        setClients(visibleClients)
         setOrdersError('')
         setLastRefreshed(new Date())
       }).catch(e => setOrdersError(e instanceof Error ? e.message : String(e)))
@@ -545,7 +545,7 @@ export default function BODashboard({ user }: Props) {
               </h2>
               {/* LIVE badge */}
               <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black tracking-wider"
-                style={{ background: "oklch(0.18 0.06 148)", color: "oklch(0.72 0.18 148)", border: "1px solid oklch(0.28 0.10 148)" }}>
+                style={{ background: "#064e3b", color: "#d1fae5", border: "1px solid #047857" }}>
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                 {ordersError ? "À VÉRIFIER" : ordersLoading ? "MISE À JOUR" : "SYNCHRONISÉ"}
               </span>
@@ -596,7 +596,7 @@ export default function BODashboard({ user }: Props) {
             <button onClick={() => { setDateDebut(today); setDateFin(today); setHeureDebut(""); setHeureFin("") }}
               title="Revenir a aujourd'hui"
               className="px-2 py-1 rounded-lg text-[10px] font-bold transition-colors hover:opacity-80"
-              style={{ background: "oklch(0.18 0.06 148)", color: "oklch(0.72 0.18 148)", border: "1px solid oklch(0.28 0.10 148)" }}>
+              style={{ background: "#064e3b", color: "#d1fae5", border: "1px solid #047857" }}>
               ↺ Aujourd&apos;hui
             </button>
           )}

@@ -1,5 +1,6 @@
 "use client"
 
+import { markupPercent } from "@/lib/catalogueDisplay"
 import { useState, useEffect, useRef } from "react"
 import { store, type Article, type HistoriquePrixAchat, type StatutCaisseEtrangere, type TypeCaisse, STATUT_CAISSE_ETRANGERE_LABELS, TYPES_CAISSE_LABELS, FAMILLE_GROUPES, getAllFamilles, addCustomFamille, paDeviationConfirmMessage } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
@@ -332,7 +333,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   // ("Cannot access 'famillesFiltre' before initialization") car
   // le callback de `filtered` lit `famillesFiltre` quand une famille est sélectionnée.
   const famillesFiltre = famille
-    ? (FAMILLE_GROUPES[famille] ?? [famille])
+    ? [famille, ...(FAMILLE_GROUPES[famille] ?? [])]
     : []
 
   const filtered = articles.filter(a => {
@@ -439,7 +440,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
   const byGroupe = Object.entries(FAMILLE_GROUPES).map(([groupe, familles]) => ({
     groupe,
     familles,
-    count: articles.filter(a => familles.includes(a.famille)).length,
+    count: articles.filter(a => a.famille === groupe || familles.includes(a.famille)).length,
   }))
 
   const byFamille = familleOptions.map(f => ({
@@ -1163,16 +1164,16 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <input placeholder="Rechercher article..."
+        <input aria-label="Rechercher un article" placeholder="Rechercher article..."
           value={search} onChange={e => setSearch(e.target.value)}
           className="flex-1 min-w-52 px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
         <div className="flex items-center gap-1 p-1 bg-muted rounded-xl">
-          <button onClick={() => setView("grid")}
+          <button aria-label="Vue en cartes" title="Vue en cartes" aria-pressed={view === "grid"} onClick={() => setView("grid")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${view === "grid" ? "text-white" : "text-muted-foreground"}`}
             style={view === "grid" ? { background: "oklch(0.38 0.2 260)" } : {}}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
           </button>
-          <button onClick={() => setView("table")}
+          <button aria-label="Vue en tableau" title="Vue en tableau" aria-pressed={view === "table"} onClick={() => setView("table")}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${view === "table" ? "text-white" : "text-muted-foreground"}`}
             style={view === "table" ? { background: "oklch(0.38 0.2 260)" } : {}}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
@@ -1211,7 +1212,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
         <button
           onClick={reloadFromSupabase}
           disabled={reloadingFromSb}
-          title="Recharge les articles depuis Supabase (résout les compteurs incohérents 287 vs 135)"
+          title="Recharge les articles depuis Supabase (actualise le catalogue local)"
           className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-bold border-2 transition-all disabled:opacity-60 shadow-sm border-blue-600 bg-blue-600 text-white hover:bg-blue-700">
           {reloadingFromSb
             ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />Rechargement...</>
@@ -1440,7 +1441,8 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                 {(() => {
                   const pv = computePV({ ...form, id: "" })
                   const marge = pv - form.prixAchat
-                  const pct = form.prixAchat > 0 ? (marge / form.prixAchat) * 100 : 0
+                  const pct = markupPercent(form.prixAchat, pv)
+                  if (pct === null) return <p className="text-sm text-muted-foreground">Non calculable : prix d’achat manquant ou nul.</p>
                   return <p className="text-lg font-extrabold text-green-700">{pct.toFixed(1)}% <span className="text-xs font-normal">{DH(marge)}</span></p>
                 })()}
               </div>
@@ -1473,7 +1475,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
           ) : filtered.map(a => {
             const pv = computePV(a)
             const marge = pv - a.prixAchat
-            const margePct = a.prixAchat > 0 ? (marge / a.prixAchat) * 100 : 0
+            const margePct = markupPercent(a.prixAchat, pv)
             return (
               <div key={a.id} className={`bg-card rounded-2xl border overflow-hidden hover:shadow-md transition-all group flex flex-col ${selectedArticleIds.has(a.id) ? "border-blue-400 ring-2 ring-blue-300" : "border-border"} ${!(a.actif ?? true) ? "opacity-60" : ""}`}>
                 {/* Image */}
@@ -1537,7 +1539,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                   </div>
                   <div className="flex items-center justify-between mt-1">
                     <span className="text-[10px] text-muted-foreground">Marge</span>
-                    <span className="text-[10px] font-bold text-blue-600">+{margePct.toFixed(0)}%</span>
+                    <span className="text-[10px] font-bold text-blue-600">{margePct === null ? "Non calculable" : `${margePct > 0 ? "+" : ""}${margePct.toFixed(0)}%`}</span>
                   </div>
                   {a.um && a.colisageParUM && (
                     <div className="flex items-center justify-between mt-1">
@@ -1606,7 +1608,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                 ) : filtered.map(a => {
                   const pv = computePV(a)
                   const marge = pv - a.prixAchat
-                  const margePct = a.prixAchat > 0 ? (marge / a.prixAchat) * 100 : 0
+                  const margePct = markupPercent(a.prixAchat, pv)
                   return (
                     <tr key={a.id} className={`border-t border-border hover:bg-muted/30 transition-colors ${selectedArticleIds.has(a.id) ? "bg-blue-50" : ""}`}>
                       <td className="px-4 py-2 w-10" onClick={e => e.stopPropagation()}>
@@ -1640,7 +1642,7 @@ export default function BOArticles({ user }: { user: { id: string; name: string 
                       <td className="px-4 py-2 font-mono font-semibold text-red-600">{DH(a.prixAchat)}</td>
                       <td className="px-4 py-2 text-muted-foreground text-xs">{a.pvMethode === "pourcentage" ? `${a.pvValeur}%` : a.pvMethode === "montant" ? `+${a.pvValeur} DH` : "Manuel"}</td>
                       <td className="px-4 py-2 font-mono font-semibold text-green-600">{DH(pv)}</td>
-                      <td className="px-4 py-2 font-bold text-blue-600">+{margePct.toFixed(0)}%</td>
+                      <td className="px-4 py-2 font-bold text-blue-600">{margePct === null ? "Non calculable" : `${margePct > 0 ? "+" : ""}${margePct.toFixed(0)}%`}</td>
                       <td className="px-4 py-2">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${a.stockDisponible > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
                           {a.stockDisponible.toLocaleString("fr-MA")} {a.unite}

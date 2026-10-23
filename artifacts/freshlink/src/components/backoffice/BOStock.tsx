@@ -1,7 +1,8 @@
 "use client"
 
+import { stockTotalsByUnit } from "@/lib/catalogueDisplay"
 import { useState, useEffect } from "react"
-import { store, type Article, type TransfertStock, type CaisseVide, type CaisseVideMouvement, type ContenantTare, DEFAULT_CONTENANTS_TARE, FAMILLES_ARTICLES, type BonLivraison, type Retour, paDeviationConfirmMessage } from "@/lib/store"
+import { store, type Article, type TransfertStock, type CaisseVide, type CaisseVideMouvement, type ContenantTare, DEFAULT_CONTENANTS_TARE, getAllFamilles, type BonLivraison, type Retour, paDeviationConfirmMessage } from "@/lib/store"
 import { hasPermission } from "@/lib/permissions"
 import { logAction } from "@/lib/auditLog"
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
@@ -279,8 +280,10 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
     setSaved("Transfert enregistré"); setTimeout(() => setSaved(""), 2000)
   }
 
-  const totalStock = articles.reduce((s, a) => s + a.stockDisponible, 0)
-  const totalDefect = articles.reduce((s, a) => s + a.stockDefect, 0)
+  const stockByUnit = (field: "stockDisponible" | "stockDefect") => stockTotalsByUnit(articles, field)
+    .map(([u, q]) => `${q.toLocaleString("fr-MA", {maximumFractionDigits: 2})} ${u}`).join(" · ") || "Aucun article"
+  const totalStock = stockByUnit("stockDisponible")
+  const totalDefect = stockByUnit("stockDefect")
   const valeurStock = articles.reduce((s, a) => s + a.stockDisponible * a.prixAchat, 0)
   const alertArticles = articles.filter(a => a.stockDisponible < 50)
 
@@ -401,8 +404,8 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Stock conforme (kg)", labelAr: "مخزون سليم", value: `${totalStock.toLocaleString("fr-MA")} kg`, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
-          { label: "Stock défect (kg)", labelAr: "مخزون تالف", value: `${totalDefect.toLocaleString("fr-MA")} kg`, color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
+          { label: "Stock conforme par unité", labelAr: "مخزون سليم", value: totalStock, color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200" },
+          { label: "Stock défect par unité", labelAr: "مخزون تالف", value: totalDefect, color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
           { label: "Valeur stock", labelAr: "قيمة المخزون", value: DH(valeurStock), color: "text-indigo-600", bg: "bg-indigo-50 border-indigo-200" },
           { label: "Alertes stock", labelAr: "تنبيهات", value: `${alertArticles.length} articles`, color: "text-red-600", bg: "bg-red-50 border-red-200" },
         ].map(k => (
@@ -433,7 +436,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
           </div>
           <select value={famille} onChange={e => setFamille(e.target.value)} className="px-3 py-2.5 rounded-xl border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary">
             <option value="">Toutes familles</option>
-            {FAMILLES_ARTICLES.map(f => <option key={f} value={f}>{f}</option>)}
+            {getAllFamilles(articles.map(a => a.famille)).map(f => <option key={f} value={f}>{f}</option>)}
           </select>
           <button type="button"
             onClick={() => setSortName(s => s === "az" ? "za" : s === "za" ? "none" : "az")}
@@ -623,7 +626,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                 <label className="text-[11px] font-bold text-indigo-800 uppercase tracking-wide">Prix de vente par famille</label>
                 <select value={pfFamille} onChange={e => setPfFamille(e.target.value)} className="px-3 py-2 rounded-xl border border-indigo-300 bg-white text-sm">
                   <option value="">— Choisir une famille —</option>
-                  {FAMILLES_ARTICLES.map(f => <option key={f} value={f}>{f}</option>)}
+                  {getAllFamilles(articles.map(a => a.famille)).map(f => <option key={f} value={f}>{f}</option>)}
                 </select>
               </div>
               <select value={pfMethode} onChange={e => setPfMethode(e.target.value as Article["pvMethode"])} className="px-3 py-2 rounded-xl border border-indigo-300 bg-white text-sm">
@@ -920,7 +923,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                 <div className="flex flex-col gap-1">
                   <label className="text-xs font-semibold text-foreground">Famille</label>
                   <select value={artForm.famille} onChange={e => setArtForm({ ...artForm, famille: e.target.value })} className="px-3 py-2.5 rounded-xl border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                    {FAMILLES_ARTICLES.map(f => <option key={f} value={f}>{f}</option>)}
+                    {getAllFamilles(articles.map(a => a.famille)).map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1">

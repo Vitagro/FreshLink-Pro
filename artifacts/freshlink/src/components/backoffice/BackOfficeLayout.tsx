@@ -55,12 +55,19 @@ class PanelErrorBoundary extends Component<{ children: React.ReactNode; label: s
           </div>
           <div>
             <p className="font-bold text-foreground text-base">{this.props.label} — Erreur de chargement</p>
-            <p className="text-xs text-muted-foreground mt-1 max-w-xs font-mono break-all">{this.state.msg}</p>
+            <p className="text-sm text-muted-foreground mt-2 max-w-md">Cet écran n’a pas pu être chargé. Vérifiez votre connexion puis réessayez.</p>
+            <details className="mt-3 text-xs text-muted-foreground"><summary className="cursor-pointer">Détails techniques</summary><p className="mt-2 max-w-md font-mono break-all">{this.state.msg}</p></details>
           </div>
           <button
-            onClick={() => this.setState({ hasError: false, msg: "" })}
+            onClick={() => {
+              if (STALE_CHUNK_RE.test(this.state.msg)) {
+                const url = new URL(window.location.href)
+                url.searchParams.set("_freshlink_reload", String(Date.now()))
+                window.location.replace(url.href)
+              } else this.setState({ hasError: false, msg: "" })
+            }}
             className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
-            Reessayer
+            Réessayer
           </button>
         </div>
       )

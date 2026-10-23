@@ -512,7 +512,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
       setCmds(orders.filter(o => !normTel(o.telephone) || visibleTels.has(normTel(o.telephone))))
     } catch (e) {
       console.error("[BOCommandesUnifiees]", e)
-      setMsg({ ok: false, text: e instanceof Error ? e.message : 'Chargement des commandes impossible. Cliquez sur Actualiser.' })
+      setMsg({ ok: false, text: 'Actualisation des commandes impossible. Les données affichées peuvent être anciennes. Vérifiez votre connexion puis cliquez sur Actualiser.' })
     }
     setLoading(false)
   }, [])
@@ -921,7 +921,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
             Site web <span className="text-blue-600 font-semibold">({webCount} Web)</span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           {hasPermission(user.role, "creer_commande") && <button
             onClick={() => setShowNew(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors">
@@ -1219,7 +1219,7 @@ export default function BOCommandesUnifiees({ user }: Props) {
           <div className="text-lg font-black text-green-700 leading-tight">
             {totalCA.toLocaleString("fr-MA", { maximumFractionDigits: 0 })} MAD
           </div>
-          <div className="text-xs font-semibold text-green-400 mt-1 uppercase">CA filtré</div>
+          <div className="text-xs font-semibold text-green-400 mt-1 uppercase">Valeur des commandes filtrées</div>
         </div>
       </div>
 
