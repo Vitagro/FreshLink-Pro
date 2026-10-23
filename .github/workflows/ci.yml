@@ -73,3 +73,6 @@ jobs:
 
       - name: Operational planning and draft reconciliation tests
         run: node scripts/operational-planning.test.mjs
+
+      - name: Service worker deployment and privacy regression tests
+        run: node scripts/service-worker.test.mjs
