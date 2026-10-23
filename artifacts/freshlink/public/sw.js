@@ -1,4 +1,4 @@
-const CACHE_NAME = 'freshlink-v5'
+const CACHE_NAME = 'freshlink-v6'
 const OFFLINE_URL = '/'
 
 // Assets to precache on install
@@ -27,64 +27,41 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
+        keys.filter(k => k.startsWith("freshlink-") && k !== CACHE_NAME).map(k => caches.delete(k))
       ))
       .then(() => self.clients.claim())
   )
 })
 
-// ── Fetch: network-first with cache fallback ───────────────────────────────────
+// API responses may contain private data: never intercept, persist, or replay them.
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return
-  if (!event.request.url.startsWith(self.location.origin)) return
-
-  // For navigation requests (HTML pages) — network first, fallback to cached /
+  const url = new URL(event.request.url)
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return
   if (event.request.mode === 'navigate') {
-    event.respondWith(
-      fetch(event.request)
-        .then(res => {
-          if (res && res.status === 200) {
-            caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()))
-          }
-          return res
-        })
-        .catch(() => caches.match(OFFLINE_URL))
-    )
+    event.respondWith(fetch(event.request, {cache:'no-store'}).then(res => {
+      if (res.ok && (res.headers.get('content-type') || '').includes('text/html')) {
+        const copy=res.clone()
+        event.waitUntil(caches.open(CACHE_NAME).then(c=>c.put(OFFLINE_URL,copy)))
+      }
+      return res
+    }).catch(async()=> (await caches.match(OFFLINE_URL)) || new Response('Connexion indisponible. Reconnectez-vous puis rechargez.', {status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}})))
     return
   }
-
-  // For static assets (images, fonts, JS, CSS) — cache first, then network
-  const url = event.request.url
-  const isStatic = /\.(png|jpg|jpeg|svg|webp|woff2?|ttf|ico)$/.test(url)
-    || url.includes('/_next/static/')
-
-  if (isStatic) {
-    event.respondWith(
-      caches.match(event.request).then(cached => {
-        if (cached) return cached
-        return fetch(event.request).then(res => {
-          if (res && res.status === 200) {
-            caches.open(CACHE_NAME).then(c => c.put(event.request, res.clone()))
-          }
-          return res
-        }).catch(() => cached)
-      })
-    )
-    return
-  }
-
-  // For API/data requests — network first, no cache
-  event.respondWith(
-    fetch(event.request)
-      .then(res => {
-        if (res && res.status === 200) {
-          const clone = res.clone()
-          caches.open(CACHE_NAME).then(c => c.put(event.request, clone))
-        }
-        return res
-      })
-      .catch(() => caches.match(event.request))
-  )
+  const isScript=/\.js$/.test(url.pathname),isCss=/\.css$/.test(url.pathname)
+  const isStatic=isScript||isCss||/\.(png|jpg|jpeg|svg|webp|woff2?|ttf|ico)$/.test(url.pathname)
+  if (!isStatic) return
+  const valid=res=>!!res && res.ok && (isScript ? /(?:javascript|ecmascript)/i.test(res.headers.get('content-type')||'') : isCss ? (res.headers.get('content-type')||'').includes('text/css') : !(res.headers.get('content-type')||'').includes('text/html'))
+  event.respondWith((async()=>{
+    const cache=await caches.open(CACHE_NAME),cached=await cache.match(event.request)
+    if(valid(cached))return cached
+    try {
+      const res=await fetch(event.request)
+      if(!valid(res))return new Response('Ressource indisponible. Rechargez la version courante.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}})
+      await cache.put(event.request,res.clone())
+      return res
+    }catch{return new Response('Ressource indisponible hors connexion.',{status:503})}
+  })())
 })
 
 // ── Background sync message handler ───────────────────────────────────────────
