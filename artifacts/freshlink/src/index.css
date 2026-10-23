@@ -309,3 +309,47 @@ img, video, iframe, canvas { max-width: 100%; }
 .dark .shadow-sm, .dark .shadow, .dark .shadow-md, .dark .shadow-lg {
   --tw-shadow-color: rgba(0,0,0,.6);
 }
+
+/* Shared back-office controls: scoped to preserve the mobile sales workflow. */
+.erp-workspace { scrollbar-gutter: stable; }
+.erp-workspace :is(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]), select, textarea) {
+  min-height: 2.5rem;
+  border-radius: .5rem;
+}
+.erp-workspace :is(input, textarea)::placeholder { color: hsl(var(--muted-foreground)); opacity: 1; }
+.erp-workspace :is(button, input, select, textarea):focus-visible {
+  outline: 2px solid #059669; outline-offset: 3px;
+}
+.dark .erp-workspace :is(button, input, select, textarea):focus-visible { outline-color: #6ee7b7; }
+.erp-workspace button:disabled { cursor: not-allowed; opacity: .55; }
+.erp-workspace table { width: 100%; font-variant-numeric: tabular-nums; }
+.erp-workspace th { font-weight: 600; text-align: start; }
+.erp-workspace :is(th, td) { vertical-align: middle; }
+.erp-workspace tbody tr { border-bottom: 1px solid hsl(var(--border)); }
+.erp-workspace tbody tr:focus-within { outline: 2px solid #059669; outline-offset: -2px; }
+.erp-dashboard .erp-period[aria-pressed=true] { background: #065f46; border-color: #065f46; color: #fff; }
+.erp-dashboard .kpi-card { border-radius: .75rem; }
+.erp-dashboard .kpi-card > div:first-child { width: 2rem; height: 2rem; }
+.dark .erp-workspace .text-amber-600,
+.dark .erp-workspace .text-yellow-600 { color: #fcd34d; }
+.dark .erp-workspace .text-emerald-600,
+.dark .erp-workspace .text-green-600 { color: #6ee7b7; }
+.dark .erp-workspace .text-blue-600,
+.dark .erp-workspace .text-sky-600 { color: #93c5fd; }
+.dark .erp-workspace .text-red-600 { color: #fca5a5; }
+.dark .erp-workspace .text-violet-600 { color: #c4b5fd; }
+.dark .erp-workspace .text-orange-600 { color: #fdba74; }
+@media (max-width: 639px) {
+  .erp-dashboard { gap: .75rem; }
+  .erp-dashboard .kpi-card { padding: .75rem; }
+  .erp-workspace button { min-height: 2.5rem; }
+  .erp-workspace :is(input,select,textarea) { font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .erp-shell *, .erp-shell *::before, .erp-shell *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
