@@ -76,3 +76,6 @@ jobs:
 
       - name: Service worker deployment and privacy regression tests
         run: node scripts/service-worker.test.mjs
+
+      - name: Catalogue display and unit separation tests
+        run: node scripts/catalogue-display.test.mjs
