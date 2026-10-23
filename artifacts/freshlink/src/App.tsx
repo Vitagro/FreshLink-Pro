@@ -119,10 +119,8 @@ function MainApp() {
         syncFromSupabase().then(({ ok, tables }) => {
           console.log(`[FreshLink] Sync login — ${tables.length} tables chargées depuis Supabase`)
           if (ok) {
-            try {
-              const fresh = store.getUsers().find(u => u.id === loggedUser.id)
-              if (fresh) { store.setSession(fresh); setUser(fresh) }
-            } catch { /* noop */ }
+            // Keep the profile returned by authenticated login. The synchronized
+            // directory intentionally omits permissions and interface settings.
             window.dispatchEvent(new CustomEvent("fl_store_updated", { detail: { table: "all" } }))
           }
         }).catch(() => {})
