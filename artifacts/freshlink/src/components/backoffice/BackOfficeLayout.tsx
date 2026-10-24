@@ -283,8 +283,8 @@ const NAV_GROUPS_RAW: NavGroup[] = [
     items: [
       { id: "dashboard",        label: "Tableau de bord",        labelAr: "لوحة التحكم",      icon: <Icon d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /> },
       { id: "messagerie",       label: "Messagerie",             labelAr: "المراسلة",         icon: <Icon d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.86 9.86 0 01-4-.8L3 21l1.8-4A8.96 8.96 0 013 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /> },
-      { id: "recap",            label: "Synthese & Recap",       labelAr: "الملخص",           permKey: "canViewRecap",      icon: <Icon d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /> },
-      { id: "rapport_livraison", label: "Rapport Livraison",     labelAr: "تقرير التوصيل",    permKey: "canViewLogistique", icon: <Icon d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
+      { id: "recap",            label: "Synthèse & récapitulatif",       labelAr: "الملخص",           permKey: "canViewRecap",      icon: <Icon d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /> },
+      { id: "rapport_livraison", label: "Rapport de livraison",     labelAr: "تقرير التوصيل",    permKey: "canViewLogistique", icon: <Icon d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /> },
     ],
   },
   // ── 2. ACHATS & APPROVISIONNEMENT ────────────────────────────────────────
@@ -703,14 +703,17 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
   const activeItem = allItems.find(i => i.id === activeTab)
 
   // Filter nav by search
-  const searchQ = navSearch.toLowerCase().trim()
+  const normalizeSearch = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim()
+  const searchQ = normalizeSearch(navSearch)
   const filteredGroups = NAV_GROUPS.map(g => ({
     ...g,
     items: g.items.filter(item =>
       isVisible(item) && (
         !searchQ ||
-        (item.label ?? "").toLowerCase().includes(searchQ) ||
-        item.labelAr?.includes(navSearch)
+        normalizeSearch(getNavLabel(item.id, item.label, item.labelAr, lang)).includes(searchQ) ||
+        normalizeSearch(item.label).includes(searchQ) ||
+        normalizeSearch(g.label).includes(searchQ) ||
+        item.labelAr?.includes(navSearch.trim())
       )
     )
   })).filter(g => g.items.length > 0)
@@ -722,7 +725,7 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
       {isAdminOrAbove && <BONotifications navigate={navigate} />}
 
       {/* Desktop sidebar — collapsible */}
-      <div className={`hidden lg:flex flex-col shrink-0 transition-all duration-300 ${sidebarCollapsed ? "w-16" : "w-60"}`}>
+      <div className={`hidden lg:flex flex-col shrink-0 transition-all duration-300 ${sidebarCollapsed ? "w-16" : "w-72"}`}>
         <SidebarContent
           user={user}
           activeTab={activeTab}
@@ -747,11 +750,11 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           {/* Drawer */}
-          <div className="w-60 shrink-0 shadow-2xl">
+          <div className="w-80 max-w-[88vw] shrink-0 shadow-2xl">
             <SidebarContent
               user={user}
               activeTab={activeTab}
-              sidebarCollapsed={sidebarCollapsed}
+              sidebarCollapsed={false}
               setSidebarCollapsed={setSidebarCollapsed}
               profilPhoto={profilPhoto}
               navSearch={navSearch}
@@ -769,6 +772,8 @@ export default function BackOfficeLayout({ user, onLogout }: Props) {
           </div>
           {/* Backdrop */}
           <div
+            role="button" tabIndex={0} aria-label="Fermer le menu"
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " " || e.key === "Escape") setSidebarOpen(false) }}
             className="flex-1 bg-black/60 backdrop-blur-[2px]"
             onClick={() => setSidebarOpen(false)}
           />
@@ -1031,9 +1036,9 @@ function SidebarContent({
   navigate, onLogout, onOpenProfil,
   appName, appSlogan, appLogo, lang,
 }: SidebarContentProps) {
-  const BG = "#0d2218"
-  const BG2 = "#1a4f2a"
-  const ACTIVE = "#22c55e"
+  const BG = "#10251f"
+  const BG2 = "#203c32"
+  const ACTIVE = "#a7e3c0"
 
   // Groupes (grandes rubriques) repliés — liste déroulable, persistée pour
   // la session courante (remise à zéro — tout replié — à chaque reconnexion,
@@ -1066,11 +1071,11 @@ function SidebarContent({
   }
 
   return (
-    <aside className="flex flex-col h-full" style={{ background: BG, color: "#d1fae5" }}>
+    <aside aria-label="Navigation principale" className="erp-navigation flex flex-col h-full" style={{ background: BG, color: "#d1fae5" }}>
 
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 py-4 border-b" style={{ borderColor: "#1a4f2a" }}>
-        <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 border-2 shadow-lg" style={{ borderColor: "#22c55e" }}>
+        <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 border shadow-sm" style={{ borderColor: "#22c55e" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={appLogo || "/vita-fresh-logo.png"} alt={appName} className="w-full h-full object-contain p-0.5 bg-white" />
         </div>
@@ -1094,12 +1099,13 @@ function SidebarContent({
             </svg>
             <input
               type="text" value={navSearch} onChange={e => setNavSearch(e.target.value)}
-              placeholder="Rechercher..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg text-xs focus:outline-none transition-all"
+              aria-label="Rechercher un module"
+              placeholder="Rechercher un module…"
+              className="w-full pl-8 pr-10 py-2.5 rounded-lg text-sm focus:outline-none transition-all"
               style={{ background: BG2, color: "#d1fae5", border: "1px solid #22c55e33" }}
             />
             {navSearch && (
-              <button onClick={() => setNavSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2" style={{ color: "#6ee7b7" }}>
+              <button aria-label="Effacer la recherche" onClick={() => setNavSearch("")} className="absolute right-1 top-1/2 -translate-y-1/2 p-2" style={{ color: "#6ee7b7" }}>
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1110,16 +1116,17 @@ function SidebarContent({
       )}
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-2 px-2 thin-scroll" style={{ scrollbarColor: "#1a4f2a transparent" }}>
+      <nav aria-label="Modules ERP" className="flex-1 overflow-y-auto py-3 px-3 thin-scroll" style={{ scrollbarColor: "#1a4f2a transparent" }}>
         {filteredGroups.map(group => {
-          const isGroupCollapsed = collapsedGroups.has(group.label) && !searchQ
+          const isGroupCollapsed = !sidebarCollapsed && collapsedGroups.has(group.label) && !searchQ
           return (
           <div key={group.label} className="mb-2">
             {!sidebarCollapsed && !searchQ && (
               <button onClick={() => toggleGroup(group.label)}
-                className="w-full flex items-center justify-between px-3 pt-3 pb-1 group/hdr"
+                aria-expanded={!isGroupCollapsed}
+                className="erp-nav-group w-full flex items-center justify-between gap-2 px-3 py-3 rounded-lg group/hdr"
                 title={isGroupCollapsed ? "Dérouler" : "Replier"}>
-                <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: "#4ade80", opacity: 0.7 }}>
+                <span className="text-xs font-semibold tracking-wide text-start" style={{ color: "#c2d9ce" }}>
                   {getGroupLabel(group.label, lang)}
                 </span>
                 <svg className={`w-3 h-3 transition-transform duration-200 ${isGroupCollapsed ? "" : "rotate-90"}`}
@@ -1135,9 +1142,11 @@ function SidebarContent({
                 <button
                   key={item.id}
                   onClick={() => { navigate(item.id); setNavSearch(""); collapseAllExcept(group.label) }}
-                  title={sidebarCollapsed ? itemLabel : undefined}
+                  title={itemLabel}
+                  aria-label={itemLabel}
+                  aria-current={isActive ? "page" : undefined}
                   className={[
-                    "w-full flex items-center gap-3 rounded-xl text-sm transition-all duration-150 group mb-0.5",
+                    "erp-nav-item w-full flex items-center gap-3 rounded-lg text-sm transition-colors duration-150 group mb-1",
                     sidebarCollapsed ? "justify-center p-2.5" : "px-3 py-2.5",
                   ].join(" ")}
                   style={isActive
@@ -1152,7 +1161,7 @@ function SidebarContent({
                   </span>
                   {!sidebarCollapsed && (
                     <>
-                      <span className="flex-1 truncate text-left text-[13px] font-semibold">{itemLabel}</span>
+                      <span className="flex-1 text-start text-[13px] leading-5 font-medium">{itemLabel}</span>
                       {item.badge ? (
                         <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: "#052e16", color: ACTIVE }}>
                           {item.badge}
@@ -1175,7 +1184,7 @@ function SidebarContent({
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p className="text-xs">Aucun résultat</p>
+            <p className="text-sm">Aucun module trouvé</p><button className="text-xs underline" onClick={() => setNavSearch("")}>Effacer la recherche</button>
           </div>
         )}
       </nav>
@@ -1183,6 +1192,8 @@ function SidebarContent({
       {/* Collapse toggle */}
       <div className="px-2 py-2 border-t hidden lg:block" style={{ borderColor: BG2 }}>
         <button
+          aria-label={sidebarCollapsed ? "Développer le menu" : "Réduire le menu"}
+          aria-expanded={!sidebarCollapsed}
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition-all text-xs"
           style={{ color: "#4ade80" }}
