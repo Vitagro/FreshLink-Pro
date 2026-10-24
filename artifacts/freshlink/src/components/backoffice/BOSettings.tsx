@@ -2412,7 +2412,7 @@ export default function BOSettings({ user }: { user: { id: string; name: string;
               </thead>
               <tbody>
                 {motifs.map((m, i) => (
-                  <tr key={m.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                  <tr key={m.id} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                     <td className="px-4 py-3 font-medium text-foreground">{m.label}</td>
                     <td className="px-4 py-3 text-muted-foreground" dir="rtl">{m.labelAr}</td>
                     <td className="px-4 py-3">

@@ -1730,7 +1730,7 @@ export default function BOUsers({ currentUser }: { currentUser: User }) {
                 </thead>
                 <tbody>
                   {ROLE_DETAILS.filter(r => r.role !== "super_super_admin" || isJawadUser).map((r, i) => (
-                    <tr key={r.role} style={{ background: i % 2 === 0 ? "white" : "#f8f8ff", borderTop: "1px solid #e0e7ff" }}>
+                    <tr key={r.role} style={{ background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))", borderTop: "1px solid hsl(var(--border))" }}>
                       <td className="px-4 py-2.5 min-w-[120px]">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${ROLE_COLORS[r.role as UserRole] ? `text-white ${ROLE_COLORS[r.role as UserRole]}` : "bg-slate-100 text-slate-700"}`}>
                           {r.label}

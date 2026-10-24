@@ -467,8 +467,8 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                   </th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">Article / المنتج</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">Famille</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">Conforme (kg) / سليم</th>
-                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">Defect (kg) / تالف</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">Conforme / سليم</th>
+                  <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">Défect / تالف</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wide">Valeur stock / القيمة</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wide">Statut</th>
                 </tr>
@@ -513,7 +513,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                 {filtered.length === 0
                   ? <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">Aucun article</td></tr>
                   : filtered.map((a, i) => (
-                    <tr key={a.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: selectedStockIds.has(a.id) ? "oklch(0.95 0.04 250)" : (i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)") }}>
+                    <tr key={a.id} style={{ borderTop: "1px solid hsl(var(--border))", background: selectedStockIds.has(a.id) ? "var(--erp-selected-row)" : (i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))") }}>
                       <td className="px-4 py-3 w-10" onClick={e => e.stopPropagation()}>
                         <input type="checkbox"
                           checked={selectedStockIds.has(a.id)}
@@ -573,7 +573,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
               </thead>
               <tbody>
                 {filtered.map((a, i) => (
-                  <tr key={a.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: isDup(a) ? "oklch(0.97 0.04 70)" : i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                  <tr key={a.id} style={{ borderTop: "1px solid hsl(var(--border))", background: isDup(a) ? "var(--erp-warning-row)" : i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                     <td className="px-4 py-3">
                       <p className="font-semibold text-foreground flex items-center gap-1.5">
                         {a.nom}
@@ -661,7 +661,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                   const marge = pv - a.prixAchat
                   const margePct = a.prixAchat > 0 ? Math.round(marge / a.prixAchat * 100) : 0
                   return (
-                    <tr key={a.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                    <tr key={a.id} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                       <td className="px-4 py-3">
                         <p className="font-semibold text-foreground">{a.nom}</p>
                         <p className="font-arabic text-sm text-muted-foreground" dir="rtl" lang="ar">{a.nomAr}</p>
@@ -710,7 +710,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                 {transferts.length === 0
                   ? <tr><td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">Aucun transfert enregistré</td></tr>
                   : transferts.map((t, i) => (
-                    <tr key={t.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                    <tr key={t.id} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                       <td className="px-4 py-3 text-muted-foreground">{t.date}</td>
                       <td className="px-4 py-3 font-semibold text-foreground">{t.articleNom}</td>
                       <td className="px-4 py-3 text-right font-semibold">{t.quantite} kg</td>
@@ -819,7 +819,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                     const stockReelNum = entry.stockReel !== "" ? Number(entry.stockReel) : null
                     const ecartReel = stockReelNum !== null ? stockReelNum - stockTheorique : null
                     return (
-                      <tr key={a.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                      <tr key={a.id} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                         <td className="px-4 py-3">
                           <p className="font-semibold text-foreground">{a.nom}</p>
                           <p className="font-arabic text-sm text-muted-foreground" dir="rtl" lang="ar">{a.nomAr}</p>
@@ -1313,7 +1313,7 @@ export default function BOStock({ user }: { user: { id: string; name: string } }
                         </td>
                       </tr>
                     ) : filteredMvts.map((m, i) => (
-                      <tr key={m.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                      <tr key={m.id} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                         <td className="px-4 py-3">
                           <p className="font-mono text-xs text-foreground">{m.date}</p>
                           {m.heure && <p className="text-[10px] text-muted-foreground">{m.heure}</p>}
