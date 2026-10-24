@@ -362,3 +362,9 @@ img, video, iframe, canvas { max-width: 100%; }
 .dark .erp-workspace :is(.text-amber-900, .text-amber-950, .text-yellow-900, .text-yellow-950) { color: #fde68a !important; }
 .erp-shell { --erp-selected-row: #dbeafe; --erp-warning-row: #fef3c7; }
 .dark .erp-shell { --erp-selected-row: #193653; --erp-warning-row: #47351b; }
+
+/* Navigation: consistent focus and hierarchy on desktop and touch screens. */
+.erp-navigation button:focus-visible, .erp-navigation input:focus-visible { outline: 2px solid #a7e3c0; outline-offset: 2px; }
+.erp-navigation .erp-nav-group:hover { background: #203c32; }
+.erp-navigation .erp-nav-item { min-height: 44px; }
+.erp-navigation input::placeholder { color: #b3cabe !important; }
