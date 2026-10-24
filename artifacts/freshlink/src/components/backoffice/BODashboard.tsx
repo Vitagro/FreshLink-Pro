@@ -503,11 +503,11 @@ export default function BODashboard({ user }: Props) {
         </div>
       </section>
       {scopeError && <p role="alert" className="rounded-xl border border-red-300 p-3 text-sm">{scopeError}</p>}
-      {orderScope === 'simulation' && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">Mode simulation : ces chiffres ne représentent pas des ventes réalisées. Aucun stock ni paiement n’est modifié.</p>}
-      <details className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+      {canChangeScope && orderScope === 'simulation' && <p role="status" className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">Mode simulation : ces chiffres ne représentent pas des ventes réalisées. Aucun stock ni paiement n’est modifié.</p>}
+      {canChangeScope && <details className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
         <summary className="cursor-pointer py-1 font-medium text-foreground">Source et règles de calcul · {commandes.length.toLocaleString('fr-FR')} commandes chargées</summary>
         <p className="mt-2 leading-relaxed">Montants du carnet de commandes, hors commandes refusées ou retournées ; ce ne sont pas des encaissements. Les poids excluent les unités sans conversion fiable en kg. Les commandes simulées restent en attente d’approbation.</p>
-      </details>
+      </details>}
       {ordersError && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{ordersError} Les compteurs ne sont pas à jour.</p>}
       <div className="flex flex-wrap items-center gap-2" aria-label="Périodes rapides">
         <span className="mr-2 text-xs font-medium text-muted-foreground">Période</span>
