@@ -360,3 +360,5 @@ img, video, iframe, canvas { max-width: 100%; }
 .dark .erp-workspace :is(.bg-teal-50, .bg-teal-100) { background-color: #153b38 !important; }
 .dark .erp-workspace :is(.text-teal-600, .text-teal-700, .text-teal-800) { color: #99f6e4 !important; }
 .dark .erp-workspace :is(.text-amber-900, .text-amber-950, .text-yellow-900, .text-yellow-950) { color: #fde68a !important; }
+.erp-shell { --erp-selected-row: #dbeafe; --erp-warning-row: #fef3c7; }
+.dark .erp-shell { --erp-selected-row: #193653; --erp-warning-row: #47351b; }

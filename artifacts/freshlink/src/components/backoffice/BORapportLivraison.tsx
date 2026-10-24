@@ -398,7 +398,7 @@ export default function BORapportLivraison({ user: _user }: Props) {
                   const ca = tripBlsLivres.reduce((s, bl) => s + (bl.montantTTC ?? bl.montantTotal), 0)
                   return (
                     <tr key={trip.id}
-                      style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                      style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{trip.date}</td>
                       <td className="px-4 py-3 font-semibold text-foreground">{trip.livreurNom}</td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{trip.vehicule || "—"}</td>
@@ -453,7 +453,7 @@ export default function BORapportLivraison({ user: _user }: Props) {
                   <tr><td colSpan={13} className="px-4 py-10 text-center text-muted-foreground">Aucune donnée</td></tr>
                 ) : livreurPerfs.map((p, i) => (
                   <tr key={p.nom}
-                    style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                    style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                     <td className="px-3 py-3 font-semibold text-foreground whitespace-nowrap">{p.nom}</td>
                     <td className="px-3 py-3 text-center text-muted-foreground">{p.trips}</td>
                     <td className="px-3 py-3 text-center font-semibold text-blue-600">{p.clients}</td>

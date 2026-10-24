@@ -613,9 +613,9 @@ export default function BoPurchaseOrders({ user }: { user: User }) {
                 <tr
                   key={po.id}
                   className="transition-colors"
-                  style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}
+                  style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}
                   onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = "oklch(0.38 0.2 260 / 0.04)"}
-                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)"}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))"}
                 >
                   <td className="px-4 py-3">
                     <span className="text-xs font-mono font-semibold" style={{ color: "oklch(0.38 0.2 260)" }}>
@@ -770,7 +770,7 @@ export default function BoPurchaseOrders({ user }: { user: User }) {
                       }
                       return (
                         <tr key={da.id} className="border-t border-border hover:bg-muted/30 transition-colors"
-                          style={{ background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                          style={{ background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                           <td className="px-4 py-3">
                             <span className="text-xs font-mono font-bold text-amber-700">
                               DA-{da.id.slice(-6).toUpperCase()}

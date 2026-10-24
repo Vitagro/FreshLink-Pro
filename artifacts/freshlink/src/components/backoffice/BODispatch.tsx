@@ -1245,7 +1245,7 @@ export default function BODispatch({ user }: Props) {
                     return livreursFiltres.length === 0 ? (
                     <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">{livreurs.length === 0 ? "Aucun livreur" : "Aucun résultat"}</td></tr>
                   ) : livreursFiltres.map((l, i) => (
-                    <tr key={l.id} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                    <tr key={l.id} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                       <td className="px-4 py-3">
                         <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${l.type === "interne" ? "bg-blue-100 text-blue-700" : "bg-purple-100 text-purple-700"}`}>
                           {l.type === "interne" ? "Interne" : "Externe"}

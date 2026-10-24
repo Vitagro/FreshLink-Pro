@@ -810,7 +810,7 @@ export default function BODatabase({ user }: { user: { id: string; role?: string
               {filtered.length === 0
                 ? <tr><td colSpan={columns.length} className="px-4 py-10 text-center text-muted-foreground">Aucune donnée</td></tr>
                 : filtered.slice(0, 200).map((row: Record<string, unknown>, i: number) => (
-                  <tr key={i} style={{ borderTop: "1px solid oklch(0.87 0.012 240)", background: i % 2 === 0 ? "white" : "oklch(0.975 0.003 240)" }}>
+                  <tr key={i} style={{ borderTop: "1px solid hsl(var(--border))", background: i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted))" }}>
                     {columns.map(col => (
                       <td key={col} className="px-3 py-2.5 text-xs text-foreground max-w-[180px] truncate" title={renderValue(row[col])}>
                         {col === "statut" || col === "statutLivraison"
