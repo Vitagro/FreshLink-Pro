@@ -85,3 +85,11 @@ test('Gemini images require explicit selection and return validated drafts only'
   await assert.rejects(()=>generateDraft('quality','test',undefined,async()=>Response.json({candidates:[{finishReason:'MAX_TOKENS'}]})),{message:'INCOMPLETE_OUTPUT'});
  }finally{for(const k of ['OLLAMA_API_KEY','GEMINI_API_KEY','GEMINI_IMAGE_MODEL','AI_IMAGE_PROVIDER'])delete process.env[k];}
 });
+
+test('Groq text drafts validate output with Ollama also configured',async()=>{
+ process.env.GROQ_API_KEY='test';process.env.OLLAMA_API_KEY='unused';
+ try {
+  const result=await generateDraft('order','2 caisses tomate',undefined,async(url)=>{assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(valid)}}]});});assert.deepEqual(result.draft,valid);
+  await assert.rejects(()=>generateDraft('order','test',undefined,async()=>Response.json({choices:[{finish_reason:'stop',message:{content:'{"total":20}'}}]})),{message:'INVALID_OUTPUT'});
+ }finally{delete process.env.GROQ_API_KEY;delete process.env.OLLAMA_API_KEY;}
+});

@@ -32,9 +32,9 @@ export type DraftTask = keyof typeof CONTRACTS;
 export function draftCapabilities() {
   const image = process.env.AI_IMAGE_PROVIDER === "gemini"
     ? !!(process.env.GEMINI_API_KEY && process.env.GEMINI_IMAGE_MODEL)
-    : !process.env.OLLAMA_API_KEY && !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL);
+    : !process.env.OLLAMA_API_KEY && !process.env.GROQ_API_KEY && !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL);
   return {
-    text:!!process.env.OLLAMA_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL),
+    text:!!process.env.GROQ_API_KEY || !!process.env.OLLAMA_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL),
     image,
     audio:!!process.env.GROQ_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_TRANSCRIBE_MODEL),
     audioProvider:process.env.GROQ_API_KEY ? "Groq" : "OpenAI",
@@ -81,6 +81,23 @@ export async function generateDraft(task: DraftTask, text: string, image?: strin
     if (candidate?.finishReason !== "STOP") throw new Error("INCOMPLETE_OUTPUT");
     let draft:unknown;
     try { draft=JSON.parse(candidate.content?.parts?.filter(p=>!p.thought).map(p=>p.text??"").join("") ?? ""); } catch {throw new Error("INVALID_OUTPUT");}
+    validateDraft(task,draft);
+    return {draft,requiresHumanReview:true,provenance:"user_input",promptVersion:"vita-drafts-v1"};
+  }
+  if (process.env.GROQ_API_KEY) {
+    if(image || task === "quality")throw Error("OLLAMA_TEXT_ONLY");
+    const response=await fetcher("https://api.groq.com/openai/v1/chat/completions",{
+      method:"POST",signal:AbortSignal.timeout(20000),
+      headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({model:process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b",stream:false,
+        messages:[{role:"system",content:AI_DRAFT_PROMPT+"\n"+CONTRACTS[task].instruction+"\nRetourne un objet JSON sans Markdown conforme au schéma : "+JSON.stringify(CONTRACTS[task].schema)},{role:"user",content:text}],
+        temperature:0,max_completion_tokens:2500}),
+    });
+    if(!response.ok)throw Error(`PROVIDER_${response.status}`);
+    const body=await response.json() as {choices?:{finish_reason?:string;message?:{content?:string}}[]};
+    const choice=body.choices?.[0];
+    if(choice?.finish_reason!=="stop")throw Error("INCOMPLETE_OUTPUT");
+    let draft:unknown;try{draft=JSON.parse(choice.message?.content??"");}catch{throw Error("INVALID_OUTPUT");}
     validateDraft(task,draft);
     return {draft,requiresHumanReview:true,provenance:"user_input",promptVersion:"vita-drafts-v1"};
   }
