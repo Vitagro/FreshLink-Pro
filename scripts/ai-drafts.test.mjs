@@ -59,3 +59,29 @@ test('Ollama text drafts validate locally, reject malformed output and block ima
   await assert.rejects(()=>generateDraft('order','test','data:image/png;base64,YQ==',()=>{throw Error('must not call')}),{message:'OLLAMA_TEXT_ONLY'});
  } finally {delete process.env.OLLAMA_API_KEY;}
 });
+
+test('Groq audio works alongside Ollama without provider fallback',async()=>{
+ process.env.GROQ_API_KEY='test-groq';process.env.OLLAMA_API_KEY='test-ollama';
+ try {
+  const text=await transcribeAudio(new Uint8Array([1]),'audio/webm',async(url,options)=>{
+   assert.equal(url,'https://api.groq.com/openai/v1/audio/transcriptions');
+   assert.equal(options.body.get('model'),'whisper-large-v3-turbo');
+   assert.equal(options.headers.Authorization,'Bearer test-groq');
+   return Response.json({text:'Deux caisses de tomates'});
+  });assert.equal(text,'Deux caisses de tomates');
+  let calls=0;await assert.rejects(()=>transcribeAudio(new Uint8Array([1]),'audio/webm',async()=>{calls++;return new Response('secret',{status:401})}),{message:'PROVIDER_401'});assert.equal(calls,1);
+ }finally{delete process.env.GROQ_API_KEY;delete process.env.OLLAMA_API_KEY;}
+});
+test('Gemini images require explicit selection and return validated drafts only',async()=>{
+ process.env.OLLAMA_API_KEY='test-ollama';process.env.GEMINI_API_KEY='test-gemini';process.env.GEMINI_IMAGE_MODEL='test-vision';
+ try {
+  await assert.rejects(()=>generateDraft('order','test','data:image/png;base64,YQ==',()=>{throw Error('must not call')}),{message:'OLLAMA_TEXT_ONLY'});
+  process.env.AI_IMAGE_PROVIDER='gemini';
+  const result=await generateDraft('order','test','data:image/png;base64,YQ==',async(url,options)=>{
+   assert.equal(url,'https://generativelanguage.googleapis.com/v1beta/models/test-vision:generateContent');assert.doesNotMatch(url,/test-gemini/);
+   const body=JSON.parse(options.body);assert.equal(body.contents[0].parts[1].inlineData.mimeType,'image/png');
+   return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:JSON.stringify(valid)}]}}]});
+  });assert.deepEqual(result.draft,valid);
+  await assert.rejects(()=>generateDraft('quality','test',undefined,async()=>Response.json({candidates:[{finishReason:'MAX_TOKENS'}]})),{message:'INCOMPLETE_OUTPUT'});
+ }finally{for(const k of ['OLLAMA_API_KEY','GEMINI_API_KEY','GEMINI_IMAGE_MODEL','AI_IMAGE_PROVIDER'])delete process.env[k];}
+});

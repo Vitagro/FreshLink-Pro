@@ -28,6 +28,16 @@ export default function AiWorkbench({fixedTask,context="",onQuality,onOrder}:{fi
   const [task,setTask]=useState<"order"|"document"|"quality">(fixedTask??"order")
   const [text,setText]=useState("");const [image,setImage]=useState<string>();const [draft,setDraft]=useState<unknown>();const [error,setError]=useState("")
   const [busy,setBusy]=useState(false);const [recording,setRecording]=useState(false);const [confirmed,setConfirmed]=useState(false)
+  const [capabilities,setCapabilities]=useState<{text:boolean;image:boolean;audio:boolean;audioProvider:string;imageProvider:string}|null>(null)
+  const [configurationError,setConfigurationError]=useState("")
+  useEffect(()=>{
+    const controller=new AbortController()
+    fetch("/api/ai-drafts/capabilities",{credentials:"include",cache:"no-store",signal:controller.signal})
+      .then(async response=>{const body=await response.json();if(!response.ok||!body.ok)throw Error(body.error||"Configuration IA indisponible.");return body})
+      .then(body=>{if(!controller.signal.aborted)setCapabilities(body)})
+      .catch(error=>{if(!controller.signal.aborted)setConfigurationError(error instanceof Error?error.message:"Configuration IA indisponible.")})
+    return()=>controller.abort()
+  },[])
   const recorder=useRef<MediaRecorder|undefined>(undefined);const stream=useRef<MediaStream|undefined>(undefined);const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);const mounted=useRef(true)
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;clearTimeout(timer.current);if(recorder.current?.state==="recording")recorder.current.stop();stream.current?.getTracks().forEach(t=>t.stop())}},[])
   const reset=()=>{setDraft(undefined);setConfirmed(false);setError("")}
@@ -57,13 +67,14 @@ export default function AiWorkbench({fixedTask,context="",onQuality,onOrder}:{fi
   return <section className="rounded-2xl border bg-white p-4 text-slate-900 space-y-3" aria-label="Atelier IA">
     <h3 className="font-bold">{fixedTask==="quality"?"Constat visuel assisté":"Brouillons assistés : texte, voix et documents"}</h3>
     <p className="text-sm text-slate-600">Vérifiez chaque résultat. Aucune commande, écriture comptable ou modification de stock n'est créée ici.</p>
+    <p role="status" className="text-sm text-slate-600">{configurationError || (capabilities ? `Texte : ${capabilities.text?"disponible":"non configuré"} · Voix : ${capabilities.audio?capabilities.audioProvider:"non configurée"} · Images : ${capabilities.image?capabilities.imageProvider:"non configurées"}` : "Vérification des fonctions IA disponibles…")}</p>
     {!fixedTask&&<label className="block">Type de brouillon<select disabled={busy||recording} className="block border rounded p-2" value={task} onChange={e=>{setTask(e.target.value as typeof task);reset();setImage(undefined)}}><option value="order">Commande</option><option value="document">Bon fournisseur</option><option value="quality">Constat qualité</option></select></label>}
     <label className="block">{task==="order"?"Commande dictée ou saisie — vérifiez les quantités et unités":"Informations complémentaires"}<textarea disabled={busy||recording} maxLength={11000} className="w-full border rounded p-2 min-h-24" value={text} onChange={e=>{setText(e.target.value);reset()}}/></label>
-    {fixedTask!=="quality"&&<button type="button" disabled={busy} className="border rounded px-3 py-2" onClick={()=>recording?recorder.current?.stop():void startRecording()}>{recording?"Arrêter et transcrire":"Dicter (60 secondes maximum)"}</button>}
-    <label className="block">Photo ou document<input type="file" capture="environment" accept="image/jpeg,image/png,image/webp" disabled={busy||recording} onChange={async e=>{const f=e.target.files?.[0];reset();setImage(undefined);if(f){setBusy(true);try{const prepared=await imageData(f);if(mounted.current)setImage(prepared)}catch(err){if(mounted.current)setError(err instanceof Error?err.message:"Image invalide.")}finally{if(mounted.current)setBusy(false)}}}}/></label>
+    {fixedTask!=="quality"&&<button type="button" disabled={busy||!capabilities?.audio} className="border rounded px-3 py-2 disabled:opacity-50" onClick={()=>recording?recorder.current?.stop():void startRecording()}>{recording?"Arrêter et transcrire":"Dicter (60 secondes maximum)"}</button>}
+    <label className="block">Photo ou document<input type="file" capture="environment" accept="image/jpeg,image/png,image/webp" disabled={busy||recording||!capabilities?.image} onChange={async e=>{const f=e.target.files?.[0];reset();setImage(undefined);if(f){setBusy(true);try{const prepared=await imageData(f);if(mounted.current)setImage(prepared)}catch(err){if(mounted.current)setError(err instanceof Error?err.message:"Image invalide.")}finally{if(mounted.current)setBusy(false)}}}}/></label>
     {image&&<img src={image} alt="Document à analyser" className="max-h-48 rounded"/>}
     <p className="text-xs text-slate-600">En lançant l'analyse, le contenu choisi est transmis au fournisseur IA configuré. Évitez les données personnelles inutiles.</p>
-    <button type="button" className="bg-emerald-700 text-white rounded px-4 py-2 disabled:opacity-50" disabled={busy||recording||(!text.trim()&&!image&&!context)} onClick={()=>void analyse()}>{busy?"Traitement…":"Préparer le brouillon"}</button>
+    <button type="button" className="bg-emerald-700 text-white rounded px-4 py-2 disabled:opacity-50" disabled={busy||recording||!(image||task==="quality"?capabilities?.image:capabilities?.text)||(!text.trim()&&!image&&!context)} onClick={()=>void analyse()}>{busy?"Traitement…":"Préparer le brouillon"}</button>
     {error&&<p role="alert" className="text-red-700">{error} Votre saisie reste disponible.</p>}
     {draft!==undefined&&<div className="border-t pt-3 space-y-3"><DraftView value={draft}/><label className="flex gap-2"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)}/>J'ai vérifié les informations et les points à clarifier.</label>{onOrder&&task==="order"&&<button type="button" className="border rounded p-2" disabled={!confirmed} onClick={()=>{try{onOrder(draft as OrderDraft)}catch(e){setError(e instanceof Error?e.message:"Rapprochement impossible.")}}}>Reprendre dans la commande à vérifier</button>}{onQuality&&image&&<button type="button" className="border rounded p-2" disabled={!confirmed} onClick={()=>onQuality(draft as QualityDraft,image)}>Joindre le constat au retour</button>}</div>}
   </section>
