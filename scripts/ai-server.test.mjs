@@ -59,3 +59,14 @@ test('Ollama rejects empty, truncated and unauthorized responses without leaking
   assert.equal(r.status,502);assert.equal(calls,1);assert.doesNotMatch(JSON.stringify(r),/private-key|partial/);
  }
 });
+
+test('Groq is primary when authorized with its key and never falls back',async()=>{
+ let calls=0;
+ const r=await setup({GROQ_API_KEY:'test',OLLAMA_API_KEY:'unused'},async(url,options)=>{
+  calls++;assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');assert.equal(JSON.parse(options.body).model,'openai/gpt-oss-120b');
+  return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'Connexion réussie'}}]})};
+ })();assert.equal(r.payload.text,'Connexion réussie');assert.equal(calls,1);
+ for(const response of [{ok:false,status:429},{ok:true,json:async()=>({choices:[{finish_reason:'length',message:{content:'partial'}}]})}]){
+  calls=0;const bad=await setup({GROQ_API_KEY:'test',OLLAMA_API_KEY:'unused'},async()=>{calls++;return response})();assert.equal(bad.status,502);assert.equal(calls,1);
+ }
+});

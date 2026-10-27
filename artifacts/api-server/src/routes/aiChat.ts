@@ -22,6 +22,21 @@ const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
 const OLLAMA_KEY = process.env.OLLAMA_API_KEY ?? "";
+const GROQ_KEY = process.env.GROQ_API_KEY ?? "";
+
+async function callGroq(system:string,messages:{role:string;content:string}[],maxTokens:number,temperature:number):Promise<string> {
+  const response=await fetch("https://api.groq.com/openai/v1/chat/completions",{
+    method:"POST",signal:AbortSignal.timeout(20000),
+    headers:{Authorization:`Bearer ${GROQ_KEY}`,"Content-Type":"application/json"},
+    body:JSON.stringify({model:process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b",stream:false,
+      messages:[{role:"system",content:system},...messages],max_completion_tokens:maxTokens,temperature}),
+  });
+  if(!response.ok)throw Error(`PROVIDER_${response.status}`);
+  const body=await response.json() as {choices?:{finish_reason?:string;message?:{content?:unknown}}[]};
+  const choice=body.choices?.[0];
+  if(choice?.finish_reason!=="stop" || typeof choice.message?.content!=="string" || !choice.message.content.trim())throw Error("INCOMPLETE_OUTPUT");
+  return choice.message.content.trim();
+}
 
 async function callOllama(system:string,messages:{role:string;content:string}[],maxTokens:number,temperature:number):Promise<string> {
   const response = await fetch("https://ollama.com/api/chat", {
@@ -131,7 +146,7 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
     res.status(401).json({ ok: false, error: "Device non autorisé" });
     return;
   }
-  if (!ANTHROPIC_KEY && !GEMINI_KEY && !OPENAI_KEY && !OLLAMA_KEY) {
+  if (!ANTHROPIC_KEY && !GEMINI_KEY && !OPENAI_KEY && !OLLAMA_KEY && !GROQ_KEY) {
     res.status(503).json({ ok: false, error: "IA non configurée : ajoutez OPENAI_API_KEY et OPENAI_CHAT_MODEL, ou ANTHROPIC_API_KEY / GEMINI_API_KEY avec leur modèle, dans les variables serveur de production, puis redéployez." });
     return;
   }
@@ -157,6 +172,14 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
   } catch {res.status(503).json({ok:false,error:"Contexte ou quota IA indisponible. Aucun chiffre n’est inventé."});return;}
 
   let lastError = "";
+  // Owner-selected primary provider; a failure never triggers another provider.
+  if (GROQ_KEY) {
+    try {res.json({ok:true,text:await callGroq(system,messages,mt,temp)});return;}
+    catch(e){
+      const code=e instanceof Error?e.message:"FAILED";
+      res.status(502).json({ok:false,error:["PROVIDER_401","PROVIDER_403"].includes(code)?"Clé Groq refusée. Vérifiez GROQ_API_KEY puis redéployez.":["PROVIDER_429","PROVIDER_402"].includes(code)?"Quota Groq atteint. Réessayez plus tard ou vérifiez votre compte Groq.":"Groq n’a pas fourni de réponse complète. Vérifiez le modèle ou réessayez avec une demande plus courte."});return;
+    }
+  }
   // Ollama is explicit and exclusive: never send its failed requests to another provider.
   if (OLLAMA_KEY) {
     try {
