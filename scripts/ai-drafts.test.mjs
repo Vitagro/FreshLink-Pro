@@ -46,3 +46,16 @@ test('transcription uses configured model and multipart, not invented language',
   });
   assert.equal(text,'2 caisses de tomates');
 });
+
+test('Ollama text drafts validate locally, reject malformed output and block images before network',async()=>{
+ process.env.OLLAMA_API_KEY='isolated-test';
+ try {
+  const result=await generateDraft('order','2 caisses tomate',undefined,async(url,options)=>{
+   assert.equal(url,'https://ollama.com/api/chat');const body=JSON.parse(options.body);
+   assert.equal(body.format,undefined);assert.equal(body.model,'gpt-oss:120b');
+   return Response.json({done:true,message:{content:JSON.stringify(valid)}});
+  });assert.deepEqual(result.draft,valid);
+  await assert.rejects(()=>generateDraft('order','test',undefined,async()=>Response.json({done:true,message:{content:'{"total":5}'}})),{message:'INVALID_OUTPUT'});
+  await assert.rejects(()=>generateDraft('order','test','data:image/png;base64,YQ==',()=>{throw Error('must not call')}),{message:'OLLAMA_TEXT_ONLY'});
+ } finally {delete process.env.OLLAMA_API_KEY;}
+});

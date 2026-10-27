@@ -48,6 +48,24 @@ export function validateDraft(task: DraftTask, draft: unknown): void {
   if (lines?.some(l => (l.quantity !== null && l.quantity <= 0) || (l.unitPrice != null && l.unitPrice < 0))) throw new Error("INVALID_OUTPUT");
 }
 export async function generateDraft(task: DraftTask, text: string, image?: string, fetcher: typeof fetch = fetch) {
+  if (process.env.OLLAMA_API_KEY) {
+    if (image || task === "quality") throw new Error("OLLAMA_TEXT_ONLY");
+    // Cloud does not enforce JSON schemas. Validate every field locally and fail closed.
+    const response = await fetcher("https://ollama.com/api/chat", {
+      method:"POST", signal:AbortSignal.timeout(20000),
+      headers:{Authorization:`Bearer ${process.env.OLLAMA_API_KEY}`,"Content-Type":"application/json"},
+      body:JSON.stringify({model:process.env.OLLAMA_MODEL || "gpt-oss:120b",stream:false,think:"low",
+        messages:[{role:"system",content:AI_DRAFT_PROMPT+"\n"+CONTRACTS[task].instruction+"\nRetourne uniquement un objet JSON sans Markdown conforme à ce schéma : "+JSON.stringify(CONTRACTS[task].schema)},
+          {role:"user",content:text}],options:{temperature:0,num_predict:2500}}),
+    });
+    if (!response.ok) throw new Error(`PROVIDER_${response.status}`);
+    const body = await response.json() as {done?:boolean;done_reason?:string;message?:{content?:string}};
+    if (!body.done || body.done_reason === "length") throw new Error("INCOMPLETE_OUTPUT");
+    let draft:unknown;
+    try { draft = JSON.parse(body.message?.content ?? ""); } catch { throw new Error("INVALID_OUTPUT"); }
+    validateDraft(task,draft);
+    return {draft,requiresHumanReview:true,provenance:"user_input",promptVersion:"vita-drafts-v1"};
+  }
   const key = process.env.OPENAI_API_KEY;
   const model = process.env.OPENAI_DRAFT_MODEL;
   if (!key || !model) throw new Error("NOT_CONFIGURED");
