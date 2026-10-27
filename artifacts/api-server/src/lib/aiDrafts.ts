@@ -29,6 +29,18 @@ export const CONTRACTS = {
   },
 } as const;
 export type DraftTask = keyof typeof CONTRACTS;
+export function draftCapabilities() {
+  const image = process.env.AI_IMAGE_PROVIDER === "gemini"
+    ? !!(process.env.GEMINI_API_KEY && process.env.GEMINI_IMAGE_MODEL)
+    : !process.env.OLLAMA_API_KEY && !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL);
+  return {
+    text:!!process.env.OLLAMA_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL),
+    image,
+    audio:!!process.env.GROQ_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_TRANSCRIBE_MODEL),
+    audioProvider:process.env.GROQ_API_KEY ? "Groq" : "OpenAI",
+    imageProvider:process.env.AI_IMAGE_PROVIDER === "gemini" ? "Gemini" : "OpenAI",
+  };
+}
 export function matchesSchema(value: unknown, schema: Schema): boolean {
   const kind = value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
   if (!(Array.isArray(schema.type) ? schema.type : [schema.type]).includes(kind)) return false;
@@ -48,6 +60,30 @@ export function validateDraft(task: DraftTask, draft: unknown): void {
   if (lines?.some(l => (l.quantity !== null && l.quantity <= 0) || (l.unitPrice != null && l.unitPrice < 0))) throw new Error("INVALID_OUTPUT");
 }
 export async function generateDraft(task: DraftTask, text: string, image?: string, fetcher: typeof fetch = fetch) {
+  if ((image || task === "quality") && process.env.AI_IMAGE_PROVIDER === "gemini") {
+    const key = process.env.GEMINI_API_KEY, model = process.env.GEMINI_IMAGE_MODEL;
+    if (!key || !model) throw new Error("NOT_CONFIGURED");
+    const parts:Record<string,unknown>[] = [{text:text || "Analyser uniquement les éléments visibles."}];
+    if (image) {
+      const match = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/.exec(image);
+      if (!match) throw new Error("INVALID_IMAGE");
+      parts.push({inlineData:{mimeType:match[1],data:match[2]}});
+    }
+    const response = await fetcher(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+      method:"POST",signal:AbortSignal.timeout(20000),
+      headers:{"x-goog-api-key":key,"Content-Type":"application/json"},
+      body:JSON.stringify({systemInstruction:{parts:[{text:AI_DRAFT_PROMPT+"\n"+CONTRACTS[task].instruction+"\nRéponds uniquement avec un objet JSON conforme à ce schéma : "+JSON.stringify(CONTRACTS[task].schema)}]},
+        contents:[{role:"user",parts}],generationConfig:{temperature:0,maxOutputTokens:4000,responseMimeType:"application/json"}}),
+    });
+    if (!response.ok) throw new Error(`PROVIDER_${response.status}`);
+    const body = await response.json() as {candidates?:{finishReason?:string;content?:{parts?:{text?:string;thought?:boolean}[]}}[]};
+    const candidate = body.candidates?.[0];
+    if (candidate?.finishReason !== "STOP") throw new Error("INCOMPLETE_OUTPUT");
+    let draft:unknown;
+    try { draft=JSON.parse(candidate.content?.parts?.filter(p=>!p.thought).map(p=>p.text??"").join("") ?? ""); } catch {throw new Error("INVALID_OUTPUT");}
+    validateDraft(task,draft);
+    return {draft,requiresHumanReview:true,provenance:"user_input",promptVersion:"vita-drafts-v1"};
+  }
   if (process.env.OLLAMA_API_KEY) {
     if (image || task === "quality") throw new Error("OLLAMA_TEXT_ONLY");
     // Cloud does not enforce JSON schemas. Validate every field locally and fail closed.
@@ -95,12 +131,14 @@ export async function generateDraft(task: DraftTask, text: string, image?: strin
 export async function transcribeAudio(bytes: Uint8Array, mime: string, fetcher: typeof fetch = fetch): Promise<string> {
   const formats: Record<string,string> = {"audio/webm":"webm","audio/wav":"wav","audio/mpeg":"mp3","audio/mp4":"m4a"};
   if (!formats[mime] || bytes.length === 0 || bytes.length > 2_000_000) throw new Error("INVALID_AUDIO");
-  const key = process.env.OPENAI_API_KEY, model = process.env.OPENAI_TRANSCRIBE_MODEL;
+  const groq = !!process.env.GROQ_API_KEY;
+  const key = groq ? process.env.GROQ_API_KEY : process.env.OPENAI_API_KEY;
+  const model = groq ? (process.env.GROQ_TRANSCRIBE_MODEL || "whisper-large-v3-turbo") : process.env.OPENAI_TRANSCRIBE_MODEL;
   if (!key || !model) throw new Error("NOT_CONFIGURED");
   const form = new FormData();
   form.append("model",model); form.append("response_format","json");
   form.append("file",new Blob([new Uint8Array(bytes)],{type:mime}),`recording.${formats[mime]}`);
-  const response = await fetcher("https://api.openai.com/v1/audio/transcriptions", {
+  const response = await fetcher(groq ? "https://api.groq.com/openai/v1/audio/transcriptions" : "https://api.openai.com/v1/audio/transcriptions", {
     method:"POST",headers:{Authorization:`Bearer ${key}`},body:form,signal:AbortSignal.timeout(20000),
   });
   if (!response.ok) throw new Error(`PROVIDER_${response.status}`);

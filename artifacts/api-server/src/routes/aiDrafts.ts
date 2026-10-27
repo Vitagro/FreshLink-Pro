@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { requireAccount } from "../lib/adminAuth.js";
 import { requireDeviceApi } from "../lib/deviceGuard.js";
-import { CONTRACTS, generateDraft, transcribeAudio, type DraftTask } from "../lib/aiDrafts.js";
+import { CONTRACTS, generateDraft, transcribeAudio, draftCapabilities, type DraftTask } from "../lib/aiDrafts.js";
 import { reserveAiCall } from "../lib/aiQuota.js";
 const router = Router();
 // Per-instance pilot guard, not a distributed billing quota.
@@ -14,12 +14,14 @@ router.use((req,res,next) => {
   const users = (process.env.AI_PILOT_USER_IDS ?? "").split(",").map(s=>s.trim()).filter(Boolean);
   const id = String(res.locals.account.id);
   if (!users.includes(id)) { res.status(403).json({ok:false,error:"Compte hors pilote IA."}); return; }
+  if (req.method === "GET") { next(); return; }
   const now = Date.now();
   for (const [key,value] of requests) if (now-value.start >= 60000) requests.delete(key);
   const counter = requests.get(id) ?? {start:now,count:0};
   if (counter.count >= 10) { res.setHeader("Retry-After","60"); res.status(429).json({ok:false,error:"Trop de demandes. Réessayez dans une minute."}); return; }
   counter.count++; requests.set(id,counter); next();
 });
+router.get("/capabilities",(_req,res)=>{res.json({ok:true,...draftCapabilities()});});
 router.post("/",async(req,res) => {
   const {task,text,image,audio,mime} = req.body ?? {};
   if (task === "transcribe") {
@@ -33,9 +35,8 @@ router.post("/",async(req,res) => {
   }
   const started = Date.now();
   try {
-    if (process.env.OLLAMA_API_KEY) {
-      if (task === "transcribe" || task === "quality" || image) throw Error("OLLAMA_TEXT_ONLY");
-    } else if(!process.env.OPENAI_API_KEY || !(task === "transcribe" ? process.env.OPENAI_TRANSCRIBE_MODEL : process.env.OPENAI_DRAFT_MODEL)) throw Error("NOT_CONFIGURED");
+    const capabilities = draftCapabilities();
+    if (!(task === "transcribe" ? capabilities.audio : image || task === "quality" ? capabilities.image : capabilities.text)) throw Error("NOT_CONFIGURED");
     if(!await reserveAiCall(String(res.locals.account.id))) {res.status(429).json({ok:false,error:"Quota IA atteint. Réessayez plus tard ou contactez votre administrateur."});return;}
     const result = task === "transcribe"
       ? {text:await transcribeAudio(Buffer.from(audio,"base64"),mime),requiresHumanReview:true}
