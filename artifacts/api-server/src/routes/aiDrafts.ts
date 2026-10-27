@@ -33,7 +33,9 @@ router.post("/",async(req,res) => {
   }
   const started = Date.now();
   try {
-    if(!process.env.OPENAI_API_KEY || !(task === "transcribe" ? process.env.OPENAI_TRANSCRIBE_MODEL : process.env.OPENAI_DRAFT_MODEL)) throw Error("NOT_CONFIGURED");
+    if (process.env.OLLAMA_API_KEY) {
+      if (task === "transcribe" || task === "quality" || image) throw Error("OLLAMA_TEXT_ONLY");
+    } else if(!process.env.OPENAI_API_KEY || !(task === "transcribe" ? process.env.OPENAI_TRANSCRIBE_MODEL : process.env.OPENAI_DRAFT_MODEL)) throw Error("NOT_CONFIGURED");
     if(!await reserveAiCall(String(res.locals.account.id))) {res.status(429).json({ok:false,error:"Quota IA atteint. Réessayez plus tard ou contactez votre administrateur."});return;}
     const result = task === "transcribe"
       ? {text:await transcribeAudio(Buffer.from(audio,"base64"),mime),requiresHumanReview:true}
@@ -43,8 +45,8 @@ router.post("/",async(req,res) => {
   } catch (error) {
     const code = error instanceof Error ? error.message : "FAILED";
     req.log?.warn({task,durationMs:Date.now()-started,outcome:"failed"},"ai_draft");
-    const status = ["NOT_CONFIGURED","QUOTA_UNAVAILABLE"].includes(code) ? 503 : code === "INVALID_AUDIO" ? 400 : 502;
-    res.status(status).json({ok:false,error:code === "NOT_CONFIGURED" ? "Clé ou modèle IA serveur non configuré." : "Analyse indisponible ou résultat invalide. Aucune donnée métier enregistrée."});
+    const status = ["NOT_CONFIGURED","QUOTA_UNAVAILABLE"].includes(code) ? 503 : ["INVALID_AUDIO","OLLAMA_TEXT_ONLY"].includes(code) ? 400 : 502;
+    res.status(status).json({ok:false,error:code === "OLLAMA_TEXT_ONLY" ? "Le modèle Ollama configuré accepte le texte uniquement. Saisissez ou collez le contenu ; les photos et la transcription audio ne sont pas activées." : code === "NOT_CONFIGURED" ? "Clé ou modèle IA serveur non configuré." : "Analyse indisponible ou résultat invalide. Aucune donnée métier enregistrée."});
   }
 });
 export default router;

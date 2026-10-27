@@ -21,6 +21,22 @@ const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
 const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 const OPENAI_KEY = process.env.OPENAI_API_KEY ?? "";
+const OLLAMA_KEY = process.env.OLLAMA_API_KEY ?? "";
+
+async function callOllama(system:string,messages:{role:string;content:string}[],maxTokens:number,temperature:number):Promise<string> {
+  const response = await fetch("https://ollama.com/api/chat", {
+    method:"POST", signal:AbortSignal.timeout(20000),
+    headers:{Authorization:`Bearer ${OLLAMA_KEY}`,"Content-Type":"application/json"},
+    body:JSON.stringify({model:process.env.OLLAMA_MODEL || "gpt-oss:120b", stream:false,
+      think:"low", messages:[{role:"system",content:system},...messages],
+      options:{num_predict:maxTokens,temperature}}),
+  });
+  if (!response.ok) throw new Error(`PROVIDER_${response.status}`);
+  const body = await response.json() as {done?:boolean;done_reason?:string;message?:{content?:unknown}};
+  if (!body.done || body.done_reason === "length") throw new Error("INCOMPLETE_OUTPUT");
+  if (typeof body.message?.content !== "string" || !body.message.content.trim()) throw new Error("INVALID_OUTPUT");
+  return body.message.content.trim();
+}
 
 async function callOpenAI(system:string,messages:{role:string;content:string}[],maxTokens:number):Promise<string> {
   const model=process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_DRAFT_MODEL;
@@ -115,7 +131,7 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
     res.status(401).json({ ok: false, error: "Device non autorisé" });
     return;
   }
-  if (!ANTHROPIC_KEY && !GEMINI_KEY && !OPENAI_KEY) {
+  if (!ANTHROPIC_KEY && !GEMINI_KEY && !OPENAI_KEY && !OLLAMA_KEY) {
     res.status(503).json({ ok: false, error: "IA non configurée : ajoutez OPENAI_API_KEY et OPENAI_CHAT_MODEL, ou ANTHROPIC_API_KEY / GEMINI_API_KEY avec leur modèle, dans les variables serveur de production, puis redéployez." });
     return;
   }
@@ -141,6 +157,22 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
   } catch {res.status(503).json({ok:false,error:"Contexte ou quota IA indisponible. Aucun chiffre n’est inventé."});return;}
 
   let lastError = "";
+  // Ollama is explicit and exclusive: never send its failed requests to another provider.
+  if (OLLAMA_KEY) {
+    try {
+      const text = await callOllama(system,messages,mt,temp);
+      res.json({ok:true,text}); return;
+    } catch(e) {
+      const code = e instanceof Error ? e.message : "FAILED";
+      const error = ["PROVIDER_401","PROVIDER_403"].includes(code)
+        ? "Clé Ollama refusée. Vérifiez OLLAMA_API_KEY dans Vercel puis redéployez."
+        : ["PROVIDER_429","PROVIDER_402"].includes(code)
+        ? "Quota Ollama atteint. Vérifiez votre compte Ollama Cloud."
+        : code === "PROVIDER_404" ? "Modèle Ollama indisponible. Vérifiez OLLAMA_MODEL."
+        : "Ollama n’a pas fourni de réponse complète dans le délai prévu. Réessayez avec une demande plus courte.";
+      res.status(502).json({ok:false,error}); return;
+    }
+  }
   // Explicit OpenAI configuration is used alone; no silent data transfer to another provider.
   if (OPENAI_KEY) {
     try {

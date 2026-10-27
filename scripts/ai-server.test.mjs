@@ -43,3 +43,19 @@ test('OpenAI returns completed text with server instructions and no retention fl
   return {ok:true,json:async()=>({status:'completed',output:[{content:[{type:'output_text',text:'Réponse vérifiable'}]}]})};
  })();assert.equal(r.status,200);assert.equal(r.payload.text,'Réponse vérifiable');
 })
+
+test('Ollama uses fixed cloud endpoint, server context and default model without fallback',async()=>{
+ let calls=0;
+ const r=await setup({OLLAMA_API_KEY:'test-only',OPENAI_API_KEY:'unused'},async(url,options)=>{
+  calls++;assert.equal(url,'https://ollama.com/api/chat');
+  const body=JSON.parse(options.body);assert.equal(body.model,'gpt-oss:120b');assert.equal(body.stream,false);
+  assert.match(body.messages[0].content,/CONTEXTE SERVEUR/);assert.equal(body.options.num_predict,1500);
+  return {ok:true,json:async()=>({done:true,message:{content:'Bonjour Vita',thinking:'not returned'}})};
+ })();assert.equal(calls,1);assert.equal(r.payload.text,'Bonjour Vita');assert.doesNotMatch(JSON.stringify(r),/not returned/);
+});
+test('Ollama rejects empty, truncated and unauthorized responses without leaking details or fallback',async()=>{
+ for(const response of [{ok:false,status:401},{ok:true,json:async()=>({done:true,done_reason:'length',message:{content:'partial'}})},{ok:true,json:async()=>({done:true,message:{content:''}})}]) {
+  let calls=0;const r=await setup({OLLAMA_API_KEY:'private-key',GEMINI_API_KEY:'unused'},async()=>{calls++;return response})();
+  assert.equal(r.status,502);assert.equal(calls,1);assert.doesNotMatch(JSON.stringify(r),/private-key|partial/);
+ }
+});
