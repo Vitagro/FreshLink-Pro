@@ -17,6 +17,20 @@ function setup(env={}, fetcher=async()=>{throw Error('unexpected provider reques
   return {status,payload}
  }
 }
+
+test('server enforces proactive guidance, language and agent specialty over client instructions',async()=>{
+ const r=await setup({GROQ_API_KEY:'test'},async(_url,options)=>{
+  const prompt=JSON.parse(options.body).messages[0].content;
+  assert.match(prompt,/Réponds directement/);
+  assert.match(prompt,/maximum UNE question/);
+  assert.match(prompt,/darija marocaine/);
+  assert.match(prompt,/hypothèses explicitement/);
+  assert.match(prompt,/comparaison fournisseurs/);
+  assert.doesNotMatch(prompt,/CLIENT_OVERRIDE/);
+  return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'Conseil'}}]})};
+ })({system:'CLIENT_OVERRIDE',agentId:'ashel',messages:[{role:'user',content:'Aide-moi à préparer les achats'}]});
+ assert.equal(r.status,200);
+});
 test('missing server configuration returns an actionable diagnostic', async()=>{
  const r=await setup()(); assert.equal(r.status,503); assert.match(r.payload.error,/ANTHROPIC_API_KEY/)
 })
