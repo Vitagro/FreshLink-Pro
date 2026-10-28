@@ -4,11 +4,34 @@ import fs from 'node:fs';
 import ts from 'typescript';
 const source=fs.readFileSync(new URL('../artifacts/api-server/src/lib/aiDrafts.ts',import.meta.url),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
-const {generateDraft,validateDraft,transcribeAudio}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
+const {generateDraft,validateDraft,transcribeAudio,draftCapabilities}=await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'));
 process.env.OPENAI_API_KEY='isolated-test-key';
 process.env.OPENAI_DRAFT_MODEL='test-model';
 const valid={customer:null,lines:[{article:'Tomate',quantity:2,unit:'caisse',evidence:'2 caisses tomate'}],questions:['Quel client ?']};
 const output=(draft)=>Response.json({status:'completed',output:[{content:[{type:'output_text',text:JSON.stringify(draft)}]}]});
+
+test('Groq vision sends only the uploaded image and validates completed JSON without fallback',async()=>{
+ process.env.GROQ_API_KEY='test';
+ const image='data:image/png;base64,YQ==';
+ try {
+  assert.equal(draftCapabilities().image,true);
+  const result=await generateDraft('order','Lire le bon',image,async(url,options)=>{
+   assert.equal(url,'https://api.groq.com/openai/v1/chat/completions');
+   const body=JSON.parse(options.body);
+   assert.equal(body.model,'qwen/qwen3.8-27b');
+   assert.deepEqual(body.response_format,{type:'json_object'});
+   assert.equal(body.messages[1].content[1].image_url.url,image);
+   return Response.json({choices:[{finish_reason:'stop',message:{content:JSON.stringify(valid)}}]});
+  });assert.deepEqual(result.draft,valid);assert.equal(result.requiresHumanReview,true);
+  for(const bad of [undefined,'https://example.com/private.jpg','data:image/svg+xml;base64,YQ==']) {
+   await assert.rejects(()=>generateDraft('quality','test',bad,()=>{throw Error('must not call')}),{message:'INVALID_IMAGE'});
+  }
+  let calls=0;
+  await assert.rejects(()=>generateDraft('document','',image,async()=>{calls++;return new Response('private details',{status:429})}),{message:'PROVIDER_429'});
+  assert.equal(calls,1);
+  await assert.rejects(()=>generateDraft('order','',image,async()=>Response.json({choices:[{finish_reason:'length',message:{content:JSON.stringify(valid)}}]})),{message:'INCOMPLETE_OUTPUT'});
+ }finally{delete process.env.GROQ_API_KEY;}
+});
 test('strict schema request, no retention flag, no totals or invented conversion',async()=>{
   const result=await generateDraft('order','2 caisses tomate',undefined,async(url,options)=>{
     assert.equal(url,'https://api.openai.com/v1/responses');
