@@ -11,9 +11,8 @@ router.use((req,res,next) => {
   res.setHeader("Cache-Control","no-store");
   if (requireDeviceApi(req)) { res.status(401).json({ok:false,error:"Appareil non autorisé."}); return; }
   if (process.env.AI_DRAFTS_ENABLED !== "true") { res.status(503).json({ok:false,error:"Pilote IA non activé."}); return; }
-  const users = (process.env.AI_PILOT_USER_IDS ?? "").split(",").map(s=>s.trim()).filter(Boolean);
   const id = String(res.locals.account.id);
-  if (!users.includes(id)) { res.status(403).json({ok:false,error:"Compte hors pilote IA."}); return; }
+  // All authenticated ERP accounts are authorized; account and device guards remain mandatory.
   if (req.method === "GET") { next(); return; }
   const now = Date.now();
   for (const [key,value] of requests) if (now-value.start >= 60000) requests.delete(key);

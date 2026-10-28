@@ -56,6 +56,9 @@ jobs:
       - name: Structured AI draft tests
         run: node scripts/ai-drafts.test.mjs
 
+      - name: Public shop assistant grounding tests
+        run: node scripts/shop-assistant.test.mjs
+
       - name: Server scoped AI context tests
         run: node scripts/ai-context.test.mjs
 
