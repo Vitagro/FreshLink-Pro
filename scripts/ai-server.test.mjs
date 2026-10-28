@@ -70,3 +70,10 @@ test('Groq is primary when authorized with its key and never falls back',async()
   calls=0;const bad=await setup({GROQ_API_KEY:'test',OLLAMA_API_KEY:'unused'},async()=>{calls++;return response})();assert.equal(bad.status,502);assert.equal(calls,1);
  }
 });
+
+test('Groq reasoning models reserve a bounded reasoning budget for short connection tests',async()=>{
+ const r=await setup({GROQ_API_KEY:'test'},async(_url,options)=>{
+  const body=JSON.parse(options.body);assert.equal(body.max_completion_tokens,1024);assert.equal(body.reasoning_effort,'low');assert.equal(body.include_reasoning,false);
+  return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'OK'}}]})};
+ })({system:'test',messages:[{role:'user',content:'bonjour'}],max_tokens:16});assert.equal(r.payload.text,'OK');
+});
