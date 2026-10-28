@@ -25,11 +25,14 @@ const OLLAMA_KEY = process.env.OLLAMA_API_KEY ?? "";
 const GROQ_KEY = process.env.GROQ_API_KEY ?? "";
 
 async function callGroq(system:string,messages:{role:string;content:string}[],maxTokens:number,temperature:number):Promise<string> {
+  const model=process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b";
+  const reasoning=model.startsWith("openai/gpt-oss-");
   const response=await fetch("https://api.groq.com/openai/v1/chat/completions",{
     method:"POST",signal:AbortSignal.timeout(20000),
     headers:{Authorization:`Bearer ${GROQ_KEY}`,"Content-Type":"application/json"},
-    body:JSON.stringify({model:process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b",stream:false,
-      messages:[{role:"system",content:system},...messages],max_completion_tokens:maxTokens,temperature}),
+    body:JSON.stringify({model,stream:false,
+      ...(reasoning?{reasoning_effort:"low",include_reasoning:false}:{}),
+      messages:[{role:"system",content:system},...messages],max_completion_tokens:reasoning?Math.max(1024,maxTokens):maxTokens,temperature}),
   });
   if(!response.ok)throw Error(`PROVIDER_${response.status}`);
   const body=await response.json() as {choices?:{finish_reason?:string;message?:{content?:unknown}}[]};
