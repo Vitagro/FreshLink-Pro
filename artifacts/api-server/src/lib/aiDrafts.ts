@@ -32,13 +32,13 @@ export type DraftTask = keyof typeof CONTRACTS;
 export function draftCapabilities() {
   const image = process.env.AI_IMAGE_PROVIDER === "gemini"
     ? !!(process.env.GEMINI_API_KEY && process.env.GEMINI_IMAGE_MODEL)
-    : !process.env.OLLAMA_API_KEY && !process.env.GROQ_API_KEY && !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL);
+    : !!process.env.GROQ_API_KEY || (!process.env.OLLAMA_API_KEY && !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL));
   return {
     text:!!process.env.GROQ_API_KEY || !!process.env.OLLAMA_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_DRAFT_MODEL),
     image,
     audio:!!process.env.GROQ_API_KEY || !!(process.env.OPENAI_API_KEY && process.env.OPENAI_TRANSCRIBE_MODEL),
     audioProvider:process.env.GROQ_API_KEY ? "Groq" : "OpenAI",
-    imageProvider:process.env.AI_IMAGE_PROVIDER === "gemini" ? "Gemini" : "OpenAI",
+    imageProvider:process.env.AI_IMAGE_PROVIDER === "gemini" ? "Gemini" : process.env.GROQ_API_KEY ? "Groq (pilote)" : "OpenAI",
   };
 }
 export function matchesSchema(value: unknown, schema: Schema): boolean {
@@ -85,12 +85,14 @@ export async function generateDraft(task: DraftTask, text: string, image?: strin
     return {draft,requiresHumanReview:true,provenance:"user_input",promptVersion:"vita-drafts-v1"};
   }
   if (process.env.GROQ_API_KEY) {
-    if(image || task === "quality")throw Error("OLLAMA_TEXT_ONLY");
+    const vision = !!image || task === "quality";
+    if (vision && (!image || image.length > 2800000 || !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(image))) throw Error("INVALID_IMAGE");
     const response=await fetcher("https://api.groq.com/openai/v1/chat/completions",{
       method:"POST",signal:AbortSignal.timeout(20000),
       headers:{Authorization:`Bearer ${process.env.GROQ_API_KEY}`,"Content-Type":"application/json"},
-      body:JSON.stringify({model:process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b",stream:false,
-        messages:[{role:"system",content:AI_DRAFT_PROMPT+"\n"+CONTRACTS[task].instruction+"\nRetourne un objet JSON sans Markdown conforme au schéma : "+JSON.stringify(CONTRACTS[task].schema)},{role:"user",content:text}],
+      body:JSON.stringify({model:vision ? (process.env.GROQ_IMAGE_MODEL || "qwen/qwen3.8-27b") : (process.env.GROQ_CHAT_MODEL || "openai/gpt-oss-120b"),stream:false,
+        ...(vision ? {response_format:{type:"json_object"}} : {}),
+        messages:[{role:"system",content:AI_DRAFT_PROMPT+"\n"+CONTRACTS[task].instruction+"\nRetourne un objet JSON sans Markdown conforme au schéma : "+JSON.stringify(CONTRACTS[task].schema)},{role:"user",content:vision ? [{type:"text",text:text || "Lis uniquement les éléments visibles de cette image."},{type:"image_url",image_url:{url:image}}] : text}],
         temperature:0,max_completion_tokens:2500}),
     });
     if(!response.ok)throw Error(`PROVIDER_${response.status}`);
