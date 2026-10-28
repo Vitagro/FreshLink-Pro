@@ -579,7 +579,7 @@ interface Msg { role: "user" | "assistant"; text: string; ts: number }
 function AgentChat({ agent, user }: { agent: typeof AGENTS[0]; user: User }) {
   const [msgs, setMsgs] = useState<Msg[]>([{
     role: "assistant",
-    text: agent.greeting,
+    text: `Salam ! Je suis ${agent.name}. Je propose des conseils pour votre mission, à vérifier avant exécution. Décrivez votre besoin : je vous proposerai des actions concrètes avec les données disponibles.`,
     ts: Date.now(),
   }])
   const [input, setInput] = useState("")
@@ -596,7 +596,7 @@ function AgentChat({ agent, user }: { agent: typeof AGENTS[0]; user: User }) {
 
   // Reset chat when agent changes
   useEffect(() => {
-    setMsgs([{ role: "assistant", text: agent.greeting, ts: Date.now() }])
+    setMsgs([{ role: "assistant", text: `Salam ! Je suis ${agent.name}. Je propose des conseils pour votre mission, à vérifier avant exécution. Décrivez votre besoin : je vous proposerai des actions concrètes avec les données disponibles.`, ts: Date.now() }])
     setInput("")
     setN3Triggered(false)
     failCountRef.current = 0

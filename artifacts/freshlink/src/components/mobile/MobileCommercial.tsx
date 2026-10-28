@@ -1,6 +1,8 @@
 "use client"
 
 import AiWorkbench from "@/components/shared/AiWorkbench"
+import MissionAlerts from "@/components/shared/MissionAlerts"
+import { commercialGuidance } from "@/lib/missionGuidance"
 import { resolveOrderDraft } from "@/lib/orderDraft"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { store, type Article, type User, type Client, type Commande, type Visite, DELAI_RECOUVREMENT_LABELS, type DelaiRecouvrement, MODALITE_LABELS, type ModalitePaiement, getAllSecteurs, VILLES_MAROC, ROLE_LABELS } from "@/lib/store"
@@ -2374,6 +2376,7 @@ export default function MobileCommercial({ user }: Props) {
       </div>
 
       {/* Submit */}
+      <MissionAlerts alerts={commercialGuidance(lignes,articles)}/>
       <button onClick={handleSubmit}
         disabled={sending || !selectedClientId || !heurelivraison || lignes.some(l => !l.articleId || !l.quantite)}
         className="w-full py-4 rounded-xl font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 text-sm"

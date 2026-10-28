@@ -8,14 +8,17 @@ import {
 import ArticleCombobox from "@/components/ui/ArticleCombobox"
 
 import AiWorkbench from "@/components/shared/AiWorkbench"
+import { purchaseGuidance } from "@/lib/missionGuidance"
 
 interface CameraQualiteIAProps {articles:Article[];fournisseurs:Fournisseur[];user:User}
 export function CameraQualiteIA({articles}:CameraQualiteIAProps) {
   const [articleId,setArticleId]=useState("")
+  const [offer,setOffer]=useState("")
   const article=articles.find(a=>a.id===articleId)
   return <div className="space-y-3 p-3">
     <label>Article<select className="border rounded p-2 w-full" value={articleId} onChange={e=>setArticleId(e.target.value)}><option value="">Choisir un article</option>{articles.map(a=><option key={a.id} value={a.id}>{a.nom}</option>)}</select></label>
     <AiWorkbench key={articleId} fixedTask="quality" context={`Produit déclaré : ${article?.nom||"à préciser"}`}/>
+    {article&&<section className="rounded-xl border bg-card p-3 space-y-2"><h3 className="font-semibold">Avis prix et contrôles du lot</h3><label className="block">Prix proposé en DH / {article.unite}<input inputMode="decimal" className="block w-full rounded border bg-background p-2" value={offer} onChange={e=>setOffer(e.target.value)}/></label><p className="text-sm">{purchaseGuidance(Number(offer.replace(',','.')),article.prixAchat)}</p><p className="text-sm">Avant achat : contrôlez le poids net, le calibre, les défauts physiques et les frais inclus. Une photo ne permet pas de noter la qualité sanitaire ni de certifier un rapport qualité-prix.</p></section>}
     <p className="text-sm text-slate-600">Un constat visuel ne certifie ni la fraîcheur sanitaire, ni une durée de conservation. Prix et décision d'achat restent à valider.</p>
   </div>
 }
@@ -34,6 +37,7 @@ export function ComparatifFournisseurs({articles,fournisseurs}:ComparatifFournis
     {offers.length<4&&<button className="border rounded p-2" onClick={()=>setOffers([...offers,{id:"",price:""}])}>Ajouter une offre</button>}
     {!unique&&<p role="alert">Choisissez des fournisseurs distincts.</p>}
     {article&&unique&&ranked.length>=2&&<ol className="space-y-2">{ranked.map((o,i)=><li key={o.id}>{i+1}. {fournisseurs.find(f=>f.id===o.id)?.nom} : {o.value.toFixed(2)} DH/{article.unite}</li>)}</ol>}
+    {article&&unique&&ranked.length>=2&&<p className="rounded border p-3 text-sm">À qualité, poids net et frais identiques, l’offre de {fournisseurs.find(f=>f.id===ranked[0].id)?.nom} est la moins chère parmi les offres saisies. Écart avec la suivante : {(ranked[1].value-ranked[0].value).toFixed(2)} DH/{article.unite}. Confirmez ces conditions avant de choisir.</p>}
     <p className="text-sm">Vérifiez disponibilité, transport, taxes et qualité physique avant décision. Aucun achat n'est créé automatiquement.</p>
     {article&&<details><summary>Historique des prix enregistrés</summary><ul>{(article.historiquePrixAchat??[]).slice(-20).reverse().map((h,i)=><li key={i}>{h.fournisseurNom||"Fournisseur non précisé"} : {h.prixAchat} DH/{article.unite}</li>)}</ul></details>}
   </section>

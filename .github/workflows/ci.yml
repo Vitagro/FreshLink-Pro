@@ -59,6 +59,9 @@ jobs:
       - name: Public shop assistant grounding tests
         run: node scripts/shop-assistant.test.mjs
 
+      - name: Mobile mission guidance tests
+        run: node scripts/mission-guidance.test.mjs
+
       - name: Server scoped AI context tests
         run: node scripts/ai-context.test.mjs
 
