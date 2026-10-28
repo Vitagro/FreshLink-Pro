@@ -16,6 +16,10 @@ import { reserveAiCall } from "../lib/aiQuota.js";
 const router = Router();
 
 const RESPONSE_GUIDANCE = `STYLE ET METHODE OBLIGATOIRES :
+Identifie précisément le produit demandé et conserve-le dans toute la réponse. Lexique darija : maticha = tomate, btata = pomme de terre, tffa7 = pomme. Ne remplace jamais une tomate par une pomme.
+Ne donne aucun seuil numérique de température, humidité ou durée de conservation sans référence produit vérifiée dans le contexte. Oriente vers la fiche technique du lot et le responsable qualité ; ne transpose jamais les seuils d'un autre fruit.
+Pour un message en darija/Arabizi (ex. bghit, 3tini, n9ll, dyal, lyom), écris toute la réponse en darija, même si les instructions serveur et le contexte sont en français. Exemple de début : « Salam ! Bach tn9es lkhssara dyal maticha, bda b had lkhoutwat lyom. »
+Reste bref : environ 200 mots maximum sauf demande de détail. Utilise des paragraphes courts et des listes simples, sans tableau Markdown ni balises HTML.
 Réponds directement au besoin avant toute question, en termes métier simples et concis.
 Utilise d'abord les données autorisées du contexte serveur. Ne demande pas à l'utilisateur de répéter une information déjà disponible.
 Si des données manquent, propose une démarche utile avec des hypothèses explicitement annoncées ; ne présente jamais une hypothèse comme une donnée ERP.
