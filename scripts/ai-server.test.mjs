@@ -26,10 +26,20 @@ test('server enforces proactive guidance, language and agent specialty over clie
   assert.match(prompt,/darija marocaine/);
   assert.match(prompt,/hypothèses explicitement/);
   assert.match(prompt,/comparaison fournisseurs/);
+  assert.doesNotMatch(prompt,/"count":2/);
+  assert.match(prompt,/ne décrivent JAMAIS un stock/);
   assert.doesNotMatch(prompt,/CLIENT_OVERRIDE/);
   return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'Conseil'}}]})};
  })({system:'CLIENT_OVERRIDE',agentId:'ashel',messages:[{role:'user',content:'Aide-moi à préparer les achats'}]});
  assert.equal(r.status,200);
+});
+
+test('explicit order count requests keep the authorized server context',async()=>{
+ const result=await setup({GROQ_API_KEY:'test'},async(_url,options)=>{
+  assert.match(JSON.parse(options.body).messages[0].content,/"count":2/);
+  return {ok:true,json:async()=>({choices:[{finish_reason:'stop',message:{content:'Deux commandes'}}]})};
+ })({system:'test',agentId:'jawad',messages:[{role:'user',content:'Combien de commandes ?'}]});
+ assert.equal(result.status,200);
 });
 test('missing server configuration returns an actionable diagnostic', async()=>{
  const r=await setup()(); assert.equal(r.status,503); assert.match(r.payload.error,/ANTHROPIC_API_KEY/)

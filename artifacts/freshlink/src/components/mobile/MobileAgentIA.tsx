@@ -348,6 +348,8 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta répons
       failCountRef.current = 0
       setMsgs(prev => [...prev, { role: "assistant", text: reply, ts: Date.now() }])
     } catch (e: unknown) {
+      failCountRef.current += 1
+      if(failCountRef.current >= 3) setN3Triggered(true)
       setMsgs(prev => [...prev, { role: "assistant",
         text: e instanceof Error ? e.message : "Service IA indisponible.", ts: Date.now() }])
     } finally {
@@ -438,7 +440,7 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta répons
             <svg className="w-4 h-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
-            <span className="font-medium">Le responsable a été notifié automatiquement (N3).</span>
+            <span className="font-medium">Plusieurs demandes ont échoué. Contactez votre responsable ; aucune notification automatique n’a été envoyée.</span>
           </div>
         )}
 
