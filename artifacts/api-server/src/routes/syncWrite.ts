@@ -80,6 +80,12 @@ router.post("/", requireAccount, async (req: Request, res: Response) => {
   }
 
   const base = `${SB_URL}/rest/v1/${body.table}`;
+  if (body.table === "fl_notices") {
+    const protectedIds = new Set(["shop_admin_secret", "__loterie_winners"]);
+    if (body.clearAll || body.upserts?.some(row => protectedIds.has(row.id)) || body.deletes?.some(id => protectedIds.has(id))) {
+      res.status(403).json({ ok: false, errors: ["Secrets et participations sont gérés uniquement par leurs services dédiés."] }); return;
+    }
+  }
   const errors: string[] = [];
 
   if (body.table === "fl_articles" || body.table === "fl_caisse_entries") {

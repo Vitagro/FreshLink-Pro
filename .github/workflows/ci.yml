@@ -59,6 +59,9 @@ jobs:
       - name: Public shop assistant grounding tests
         run: node scripts/shop-assistant.test.mjs
 
+      - name: Shop lottery identity and concurrency tests
+        run: node scripts/shop-lottery.test.mjs
+
       - name: Mobile mission guidance tests
         run: node scripts/mission-guidance.test.mjs
 
