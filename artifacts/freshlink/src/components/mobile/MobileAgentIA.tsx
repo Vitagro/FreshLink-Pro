@@ -1,5 +1,6 @@
 "use client"
 import AiWorkbench from "@/components/shared/AiWorkbench"
+import CompactAiResponse from "@/components/shared/CompactAiResponse"
 
 import { callLLM } from "@/lib/ai"
 import { useState, useRef, useEffect, useCallback } from "react"
@@ -415,7 +416,7 @@ ${dataContext ? `\n${dataContext}\n\nUtilise CES CHIFFRES RÉELS dans ta répons
               }`}
               style={m.role === "user" ? { background: agent.color } : {}}
             >
-              {m.text}
+              {m.role==="assistant"?<CompactAiResponse text={m.text}/>:m.text}
             </div>
           </div>
         ))}
