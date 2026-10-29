@@ -66,6 +66,11 @@ export function projectSyncRows(
   table: string,
   rows: { id: string; payload: unknown; updated_at?: string }[],
 ) {
+  if (table === "fl_notices") return rows.filter(row => row.id !== "shop_admin_secret").map(row => {
+    if (row.id !== "__loterie_winners") return row;
+    const payload = row.payload as Record<string, unknown> | null;
+    return { ...row, payload: Object.fromEntries(Object.entries(payload || {}).filter(([key]) => !key.startsWith("_"))) };
+  });
   if (table !== "fl_users" || admins.has(role)) return rows;
   // Internal directory: no password hash, phone, email, salary or permission flags.
   return rows.map((row) => {

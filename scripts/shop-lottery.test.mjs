@@ -27,3 +27,10 @@ function setup(){
 test('public config exposes neither coupon codes nor participant identities',async()=>{const s=setup();const r=await s.get();assert.equal(r.result.active,true);assert.doesNotMatch(JSON.stringify(r.result),/_claims|revision/);assert.equal(s.guard,s.requireAccount);});
 test('server selects reward, replay is idempotent and concurrent quota cannot overspend',async()=>{const s=setup();const results=await Promise.all([s.post('u1'),s.post('u2')]);assert.equal(results.filter(r=>r.status===200).length,1);const winner=results[0].status===200?'u1':'u2';const first=results.find(r=>r.status===200);const again=await s.post(winner);assert.equal(again.result.coupon.code,first.result.coupon.code);assert.equal(Object.keys(s.coupons).length,1);assert.equal(s.records.__loterie_winners.payload.s1.count,1);});
 test('disabled offers cannot award prizes',async()=>{const s=setup();s.records.__loterie_config.payload.active=false;assert.equal((await s.post()).status,409);assert.equal(Object.keys(s.coupons).length,0);});
+test('general sync exposes only winner counts and never password hashes',()=>{
+ const policy=fs.readFileSync('artifacts/api-server/src/lib/syncReadPolicy.ts','utf8').replace(/export /g,'');
+ const js=ts.transpileModule(policy,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+ const ctx={};vm.createContext(ctx);vm.runInContext(js,ctx);
+ const rows=ctx.projectSyncRows('super_super_admin','fl_notices',[{id:'shop_admin_secret',payload:{hash:'private'}},{id:'__loterie_winners',payload:{s1:{count:1},_claims:{person:{coupon:'private'}},_revision:'private'}}]);
+ assert.equal(rows.length,1);assert.equal(rows[0].payload.s1.count,1);assert.doesNotMatch(JSON.stringify(rows),/private|_claims|hash/);
+});
